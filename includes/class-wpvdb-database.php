@@ -139,21 +139,19 @@ class Database {
                 try {
                     $version = $wpdb->get_var("SELECT VERSION()");
                     
-                    if (stripos($version, 'MySQL') !== false || stripos($version, '-mysql') !== false) {
-                        // Extract version number
-                        if (preg_match('/(\d+\.\d+\.\d+)/', $version, $matches)) {
-                            $version_number = $matches[1];
-                            $version_parts = explode('.', $version_number);
+                    // Extract version number (MySQL version strings can be just the number or include "MySQL")
+                    if (preg_match('/(\d+\.\d+(?:\.\d+)?)/', $version, $matches)) {
+                        $version_number = $matches[1];
+                        $version_parts = explode('.', $version_number);
+                        
+                        // MySQL 8.0.32 or higher has vector support
+                        if (isset($version_parts[0]) && isset($version_parts[1])) {
+                            $major = (int)$version_parts[0];
+                            $minor = (int)$version_parts[1];
+                            $patch = isset($version_parts[2]) ? (int)$version_parts[2] : 0;
                             
-                            // MySQL 8.0.32 or higher has vector support
-                            if (isset($version_parts[0]) && isset($version_parts[1]) && isset($version_parts[2])) {
-                                $major = (int)$version_parts[0];
-                                $minor = (int)$version_parts[1];
-                                $patch = (int)$version_parts[2];
-                                
-                                if ($major > 8 || ($major == 8 && $minor > 0) || ($major == 8 && $minor == 0 && $patch >= 32)) {
-                                    $this->has_vector_support = true;
-                                }
+                            if ($major > 8 || ($major == 8 && $minor > 0) || ($major == 8 && $minor == 0 && $patch >= 32)) {
+                                $this->has_vector_support = true;
                             }
                         }
                     }

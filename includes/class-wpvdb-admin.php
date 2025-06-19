@@ -261,68 +261,40 @@ class Admin {
             set_transient('wpvdb_connection_success', true, 30);
         }
         
-        // If we're receiving individual wpvdb_* fields, convert them to the expected structure
-        if (isset($_POST['wpvdb_openai_api_key']) || isset($_POST['wpvdb_provider'])) {
-            // This is the old format with individual fields, convert to new structure
-            $input = [
-                'provider' => isset($_POST['wpvdb_provider']) ? sanitize_text_field($_POST['wpvdb_provider']) : 'openai',
-                'openai' => [
-                    'api_key' => isset($_POST['wpvdb_openai_api_key']) ? sanitize_text_field($_POST['wpvdb_openai_api_key']) : '',
-                    'default_model' => isset($_POST['wpvdb_openai_model']) ? sanitize_text_field($_POST['wpvdb_openai_model']) : 'text-embedding-3-small',
-                ],
-                'automattic' => [
-                    'api_key' => isset($_POST['wpvdb_automattic_api_key']) ? sanitize_text_field($_POST['wpvdb_automattic_api_key']) : '',
-                    'default_model' => isset($_POST['wpvdb_automattic_model']) ? sanitize_text_field($_POST['wpvdb_automattic_model']) : 'a8cai-embeddings-small-1',
-                ],
-                'specter' => [
-                    'default_model' => isset($_POST['wpvdb_specter_model']) ? sanitize_text_field($_POST['wpvdb_specter_model']) : 'specter2',
-                    'endpoint' => isset($_POST['wpvdb_specter_endpoint']) ? sanitize_text_field($_POST['wpvdb_specter_endpoint']) : \WPVDB\Providers::get_api_base('specter'),
-                ],
-                'chunk_size' => isset($_POST['wpvdb_chunk_size']) ? intval($_POST['wpvdb_chunk_size']) : 1000,
-                'chunk_overlap' => isset($_POST['wpvdb_chunk_overlap']) ? intval($_POST['wpvdb_chunk_overlap']) : 200,
-                'auto_embed' => isset($_POST['wpvdb_auto_embed']) ? 1 : 0,
-                'post_types' => isset($_POST['wpvdb_auto_embed_post_types']) && is_array($_POST['wpvdb_auto_embed_post_types']) ? $_POST['wpvdb_auto_embed_post_types'] : [],
-                'enable_summarization' => isset($_POST['wpvdb_summarize_chunks']) ? 1 : 0,
-                'require_auth' => isset($_POST['wpvdb_require_auth']) ? intval($_POST['wpvdb_require_auth']) : 1,
-            ];
-            
-            // Also update individual options for backwards compatibility
-            update_option('wpvdb_provider', $input['provider']);
-            update_option('wpvdb_openai_api_key', $input['openai']['api_key']);
-            update_option('wpvdb_openai_model', $input['openai']['default_model']);
-            update_option('wpvdb_automattic_api_key', $input['automattic']['api_key']);
-            update_option('wpvdb_automattic_model', $input['automattic']['default_model']);
-            
-            // Update specter model if it exists
-            if (isset($_POST['wpvdb_specter_model'])) {
-                update_option('wpvdb_specter_model', sanitize_text_field($_POST['wpvdb_specter_model']));
-            }
-            
-            update_option('wpvdb_chunk_size', $input['chunk_size']);
-            update_option('wpvdb_chunk_overlap', $input['chunk_overlap']);
-            update_option('wpvdb_auto_embed_post_types', $input['post_types']);
-            update_option('wpvdb_summarize_chunks', $input['enable_summarization']);
-            update_option('wpvdb_require_auth', $input['require_auth']);
-            
-            // Update new provider-specific settings
-            if (isset($_POST['wpvdb_openai_organization'])) {
-                update_option('wpvdb_openai_organization', sanitize_text_field($_POST['wpvdb_openai_organization']));
-            }
-            if (isset($_POST['wpvdb_openai_api_version'])) {
-                update_option('wpvdb_openai_api_version', sanitize_text_field($_POST['wpvdb_openai_api_version']));
-            }
-            if (isset($_POST['wpvdb_automattic_endpoint'])) {
-                update_option('wpvdb_automattic_endpoint', sanitize_text_field($_POST['wpvdb_automattic_endpoint']));
-            }
-            if (isset($_POST['wpvdb_specter_endpoint'])) {
-                update_option('wpvdb_specter_endpoint', sanitize_text_field($_POST['wpvdb_specter_endpoint']));
-            }
-            if (isset($_POST['wpvdb_embedding_batch_size'])) {
-                update_option('wpvdb_embedding_batch_size', intval($_POST['wpvdb_embedding_batch_size']));
-            }
-            
-            error_log('WPVDB Converted Settings: ' . print_r($input, true));
+        // Merge with current settings to ensure we don't lose existing values
+        $input = wp_parse_args($input, $current_settings);
+        
+        // Sanitize the input data
+        if (isset($input['openai']['api_key'])) {
+            $input['openai']['api_key'] = sanitize_text_field($input['openai']['api_key']);
         }
+        if (isset($input['automattic']['api_key'])) {
+            $input['automattic']['api_key'] = sanitize_text_field($input['automattic']['api_key']);
+        }
+        if (isset($input['active_provider'])) {
+            $input['active_provider'] = sanitize_text_field($input['active_provider']);
+            // For backwards compatibility
+            $input['provider'] = $input['active_provider'];
+            update_option('wpvdb_provider', $input['provider']);
+        }
+        if (isset($input['openai']['default_model'])) {
+            $input['openai']['default_model'] = sanitize_text_field($input['openai']['default_model']);
+            update_option('wpvdb_openai_model', $input['openai']['default_model']);
+        }
+        
+        // Update individual options for backwards compatibility
+        if (isset($input['openai']['api_key'])) {
+            update_option('wpvdb_openai_api_key', $input['openai']['api_key']);
+        }
+        if (isset($input['automattic']['api_key'])) {
+            update_option('wpvdb_automattic_api_key', $input['automattic']['api_key']);
+        }
+        if (isset($input['automattic']['default_model'])) {
+            update_option('wpvdb_automattic_model', $input['automattic']['default_model']);
+        }
+        
+        error_log('WPVDB Settings validated: ' . print_r($input, true));
+        
         
         // Ensure `$input` is an array at all
         if (!is_array($input)) {

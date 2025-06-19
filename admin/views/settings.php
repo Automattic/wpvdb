@@ -35,6 +35,14 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
 ?>
 
 <div class="wrap wpvdb-settings">
+    <?php
+    // Show WordPress settings updated notice
+    if (isset($_GET['settings-updated']) && $_GET['settings-updated']) {
+        add_settings_error('wpvdb_settings', 'wpvdb_settings_updated', __('Settings saved.', 'wpvdb'), 'success');
+    }
+    settings_errors('wpvdb_settings');
+    ?>
+    
     <?php if ($has_pending_change): ?>
     <div class="notice notice-warning inline">
         <p>
@@ -69,12 +77,12 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
         $current_section = 'api';
     }
     
-    // Generate the section navigation as simple text links separated by pipes
-    echo '<div class="wpvdb-section-nav" style="margin: 20px 0; padding: 10px 0; font-size: 14px;">';
+    // Generate the section navigation using the same structure as status page
+    echo '<div class="wpvdb-section-nav">';
     $i = 0;
     foreach ($sections as $section_id => $section_label) {
         if ($i > 0) {
-            echo ' | ';
+            echo '<span class="divider">|</span>';
         }
         
         $url = add_query_arg([
@@ -82,12 +90,11 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
             'section' => $section_id
         ], admin_url('admin.php'));
         
-        $class = ($current_section === $section_id) ? 'wpvdb-tab-current' : '';
+        $class = ($current_section === $section_id) ? 'current' : '';
         printf(
-            '<a href="%s" class="%s" style="%s">%s</a>',
+            '<a href="%s" class="%s">%s</a>',
             esc_url($url),
             esc_attr($class),
-            ($current_section === $section_id) ? 'font-weight: bold; text-decoration: none; color: #000;' : 'text-decoration: none;',
             esc_html($section_label)
         );
         
@@ -109,9 +116,9 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                         <label for="wpvdb_require_auth"><?php esc_html_e('API Authentication', 'wpvdb'); ?></label>
                     </th>
                     <td>
-                        <select name="wpvdb_require_auth" id="wpvdb_require_auth">
-                            <option value="1" <?php selected(get_option('wpvdb_require_auth', 1), 1); ?>><?php esc_html_e('Require Authentication', 'wpvdb'); ?></option>
-                            <option value="0" <?php selected(get_option('wpvdb_require_auth', 1), 0); ?>><?php esc_html_e('Open Access (No Authentication)', 'wpvdb'); ?></option>
+                        <select name="wpvdb_settings[require_auth]" id="wpvdb_require_auth">
+                            <option value="1" <?php selected(isset($settings['require_auth']) ? $settings['require_auth'] : 1, 1); ?>><?php esc_html_e('Require Authentication', 'wpvdb'); ?></option>
+                            <option value="0" <?php selected(isset($settings['require_auth']) ? $settings['require_auth'] : 1, 0); ?>><?php esc_html_e('Open Access (No Authentication)', 'wpvdb'); ?></option>
                         </select>
                         <p class="description">
                             <?php esc_html_e('Determine if REST API endpoints require authentication via Application Passwords. Default is to require authentication for security.', 'wpvdb'); ?>
@@ -127,7 +134,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                         <label for="wpvdb_provider"><?php esc_html_e('Embedding Provider', 'wpvdb'); ?></label>
                     </th>
                     <td>
-                        <select name="wpvdb_provider" id="wpvdb_provider">
+                        <select name="wpvdb_settings[active_provider]" id="wpvdb_provider">
                             <?php foreach ($available_providers as $provider_id => $provider_data): ?>
                             <option value="<?php echo esc_attr($provider_id); ?>" <?php selected($provider, $provider_id); ?>><?php echo esc_html($provider_data['label']); ?></option>
                             <?php endforeach; ?>
@@ -145,7 +152,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <input type="password" 
-                               name="wpvdb_openai_api_key" 
+                               name="wpvdb_settings[openai][api_key]" 
                                id="wpvdb_openai_api_key" 
                                value="<?php echo esc_attr($openai_api_key); ?>" 
                                class="regular-text">
@@ -161,7 +168,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                         <label for="wpvdb_openai_model"><?php esc_html_e('OpenAI Embedding Model', 'wpvdb'); ?></label>
                     </th>
                     <td>
-                        <select name="wpvdb_openai_model" id="wpvdb_openai_model">
+                        <select name="wpvdb_settings[openai][default_model]" id="wpvdb_openai_model">
                             <?php if (isset($available_models['openai']) && is_array($available_models['openai'])): ?>
                                 <?php foreach ($available_models['openai'] as $model_id => $model_data): ?>
                                 <option value="<?php echo esc_attr($model_id); ?>" <?php selected($active_model, $model_id); ?>>
@@ -220,7 +227,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <input type="password" 
-                               name="wpvdb_automattic_api_key" 
+                               name="wpvdb_settings[automattic][api_key]" 
                                id="wpvdb_automattic_api_key" 
                                value="<?php echo esc_attr($automattic_api_key); ?>" 
                                class="regular-text">
@@ -630,91 +637,41 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
     </form>
 </div>
 
+<script type="text/javascript">
+jQuery(document).ready(function($) {
+    // No need to handle section switching via JS since PHP already handles it,
+    // but we can add some nice visual feedback
+    $('.wpvdb-section-nav a').on('mouseenter', function() {
+        if (!$(this).hasClass('current')) {
+            $(this).css('border-bottom', '2px solid #2271b1');
+            $(this).css('padding-bottom', '4px');
+        }
+    }).on('mouseleave', function() {
+        if (!$(this).hasClass('current')) {
+            $(this).css('border-bottom', '');
+            $(this).css('padding-bottom', '');
+        }
+    });
+});
+
 <style>
-/* Simple styles for section tabs */
+/* Settings page specific styles */
 .wpvdb-settings-section {
     background: #fff;
-    border: 1px solid #ccc;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
     padding: 20px;
     margin-top: 10px;
-}
-
-.wpvdb-tab-current {
-    font-weight: bold;
-    color: #000;
-}
-
-.wpvdb-section-nav a, 
-.wpvdb-settings-tabs a {
-    text-decoration: none;
-}
-
-.wpvdb-section-nav a:hover, 
-.wpvdb-settings-tabs a:hover {
-    color: #0073aa;
-}
-
-/* Plugin settings styling */
-.wpvdb-settings-form label {
-    font-weight: 500;
-}
-
-.wpvdb-provider-field {
-    margin-bottom: 15px;
-}
-
-.api-info-box {
-    background: #f8f9fa;
-    border: 1px solid #ddd;
-    padding: 15px;
-    margin-top: 10px;
-}
-
-.api-key-instructions {
-    margin-top: 15px;
-}
-
-/* Connection status styling */
-.wpvdb-connection-info {
-    margin-bottom: 15px;
-}
-
-.connection-status {
-    display: inline-flex;
-    align-items: center;
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-weight: 500;
-    margin-bottom: 10px;
-}
-
-.connection-status .dashicons {
-    margin-right: 5px;
-}
-
-.connection-status.connected {
-    background-color: #ecf8ed;
-    color: #0a5f0a;
-}
-
-.connection-status.disconnected {
-    background-color: #fcebec;
-    color: #a00;
-}
-
-.connection-actions {
-    margin-top: 10px;
-}
-
-.wpvdb-warning {
-    display: inline-block;
-    margin-top: 5px;
-    padding: 3px 8px;
-    background-color: #fcf8e3;
-    border: 1px solid #faebcc;
-    color: #8a6d3b;
     border-radius: 3px;
-    font-weight: 500;
+}
+
+.wpvdb-settings-section h2 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+    font-size: 16px;
+    font-weight: 600;
+    color: #23282d;
 }
 
 /* Provider radio buttons styling */
@@ -727,10 +684,14 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
     vertical-align: middle;
 }
 
-.provider-info {
-    margin-top: 10px !important;
-    padding: 5px 10px;
-    background: #f0f6fc;
-    border-left: 4px solid #0073aa;
+.wpvdb-warning {
+    display: inline-block;
+    margin-top: 5px;
+    padding: 3px 8px;
+    background-color: #fcf8e3;
+    border: 1px solid #faebcc;
+    color: #8a6d3b;
+    border-radius: 3px;
+    font-weight: 500;
 }
 </style> 
