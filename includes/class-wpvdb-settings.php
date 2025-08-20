@@ -6,10 +6,303 @@ defined('ABSPATH') || exit;
 class Settings {
     
     /**
+     * Default settings values
+     */
+    const DEFAULTS = [
+        'active_provider' => 'openai',
+        'default_model' => 'text-embedding-3-small',
+        'chunk_size' => 200,
+        'batch_size' => 5,
+        'require_auth' => 1,
+        'enable_summarization' => 0,
+        'auto_embed_post_types' => ['post', 'page'],
+        'openai' => [
+            'api_key' => '',
+            'api_base' => 'https://api.openai.com/v1',
+        ],
+        'automattic' => [
+            'api_key' => '',
+            'api_base' => 'https://public-api.wordpress.com/wpcom/v2/text-completion',
+        ],
+    ];
+    
+    /**
      * Initialize settings
      */
     public static function init() {
-        // No action needed - settings are registered in Admin class
+        // Register settings validation
+        add_action('admin_init', [__CLASS__, 'register_settings']);
+    }
+    
+    /**
+     * Register settings with WordPress
+     *
+     * @since 1.0.13
+     */
+    public static function register_settings() {
+        register_setting(
+            'wpvdb_settings',
+            'wpvdb_settings',
+            [
+                'type' => 'array',
+                'sanitize_callback' => [__CLASS__, 'validate_settings'],
+                'default' => self::DEFAULTS,
+            ]
+        );
+    }
+    
+    /**
+     * Validate and sanitize settings
+     *
+     * @since 1.0.13
+     * @param array $input Raw settings input
+     * @return array Validated settings
+     */
+    public static function validate_settings($input) {
+        if (!is_array($input)) {
+            return self::DEFAULTS;
+        }
+        
+        $validated = self::DEFAULTS;
+        
+        // Validate active provider
+        if (isset($input['active_provider']) && in_array($input['active_provider'], ['openai', 'automattic'], true)) {
+            $validated['active_provider'] = $input['active_provider'];
+        }
+        
+        // Validate model name
+        if (!empty($input['default_model'])) {
+            $model = Utils::validate_model_name($input['default_model']);
+            if ($model !== false) {
+                $validated['default_model'] = $model;
+            }
+        }
+        
+        // Validate chunk size
+        $validated['chunk_size'] = Utils::validate_positive_int(
+            isset($input['chunk_size']) ? $input['chunk_size'] : self::DEFAULTS['chunk_size'],
+            50,
+            2000,
+            self::DEFAULTS['chunk_size']
+        );
+        
+        // Validate batch size
+        $validated['batch_size'] = Utils::validate_positive_int(
+            isset($input['batch_size']) ? $input['batch_size'] : self::DEFAULTS['batch_size'],
+            1,
+            50,
+            self::DEFAULTS['batch_size']
+        );
+        
+        // Validate boolean settings
+        $validated['require_auth'] = !empty($input['require_auth']) ? 1 : 0;
+        $validated['enable_summarization'] = !empty($input['enable_summarization']) ? 1 : 0;
+        
+        // Validate auto embed post types
+        if (isset($input['auto_embed_post_types']) && is_array($input['auto_embed_post_types'])) {
+            $validated['auto_embed_post_types'] = array_map('sanitize_key', $input['auto_embed_post_types']);
+            $validated['auto_embed_post_types'] = array_filter($validated['auto_embed_post_types']);
+        }
+        
+        // Validate provider settings
+        foreach (['openai', 'automattic'] as $provider) {
+            if (!isset($input[$provider]) || !is_array($input[$provider])) {
+                continue;
+            }
+            
+            $provider_settings = $input[$provider];
+            
+            // Validate and encrypt API key
+            if (!empty($provider_settings['api_key'])) {
+                $validated[$provider]['api_key'] = self::encrypt_api_key($provider_settings['api_key']);
+            }
+            
+            // Validate API base URL
+            if (!empty($provider_settings['api_base'])) {
+                $url = Utils::validate_url($provider_settings['api_base']);
+                if ($url !== false) {
+                    $validated[$provider]['api_base'] = $url;
+                }
+            }
+        }
+        
+        // Log settings update
+        Logger::info('Settings updated', [
+            'provider' => $validated['active_provider'],
+            'model' => $validated['default_model'],
+            'chunk_size' => $validated['chunk_size'],
+        ]);
+        
+        // Trigger settings update hook
+        do_action('wpvdb_settings_updated', $validated, $input);
+        
+        return $validated;
+    }
+    
+    /**
+     * Get validated settings with defaults
+     *
+     * @since 1.0.13
+     * @return array Complete settings array with defaults
+     */
+    public static function get_validated_settings() {
+        $settings = get_option('wpvdb_settings', []);
+        return wp_parse_args($settings, self::DEFAULTS);
+    }
+    
+    /**
+     * Get chunk size setting
+     *
+     * @since 1.0.13
+     * @return int Chunk size in words
+     */
+    public static function get_chunk_size() {
+        $settings = self::get_validated_settings();
+        return $settings['chunk_size'];
+    }
+    
+    /**
+     * Get batch size setting
+     *
+     * @since 1.0.13
+     * @return int Batch size for processing
+     */
+    public static function get_batch_size() {
+        $settings = self::get_validated_settings();
+        return $settings['batch_size'];
+    }
+    
+    /**
+     * Check if summarization is enabled
+     *
+     * @since 1.0.13
+     * @return bool Whether summarization is enabled
+     */
+    public static function is_summarization_enabled() {
+        $settings = self::get_validated_settings();
+        return !empty($settings['enable_summarization']);
+    }
+    
+    /**
+     * Check if authentication is required
+     *
+     * @since 1.0.13
+     * @return bool Whether authentication is required
+     */
+    public static function is_auth_required() {
+        $settings = self::get_validated_settings();
+        return !empty($settings['require_auth']);
+    }
+    
+    /**
+     * Get auto-embed post types
+     *
+     * @since 1.0.13
+     * @return array Array of post type names
+     */
+    public static function get_auto_embed_post_types() {
+        $settings = self::get_validated_settings();
+        return $settings['auto_embed_post_types'];
+    }
+    
+    /**
+     * Get active provider name
+     *
+     * @since 1.0.13
+     * @return string Active provider name
+     */
+    public static function get_active_provider() {
+        $settings = self::get_validated_settings();
+        return $settings['active_provider'];
+    }
+    
+    /**
+     * Check if settings are properly configured
+     *
+     * @since 1.0.13
+     * @return bool|WP_Error True if valid, WP_Error with details if not
+     */
+    public static function validate_configuration() {
+        $settings = self::get_validated_settings();
+        
+        // Check if API key is configured for active provider
+        $api_key = self::get_api_key();
+        if (empty($api_key)) {
+            return new \WP_Error(
+                'missing_api_key',
+                sprintf(
+                    __('API key is not configured for provider: %s', 'wpvdb'),
+                    $settings['active_provider']
+                )
+            );
+        }
+        
+        // Check if API base is valid
+        $api_base = self::get_api_base();
+        if (empty($api_base)) {
+            return new \WP_Error(
+                'missing_api_base',
+                sprintf(
+                    __('API base URL is not configured for provider: %s', 'wpvdb'),
+                    $settings['active_provider']
+                )
+            );
+        }
+        
+        // Validate API base URL format
+        if (Utils::validate_url($api_base) === false) {
+            return new \WP_Error(
+                'invalid_api_base',
+                __('API base URL is not a valid URL', 'wpvdb')
+            );
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Reset settings to defaults
+     *
+     * @since 1.0.13
+     * @return bool Success status
+     */
+    public static function reset_to_defaults() {
+        if (!current_user_can('manage_options')) {
+            return false;
+        }
+        
+        $result = update_option('wpvdb_settings', self::DEFAULTS);
+        
+        if ($result) {
+            Logger::notice('Settings reset to defaults');
+            do_action('wpvdb_settings_reset');
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Export settings (without sensitive data)
+     *
+     * @since 1.0.13
+     * @return array Exportable settings
+     */
+    public static function export_settings() {
+        if (!current_user_can('manage_options')) {
+            return [];
+        }
+        
+        $settings = self::get_validated_settings();
+        
+        // Remove sensitive information
+        unset($settings['openai']['api_key']);
+        unset($settings['automattic']['api_key']);
+        
+        return [
+            'version' => WPVDB_VERSION,
+            'exported_at' => current_time('mysql'),
+            'settings' => $settings,
+        ];
     }
     
     /**
@@ -79,10 +372,13 @@ class Settings {
     
     /**
      * Get API key with fallback to filter
+     *
+     * @since 1.0.0
+     * @return string API key or empty string if not found
      */
     public static function get_api_key() {
-        $settings = get_option('wpvdb_settings', []);
-        $provider = isset($settings['active_provider']) ? sanitize_text_field($settings['active_provider']) : 'openai';
+        $settings = self::get_validated_settings();
+        $provider = $settings['active_provider'];
         
         // Check for constants defined in wp-config.php first
         if ($provider === 'openai' && defined('WPVDB_OPENAI_API_KEY')) {
@@ -198,18 +494,20 @@ class Settings {
     
     /**
      * Get default embedding model
+     *
+     * @since 1.0.0
+     * @return string Default embedding model name
      */
     public static function get_default_model() {
-        $settings = get_option('wpvdb_settings', []);
-        $provider = isset($settings['active_provider']) ? $settings['active_provider'] : 'openai';
+        $settings = self::get_validated_settings();
         
-        // Check settings first
-        if (isset($settings[$provider]['default_model']) && !empty($settings[$provider]['default_model'])) {
-            return $settings[$provider]['default_model'];
+        // Check if the validated settings have a default model
+        if (!empty($settings['default_model'])) {
+            return $settings['default_model'];
         }
         
         // Otherwise get default from Models registry
-        return Models::get_default_model_for_provider($provider);
+        return Models::get_default_model_for_provider($settings['active_provider']);
     }
     
     /**
