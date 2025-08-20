@@ -7,11 +7,20 @@ use WP_REST_Response;
 
 defined('ABSPATH') || exit;
 
+/**
+ * REST API endpoints for WPVDB
+ *
+ * Handles all REST API functionality including embeddings, vector operations,
+ * and similarity queries.
+ *
+ * @since 1.0.0
+ */
 class REST {
 
     /**
-     * Database handler
+     * Database handler instance
      *
+     * @since 1.0.0
      * @var Database
      */
     private static $database;
@@ -46,8 +55,13 @@ class REST {
     }
 
     /**
-     * Basic permission check. By default, require 'edit_posts'.
-     * If authentication is disabled in settings, allow public access.
+     * Default permission check for REST API endpoints.
+     * 
+     * By default, requires 'edit_posts' capability. If authentication is disabled 
+     * in settings, allows public access with rate limiting.
+     *
+     * @since 1.0.0
+     * @return bool|WP_Error True if allowed, WP_Error if denied.
      */
     public static function default_permission_check() {
         // Check if authentication is required (from individual option or from settings array)
@@ -59,36 +73,38 @@ class REST {
             $require_auth = $settings['require_auth'];
         }
         
-        error_log('[WPVDB] Permission check - require_auth setting: ' . var_export($require_auth, true));
+        Logger::debug('Permission check', ['require_auth' => $require_auth]);
         
         if (empty($require_auth)) {
-            // If authentication is disabled, allow public access
-            error_log('[WPVDB] Authentication disabled, allowing public access');
+            // If authentication is disabled, allow public access but log it
+            Logger::notice('Public access granted (authentication disabled)');
             return true;
         }
         
-        // If we're using application passwords, check that
-        if (function_exists('wp_is_application_passwords_available') && wp_is_application_passwords_available()) {
-            error_log('[WPVDB] Using application passwords for authentication');
-            // Check for application password first
-            if (current_user_can('edit_posts')) {
-                error_log('[WPVDB] User has edit_posts capability, allowing access');
-                return true;
-            } else {
-                // Return false explicitly to ensure proper error message
-                error_log('[WPVDB] User does not have edit_posts capability, denying access');
+        // Check user capabilities
+        if (!current_user_can(apply_filters('wpvdb_required_capability', 'edit_posts'))) {
+            Logger::warning('Access denied - insufficient permissions', [
+                'user_id' => get_current_user_id(),
+                'required_capability' => 'edit_posts'
+            ]);
+            
+            if (function_exists('wp_is_application_passwords_available') && wp_is_application_passwords_available()) {
                 return new \WP_Error(
                     'rest_forbidden',
-                    __('Authentication required via Application Password.', 'wpvdb'),
+                    __('Authentication required. Please use an Application Password.', 'wpvdb'),
                     ['status' => 401]
                 );
+            } else {
+                return new \WP_Error(
+                    'rest_forbidden',
+                    __('You do not have permission to access this resource.', 'wpvdb'),
+                    ['status' => 403]
+                );
             }
-        } else {
-            // Fall back to regular capability check if application passwords aren't enabled
-            $can_edit = current_user_can('edit_posts');
-            error_log('[WPVDB] Regular capability check result: ' . var_export($can_edit, true));
-            return $can_edit;
         }
+        
+        Logger::debug('Access granted', ['user_id' => get_current_user_id()]);
+        return true;
     }
 
     /**
@@ -330,9 +346,13 @@ class REST {
             return new \WP_Error('missing_query', __('Query text is required', 'wpvdb'), ['status' => 400]);
         }
         
-        // Allow optional parameters
-        $limit = isset($data['limit']) ? intval($data['limit']) : 10;
-        $limit = max(1, min($limit, 100)); // Enforce reasonable limits
+        // Validate and sanitize parameters
+        $limit = Utils::validate_positive_int(
+            isset($data['limit']) ? $data['limit'] : 10,
+            1,
+            100,
+            10
+        );
         
         // Check cache first for expensive queries
         $model = isset($data['model']) ? sanitize_text_field($data['model']) : Settings::get_default_model();

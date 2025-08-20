@@ -35,12 +35,13 @@ class Core {
     }
 
     /**
-     * Simple default chunking approach: split text into ~200 word chunks with minimal overlap.
+     * Simple default chunking approach: split text into word-based chunks.
      * Developers can override this via the 'wpvdb_chunk_text' filter.
      *
-     * @param array  $chunks existing array of chunks if any (often empty).
-     * @param string $text   the text to chunk.
-     * @return array of chunk strings
+     * @since 1.0.13
+     * @param array  $chunks Existing array of chunks if any (often empty).
+     * @param string $text   The text to chunk.
+     * @return array Array of chunk strings.
      */
     public function default_chunking($chunks, $text) {
         if (!empty($chunks)) {
@@ -62,14 +63,14 @@ class Core {
             }
         }
         
-        // Basic approach: split on whitespace, group ~200 words.
+        // Basic approach: split on whitespace, group by word count.
         $words = preg_split('/\s+/', $text, -1, PREG_SPLIT_NO_EMPTY);
         $current = [];
-        $limit = 200;
+        $limit = apply_filters('wpvdb_default_chunk_words', 200);
         $out = [];
 
-        foreach ($words as $w) {
-            $current[] = $w;
+        foreach ($words as $word) {
+            $current[] = $word;
             if (count($current) >= $limit) {
                 $out[] = implode(' ', $current);
                 $current = [];
@@ -118,11 +119,12 @@ class Core {
      * Utility function: calls the external embedding API (e.g. OpenAI) for a single chunk of text.
      * Returns array of floats, or WP_Error on failure.
      *
+     * @since 1.0.0
      * @param string $text The text to embed.
-     * @param string $model The embedding model name. e.g. 'text-embedding-3-small'
+     * @param string $model The embedding model name (e.g. 'text-embedding-3-small').
      * @param string $api_base OpenAI-compatible endpoint base URL.
-     * @param string $api_key  Your embedding provider API key.
-     * @return array|WP_Error
+     * @param string $api_key Your embedding provider API key.
+     * @return array|WP_Error Array of float values representing the embedding, or WP_Error on failure.
      */
     public static function get_embedding($text, $model, $api_base, $api_key) {
         // Check for null or empty text
@@ -160,9 +162,17 @@ class Core {
             // 'encoding_format' => 'float',
         ];
 
-        // Check for null or invalid API key
-        if ($api_key === null || $api_key === '') {
-            return new \WP_Error('embedding_error', 'API key is required for embedding.');
+        // Validate required parameters
+        if (empty($api_key) || !is_string($api_key)) {
+            return new \WP_Error('embedding_error', __('API key is required for embedding.', 'wpvdb'));
+        }
+        
+        if (empty($model) || !is_string($model)) {
+            return new \WP_Error('embedding_error', __('Model name is required for embedding.', 'wpvdb'));
+        }
+        
+        if (empty($api_base) || !is_string($api_base)) {
+            return new \WP_Error('embedding_error', __('API base URL is required for embedding.', 'wpvdb'));
         }
         
         $args = [
