@@ -408,8 +408,9 @@ class Database {
     }
 
     /**
-     * Add vector index to a table
+     * Add vector index to a table with optimized parameters
      *
+     * @since 1.0.13
      * @param int    $m_value      M value for HNSW index (default 16)
      * @param string $distance_type Distance type (cosine, euclidean, dot)
      * @return bool Whether the index was added successfully
@@ -455,6 +456,7 @@ class Database {
      * Optimize vector performance based on testing and benchmarks
      * This can be called periodically to ensure vector search remains efficient
      *
+     * @since 1.0.13
      * @return bool Success or failure
      */
     public function optimize_vector_performance() {

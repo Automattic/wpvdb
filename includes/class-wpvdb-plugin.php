@@ -84,6 +84,9 @@ class Plugin {
         $this->queue = new WPVDB_Queue();
         $this->settings = new Settings();
         $this->admin = new Admin();
+        
+        // Initialize maintenance system
+        Maintenance::init();
     }
 
     /**
