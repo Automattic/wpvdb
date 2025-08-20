@@ -130,9 +130,22 @@ class Core {
             return new \WP_Error('embedding_error', 'Empty or null text cannot be embedded.');
         }
         
+        // Check cache first
+        $cached_embedding = Cache::get_embedding($text, $model);
+        if ($cached_embedding !== false && is_array($cached_embedding)) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[WPVDB CACHE] Using cached embedding for text length: ' . strlen($text));
+            }
+            return $cached_embedding;
+        }
+        
         // Allow plugins to provide custom embedding generation
         $custom_embedding = apply_filters('wpvdb_generate_embedding', null, $text, $model, $api_base, $api_key);
         if ($custom_embedding !== null) {
+            // Cache custom embeddings too
+            if (is_array($custom_embedding)) {
+                Cache::set_embedding($text, $model, $custom_embedding);
+            }
             return $custom_embedding;
         }
         
@@ -177,7 +190,12 @@ class Core {
             return new \WP_Error('embedding_error', 'Invalid embedding response structure.');
         }
 
-        return $data['data'][0]['embedding'];
+        $embedding = $data['data'][0]['embedding'];
+        
+        // Cache the successful embedding
+        Cache::set_embedding($text, $model, $embedding);
+        
+        return $embedding;
     }
     
     /**

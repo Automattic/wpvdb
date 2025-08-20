@@ -332,6 +332,17 @@ class REST {
         
         // Allow optional parameters
         $limit = isset($data['limit']) ? intval($data['limit']) : 10;
+        $limit = max(1, min($limit, 100)); // Enforce reasonable limits
+        
+        // Check cache first for expensive queries
+        $model = isset($data['model']) ? sanitize_text_field($data['model']) : Settings::get_default_model();
+        $cached_result = Cache::get_query_result($text, $model, $limit);
+        if ($cached_result !== false) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[WPVDB CACHE] Using cached query result');
+            }
+            return rest_ensure_response($cached_result);
+        }
         
         // Try to generate an embedding for the query
         try {
@@ -342,8 +353,7 @@ class REST {
             $text = sanitize_textarea_field($data['query']);
             error_log('[WPVDB DEBUG] Generating embedding for query: ' . $text);
             
-            // Determine which model to use (from settings or provided in request)
-            $model = isset($data['model']) ? sanitize_text_field($data['model']) : Settings::get_default_model();
+            // Determine which model to use (from settings or provided in request) 
             $provider = isset($data['provider']) ? sanitize_text_field($data['provider']) : 'openai';
             
             error_log('[WPVDB DEBUG] Using model: ' . $model . ', provider: ' . $provider);
@@ -424,35 +434,76 @@ class REST {
                     return new \WP_Error('query_error', $e->getMessage(), ['status' => 500]);
                 }
             } else {
-                // Fallback to PHP - this is much slower as we load all vectors and compute distances in PHP
+                // Fallback to PHP with pagination and memory optimization
                 error_log('[WPVDB DEBUG] Using PHP fallback for similarity search');
                 
-                $all_rows = $wpdb->get_results("SELECT id, doc_id, chunk_id, chunk_content, summary, embedding FROM $table_name", ARRAY_A);
-                
-                if ($wpdb->last_error) {
-                    error_log('[WPVDB ERROR] Database error in fallback: ' . $wpdb->last_error);
-                    return new \WP_Error('db_error', $wpdb->last_error, ['status' => 500]);
-                }
-                
+                // Use pagination to avoid loading all rows at once
+                $page_size = 1000;
+                $offset = 0;
                 $distances = [];
-                foreach ($all_rows as $row) {
-                    try {
-                        $vector = json_decode($row['embedding'], true);
-                        if (!is_array($vector)) {
-                            continue; // Skip invalid embeddings
+                $total_processed = 0;
+                
+                while (true) {
+                    // Get a batch of rows with LIMIT and OFFSET
+                    $batch_query = $wpdb->prepare(
+                        "SELECT id, doc_id, chunk_id, chunk_content, summary, embedding 
+                         FROM {$table_name} 
+                         LIMIT %d OFFSET %d",
+                        $page_size,
+                        $offset
+                    );
+                    
+                    $batch_rows = $wpdb->get_results($batch_query, ARRAY_A);
+                    
+                    if ($wpdb->last_error) {
+                        error_log('[WPVDB ERROR] Database error in fallback: ' . $wpdb->last_error);
+                        return new \WP_Error('db_error', $wpdb->last_error, ['status' => 500]);
+                    }
+                    
+                    // Break if no more rows
+                    if (empty($batch_rows)) {
+                        break;
+                    }
+                    
+                    // Process this batch
+                    foreach ($batch_rows as $row) {
+                        try {
+                            $vector = json_decode($row['embedding'], true);
+                            if (!is_array($vector)) {
+                                continue; // Skip invalid embeddings
+                            }
+                            
+                            $distance = self::cosine_distance($embedding, $vector);
+                            
+                            // Add distance to the row
+                            $row['distance'] = $distance;
+                            $distances[] = $row;
+                            $total_processed++;
+                            
+                            // Memory management: if we have way more than needed, 
+                            // sort and trim to prevent memory issues
+                            if (count($distances) > ($limit * 10)) {
+                                usort($distances, function ($a, $b) {
+                                    return $a['distance'] <=> $b['distance'];
+                                });
+                                $distances = array_slice($distances, 0, $limit * 2);
+                            }
+                        } catch (\Exception $e) {
+                            // Skip rows that cause errors
+                            error_log('[WPVDB WARNING] Error processing row ' . $row['id'] . ': ' . $e->getMessage());
                         }
-                        $distance = self::cosine_distance($embedding, $vector);
-                        
-                        // Add distance to the row
-                        $row['distance'] = $distance;
-                        $distances[] = $row;
-                    } catch (\Exception $e) {
-                        // Skip rows that cause errors
-                        error_log('[WPVDB WARNING] Error processing row ' . $row['id'] . ': ' . $e->getMessage());
+                    }
+                    
+                    $offset += $page_size;
+                    
+                    // Safety break to prevent infinite loops
+                    if ($total_processed > 50000) {
+                        error_log('[WPVDB WARNING] Processed over 50k embeddings, stopping to prevent memory issues');
+                        break;
                     }
                 }
                 
-                // Sort by distance (ascending)
+                // Final sort and limit
                 usort($distances, function ($a, $b) {
                     return $a['distance'] <=> $b['distance'];
                 });
@@ -460,7 +511,7 @@ class REST {
                 // Limit results
                 $results = array_slice($distances, 0, $limit);
                 
-                error_log('[WPVDB DEBUG] Found ' . count($results) . ' matching documents using PHP fallback');
+                error_log('[WPVDB DEBUG] Found ' . count($results) . ' matching documents using PHP fallback (processed ' . $total_processed . ' total)');
             }
             
             // Add debug info
@@ -472,11 +523,16 @@ class REST {
                 return $row;
             }, $results);
             
-            return rest_ensure_response([
+            $response_data = [
                 'results' => $results,
                 'count' => count($results),
                 'query' => $text
-            ]);
+            ];
+            
+            // Cache the result for future requests
+            Cache::set_query_result($text, $model, $limit, $response_data);
+            
+            return rest_ensure_response($response_data);
         } catch (\Exception $e) {
             error_log('[WPVDB ERROR] Unhandled exception: ' . $e->getMessage());
             return new \WP_Error('error', $e->getMessage(), ['status' => 500]);
@@ -681,6 +737,9 @@ class REST {
             error_log('[WPVDB ERROR] Failed to insert embedding row: ' . $wpdb->last_error);
             return false;
         }
+        
+        // Invalidate caches since we added new embeddings
+        Cache::invalidate_document_cache($doc_id);
         
         return $wpdb->insert_id;
     }

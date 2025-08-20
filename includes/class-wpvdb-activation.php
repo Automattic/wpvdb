@@ -126,7 +126,7 @@ class Activation {
             $has_meta_column = true;
         }
         
-        // Build the SQL for creating the table
+        // Build the SQL for creating the table with optimized indexes
         $sql = "CREATE TABLE {$table_name} (
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
             doc_id bigint(20) unsigned NOT NULL,
@@ -138,9 +138,11 @@ class Activation {
             embedding_date datetime DEFAULT NULL,
             meta longtext DEFAULT NULL,
             PRIMARY KEY  (id),
-            KEY doc_id (doc_id),
-            KEY model (model),
-            KEY doc_type (doc_type)
+            KEY doc_id_idx (doc_id),
+            KEY model_idx (model),
+            KEY doc_type_idx (doc_type),
+            KEY embedding_date_idx (embedding_date),
+            KEY compound_search_idx (doc_type, model, embedding_date)
         ) $collate;\n";
 
         if (!$has_meta_column) {
