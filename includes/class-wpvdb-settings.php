@@ -14,16 +14,67 @@ class Settings {
     
     /**
      * Encrypt API key for secure storage
+     * Uses wp_salt() for encryption key and openssl for secure encryption
      */
     public static function encrypt_api_key($api_key) {
         if (empty($api_key)) {
             return '';
         }
         
-        // WordPress core doesn't have a built-in encryption function
-        // Store securely with a one-way indicator that it's set
-        // (not the actual key - just a placeholder)
-        return '*****' . substr(md5($api_key), 0, 8);
+        // Check if already encrypted (starts with encrypted prefix)
+        if (strpos($api_key, 'wpvdb_encrypted_') === 0) {
+            return $api_key;
+        }
+        
+        // Use WordPress salts as encryption key
+        $encryption_key = wp_salt('auth') . wp_salt('secure_auth');
+        $encryption_key = hash('sha256', $encryption_key, true);
+        
+        // Generate a random IV
+        $iv = openssl_random_pseudo_bytes(16);
+        
+        // Encrypt the API key
+        $encrypted = openssl_encrypt($api_key, 'AES-256-CBC', $encryption_key, 0, $iv);
+        
+        // Combine IV and encrypted data, then base64 encode
+        $encrypted_data = base64_encode($iv . $encrypted);
+        
+        return 'wpvdb_encrypted_' . $encrypted_data;
+    }
+    
+    /**
+     * Decrypt API key for use
+     */
+    public static function decrypt_api_key($encrypted_key) {
+        if (empty($encrypted_key)) {
+            return '';
+        }
+        
+        // Check if it's encrypted (has our prefix)
+        if (strpos($encrypted_key, 'wpvdb_encrypted_') !== 0) {
+            // Not encrypted, return as-is (for backward compatibility)
+            return $encrypted_key;
+        }
+        
+        // Remove prefix and decode
+        $encrypted_data = base64_decode(substr($encrypted_key, 16));
+        
+        if ($encrypted_data === false || strlen($encrypted_data) < 16) {
+            return '';
+        }
+        
+        // Extract IV and encrypted content
+        $iv = substr($encrypted_data, 0, 16);
+        $encrypted = substr($encrypted_data, 16);
+        
+        // Use the same encryption key
+        $encryption_key = wp_salt('auth') . wp_salt('secure_auth');
+        $encryption_key = hash('sha256', $encryption_key, true);
+        
+        // Decrypt
+        $decrypted = openssl_decrypt($encrypted, 'AES-256-CBC', $encryption_key, 0, $iv);
+        
+        return $decrypted !== false ? $decrypted : '';
     }
     
     /**
@@ -31,7 +82,7 @@ class Settings {
      */
     public static function get_api_key() {
         $settings = get_option('wpvdb_settings', []);
-        $provider = isset($settings['active_provider']) ? $settings['active_provider'] : 'openai';
+        $provider = isset($settings['active_provider']) ? sanitize_text_field($settings['active_provider']) : 'openai';
         
         // Check for constants defined in wp-config.php first
         if ($provider === 'openai' && defined('WPVDB_OPENAI_API_KEY')) {
@@ -42,14 +93,15 @@ class Settings {
             return \constant('WPVDB_AUTOMATTIC_API_KEY');
         }
         
-        $api_key = isset($settings[$provider]['api_key']) ? $settings[$provider]['api_key'] : '';
+        $encrypted_key = isset($settings[$provider]['api_key']) ? $settings[$provider]['api_key'] : '';
         
         // If no key in options, check filter
-        if (empty($api_key)) {
-            $api_key = apply_filters('wpvdb_default_api_key', '');
+        if (empty($encrypted_key)) {
+            $encrypted_key = apply_filters('wpvdb_default_api_key', '');
         }
         
-        return $api_key;
+        // Decrypt the API key before returning
+        return self::decrypt_api_key($encrypted_key);
     }
     
     /**
@@ -59,24 +111,36 @@ class Settings {
      * @return string API key or empty string if not found
      */
     public static function get_api_key_for_provider($provider) {
+        $provider = sanitize_text_field($provider);
         $settings = get_option('wpvdb_settings', []);
         
         if (!is_array($settings)) {
             return '';
         }
         
+        // Check for constants first
+        if ($provider === 'openai' && defined('WPVDB_OPENAI_API_KEY')) {
+            return \constant('WPVDB_OPENAI_API_KEY');
+        }
+        
+        if ($provider === 'automattic' && defined('WPVDB_AUTOMATTIC_API_KEY')) {
+            return \constant('WPVDB_AUTOMATTIC_API_KEY');
+        }
+        
+        $encrypted_key = '';
+        
         // Check in the provider-specific settings
         if (isset($settings[$provider]['api_key']) && !empty($settings[$provider]['api_key'])) {
-            return $settings[$provider]['api_key'];
+            $encrypted_key = $settings[$provider]['api_key'];
         }
         
         // Check in the active provider setting
-        if (isset($settings['active_provider']) && $settings['active_provider'] === $provider) {
-            return isset($settings['api_key']) ? $settings['api_key'] : '';
+        if (empty($encrypted_key) && isset($settings['active_provider']) && $settings['active_provider'] === $provider) {
+            $encrypted_key = isset($settings['api_key']) ? $settings['api_key'] : '';
         }
         
-        // Default to empty
-        return '';
+        // Decrypt and return
+        return self::decrypt_api_key($encrypted_key);
     }
     
     /**

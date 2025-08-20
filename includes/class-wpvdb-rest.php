@@ -124,19 +124,31 @@ class REST {
      * - Embeddings are stored in the database using the insert_embedding_row method
      */
     public static function handle_embed(WP_REST_Request $request) {
+        // Rate limiting
+        $rate_check = Security::check_rate_limit('embed');
+        if (is_wp_error($rate_check)) {
+            return $rate_check;
+        }
+        
+        // Security logging
+        Security::log_security_event('embed_request', [
+            'doc_id' => $request->get_param('doc_id'),
+            'text_length' => strlen($request->get_param('text'))
+        ]);
+        
         global $wpdb;
         $table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-        $doc_id  = $request->get_param('doc_id');
-        $text    = $request->get_param('text');
+        $doc_id  = absint($request->get_param('doc_id'));
+        $text    = sanitize_textarea_field($request->get_param('text'));
         
         // Get API key and model from admin settings instead of from the request
         $api_key = Settings::get_api_key();
         $model   = Settings::get_default_model();
         $api_base= Settings::get_api_base();
 
-        if (!$text) {
-            return new WP_Error('invalid_params', 'Missing required field: text.', ['status' => 400]);
+        if (!$doc_id || empty($text)) {
+            return new WP_Error('invalid_params', 'Missing required fields: doc_id and text.', ['status' => 400]);
         }
         
         if (empty($api_key)) {
@@ -223,17 +235,35 @@ class REST {
      * - Otherwise, it will be stored as JSON in the database
      */
     public static function handle_vectors(WP_REST_Request $request) {
-        $doc_id       = $request->get_param('doc_id');
-        $chunk_id     = $request->get_param('chunk_id') ?: 'chunk-0';
-        $chunk_content= $request->get_param('chunk_content') ?: '';
+        // Rate limiting
+        $rate_check = Security::check_rate_limit('vectors');
+        if (is_wp_error($rate_check)) {
+            return $rate_check;
+        }
+        
+        $doc_id       = absint($request->get_param('doc_id'));
+        $chunk_id     = sanitize_text_field($request->get_param('chunk_id')) ?: 'chunk-0';
+        $chunk_content= sanitize_textarea_field($request->get_param('chunk_content')) ?: '';
         $embedding    = $request->get_param('embedding');
-        $summary      = $request->get_param('summary') ?: '';
+        $summary      = sanitize_textarea_field($request->get_param('summary')) ?: '';
 
         if (!$doc_id || !$embedding || !is_array($embedding)) {
             return new WP_Error('invalid_params', 'Missing or invalid doc_id or embedding.', ['status' => 400]);
         }
+        
+        // Use security class to validate embedding
+        $validated_embedding = Security::validate_embedding($embedding);
+        if (is_wp_error($validated_embedding)) {
+            return $validated_embedding;
+        }
+        
+        // Security logging
+        Security::log_security_event('vectors_request', [
+            'doc_id' => $doc_id,
+            'embedding_dimensions' => count($validated_embedding)
+        ]);
 
-        $res = self::insert_embedding_row($doc_id, $chunk_id, $chunk_content, $summary, $embedding);
+        $res = self::insert_embedding_row($doc_id, $chunk_id, $chunk_content, $summary, $validated_embedding);
         if (is_wp_error($res)) {
             return $res;
         }
@@ -279,10 +309,22 @@ class REST {
      * - Fallback to PHP-based cosine distance calculation otherwise
      */
     public static function handle_query(\WP_REST_Request $request) {
+        // Rate limiting
+        $rate_check = Security::check_rate_limit('query');
+        if (is_wp_error($rate_check)) {
+            return $rate_check;
+        }
+        
         self::init_database();
         
         error_log('[WPVDB DEBUG] handle_query called');
         $data = $request->get_json_params();
+        
+        // Security logging
+        Security::log_security_event('query_request', [
+            'query_length' => isset($data['query']) ? strlen($data['query']) : 0,
+            'limit' => isset($data['limit']) ? $data['limit'] : 10
+        ]);
         
         if (empty($data['query'])) {
             return new \WP_Error('missing_query', __('Query text is required', 'wpvdb'), ['status' => 400]);
@@ -297,12 +339,12 @@ class REST {
             $table_name = $wpdb->prefix . 'wpvdb_embeddings';
             
             // For simplicity, we'll handle all embedding here - in real apps, you might externalize this
-            $text = sanitize_text_field($data['query']);
+            $text = sanitize_textarea_field($data['query']);
             error_log('[WPVDB DEBUG] Generating embedding for query: ' . $text);
             
             // Determine which model to use (from settings or provided in request)
-            $model = isset($data['model']) ? $data['model'] : Settings::get_default_model();
-            $provider = isset($data['provider']) ? $data['provider'] : 'openai';
+            $model = isset($data['model']) ? sanitize_text_field($data['model']) : Settings::get_default_model();
+            $provider = isset($data['provider']) ? sanitize_text_field($data['provider']) : 'openai';
             
             error_log('[WPVDB DEBUG] Using model: ' . $model . ', provider: ' . $provider);
             
@@ -335,27 +377,37 @@ class REST {
             
             if ($has_vector) {
                 try {
-                    // Convert the embedding array to JSON
-                    $embedding_json = json_encode($embedding);
+                    // Convert the embedding array to JSON and validate
+                    $embedding_json = wp_json_encode($embedding);
+                    if ($embedding_json === false) {
+                        return new \WP_Error('encoding_error', __('Failed to encode embedding data', 'wpvdb'), ['status' => 500]);
+                    }
                     
-                    // Use Database class to get the appropriate vector function
-                    $vector_function = self::$database->get_vector_from_string_function($embedding_json);
+                    // Use Database class to get safe vector SQL components
+                    $db_type = self::$database->get_db_type();
+                    $vector_function = '';
+                    $distance_function = '';
+                    
+                    // Build safe SQL based on database type
+                    if ($db_type === 'mariadb') {
+                        $vector_function = "VECTOR_FROM_JSON('" . esc_sql($embedding_json) . "')";
+                        $distance_function = "VEC_DISTANCE_COSINE(embedding, " . $vector_function . ")";
+                    } else if ($db_type === 'mysql') {
+                        $vector_function = "VECTOR_FROM_JSON('" . esc_sql($embedding_json) . "')";
+                        $distance_function = "COSINE_DISTANCE(embedding, " . $vector_function . ")";
+                    } else {
+                        return new \WP_Error('db_error', __('Unsupported database type for vector operations', 'wpvdb'), ['status' => 500]);
+                    }
+                    
                     error_log('[WPVDB DEBUG] Using vector function: ' . $vector_function);
-                    
-                    // Use Database class to get the appropriate distance function
-                    $distance_function = self::$database->get_vector_distance_function('embedding', $vector_function, 'cosine');
                     error_log('[WPVDB DEBUG] Using distance function: ' . $distance_function);
                     
-                    // Optimized query that will use the vector index
-                    // The ORDER BY + LIMIT pattern is what triggers the vector index usage
-                    $sql = $wpdb->prepare("
-                        SELECT id, doc_id, chunk_id, chunk_content, summary, 
-                            $distance_function as distance
-                        FROM $table_name
-                        ORDER BY distance
-                        LIMIT %d
-                    ", $limit
-                    );
+                    // Build the query safely
+                    $sql = "SELECT id, doc_id, chunk_id, chunk_content, summary, 
+                               {$distance_function} as distance
+                           FROM {$table_name}
+                           ORDER BY distance
+                           LIMIT " . intval($limit);
                     
                     error_log('[WPVDB DEBUG] SQL query: ' . $sql);
                     
