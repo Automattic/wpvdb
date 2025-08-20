@@ -338,51 +338,53 @@ class REST {
         $model = isset($data['model']) ? sanitize_text_field($data['model']) : Settings::get_default_model();
         $cached_result = Cache::get_query_result($text, $model, $limit);
         if ($cached_result !== false) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('[WPVDB CACHE] Using cached query result');
-            }
+            Logger::debug('Using cached query result', ['query_length' => strlen($text), 'limit' => $limit]);
             return rest_ensure_response($cached_result);
         }
         
         // Try to generate an embedding for the query
+        $start_time = Logger::start_timer('query_processing');
+        
         try {
             global $wpdb;
             $table_name = $wpdb->prefix . 'wpvdb_embeddings';
             
             // For simplicity, we'll handle all embedding here - in real apps, you might externalize this
             $text = sanitize_textarea_field($data['query']);
-            error_log('[WPVDB DEBUG] Generating embedding for query: ' . $text);
+            Logger::debug('Processing query request', ['query_length' => strlen($text), 'limit' => $limit]);
             
             // Determine which model to use (from settings or provided in request) 
             $provider = isset($data['provider']) ? sanitize_text_field($data['provider']) : 'openai';
             
-            error_log('[WPVDB DEBUG] Using model: ' . $model . ', provider: ' . $provider);
+            Logger::debug('Using configuration', ['model' => $model, 'provider' => $provider]);
             
             // Get API key from settings based on provider
             $api_key = Settings::get_api_key_for_provider($provider);
             if (empty($api_key)) {
+                Logger::error('API key not configured', ['provider' => $provider]);
                 return new \WP_Error('missing_api_key', __('API key not configured for the selected provider', 'wpvdb'), ['status' => 400]);
             }
             
             // Get API base URL
             $api_base = Settings::get_api_base_for_provider($provider);
             if (empty($api_base)) {
+                Logger::error('API base URL not configured', ['provider' => $provider]);
                 return new \WP_Error('missing_api_base', __('API base URL not configured for the selected provider', 'wpvdb'), ['status' => 400]);
             }
             
-            error_log('[WPVDB DEBUG] Calling get_embedding with model: ' . $model);
+            Logger::debug('Generating embedding', ['model' => $model, 'text_length' => strlen($text)]);
             
             $embedding = Core::get_embedding($text, $model, $api_base, $api_key);
             if (is_wp_error($embedding)) {
-                error_log('[WPVDB ERROR] Error generating embedding: ' . $embedding->get_error_message());
+                Logger::error('Failed to generate embedding', ['error' => $embedding->get_error_message(), 'model' => $model]);
                 return $embedding;
             }
             
-            error_log('[WPVDB DEBUG] Embedding generated successfully, dimensions: ' . count($embedding));
+            Logger::debug('Embedding generated successfully', ['dimensions' => count($embedding)]);
             
             // Now we have an embedding array of floats. If we have native vector support, use it. Otherwise fallback.
             $has_vector = self::$database->has_native_vector_support();
-            error_log('[WPVDB DEBUG] Vector support detected: ' . ($has_vector ? 'Yes' : 'No'));
+            Logger::debug('Database vector support status', ['has_vector' => $has_vector]);
             $results = [];
             
             if ($has_vector) {
@@ -409,8 +411,11 @@ class REST {
                         return new \WP_Error('db_error', __('Unsupported database type for vector operations', 'wpvdb'), ['status' => 500]);
                     }
                     
-                    error_log('[WPVDB DEBUG] Using vector function: ' . $vector_function);
-                    error_log('[WPVDB DEBUG] Using distance function: ' . $distance_function);
+                    Logger::debug('Vector SQL components', [
+                        'vector_function' => 'VECTOR_FROM_JSON(...)',
+                        'distance_function' => substr($distance_function, 0, 50) . '...',
+                        'db_type' => $db_type
+                    ]);
                     
                     // Build the query safely
                     $sql = "SELECT id, doc_id, chunk_id, chunk_content, summary, 
@@ -419,23 +424,24 @@ class REST {
                            ORDER BY distance
                            LIMIT " . intval($limit);
                     
-                    error_log('[WPVDB DEBUG] SQL query: ' . $sql);
+                    Logger::debug('Executing vector query', ['limit' => $limit]);
                     
                     $results = $wpdb->get_results($sql, ARRAY_A);
                     
                     if ($wpdb->last_error) {
-                        error_log('[WPVDB ERROR] Database error: ' . $wpdb->last_error);
+                        Logger::error('Vector query database error', ['error' => $wpdb->last_error, 'sql' => substr($sql, 0, 200) . '...']);
                         return new \WP_Error('db_error', $wpdb->last_error, ['status' => 500]);
                     }
                     
-                    error_log('[WPVDB DEBUG] Found ' . count($results) . ' matching documents');
+                    Logger::info('Vector query completed', ['results_count' => count($results), 'has_vector' => true]);
                 } catch (\Exception $e) {
-                    error_log('[WPVDB ERROR] Exception: ' . $e->getMessage());
+                    Logger::log_exception($e, 'Vector query exception');
                     return new \WP_Error('query_error', $e->getMessage(), ['status' => 500]);
                 }
             } else {
                 // Fallback to PHP with pagination and memory optimization
-                error_log('[WPVDB DEBUG] Using PHP fallback for similarity search');
+                Logger::warning('Using PHP fallback for similarity search - performance may be slower');
+                $fallback_start = microtime(true);
                 
                 // Use pagination to avoid loading all rows at once
                 $page_size = 1000;
@@ -456,7 +462,7 @@ class REST {
                     $batch_rows = $wpdb->get_results($batch_query, ARRAY_A);
                     
                     if ($wpdb->last_error) {
-                        error_log('[WPVDB ERROR] Database error in fallback: ' . $wpdb->last_error);
+                        Logger::error('PHP fallback database error', ['error' => $wpdb->last_error, 'offset' => $offset]);
                         return new \WP_Error('db_error', $wpdb->last_error, ['status' => 500]);
                     }
                     
@@ -490,7 +496,10 @@ class REST {
                             }
                         } catch (\Exception $e) {
                             // Skip rows that cause errors
-                            error_log('[WPVDB WARNING] Error processing row ' . $row['id'] . ': ' . $e->getMessage());
+                            Logger::warning('Error processing embedding row in fallback', [
+                                'row_id' => $row['id'],
+                                'error' => $e->getMessage()
+                            ]);
                         }
                     }
                     
@@ -498,7 +507,7 @@ class REST {
                     
                     // Safety break to prevent infinite loops
                     if ($total_processed > 50000) {
-                        error_log('[WPVDB WARNING] Processed over 50k embeddings, stopping to prevent memory issues');
+                        Logger::warning('Fallback processing limit reached', ['processed' => $total_processed]);
                         break;
                     }
                 }
@@ -511,7 +520,11 @@ class REST {
                 // Limit results
                 $results = array_slice($distances, 0, $limit);
                 
-                error_log('[WPVDB DEBUG] Found ' . count($results) . ' matching documents using PHP fallback (processed ' . $total_processed . ' total)');
+                $fallback_duration = microtime(true) - $fallback_start;
+                Logger::log_performance('php_fallback_similarity_search', $fallback_duration, [
+                    'total_processed' => $total_processed,
+                    'results_returned' => count($results)
+                ]);
             }
             
             // Add debug info
@@ -532,9 +545,16 @@ class REST {
             // Cache the result for future requests
             Cache::set_query_result($text, $model, $limit, $response_data);
             
+            // Log overall performance
+            Logger::end_timer('query_processing', $start_time, [
+                'results_count' => count($results),
+                'has_vector_support' => $has_vector,
+                'query_length' => strlen($text)
+            ]);
+            
             return rest_ensure_response($response_data);
         } catch (\Exception $e) {
-            error_log('[WPVDB ERROR] Unhandled exception: ' . $e->getMessage());
+            Logger::log_exception($e, 'Unhandled query exception');
             return new \WP_Error('error', $e->getMessage(), ['status' => 500]);
         }
     }

@@ -133,9 +133,7 @@ class Core {
         // Check cache first
         $cached_embedding = Cache::get_embedding($text, $model);
         if ($cached_embedding !== false && is_array($cached_embedding)) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('[WPVDB CACHE] Using cached embedding for text length: ' . strlen($text));
-            }
+            Logger::debug('Using cached embedding', ['text_length' => strlen($text), 'model' => $model]);
             return $cached_embedding;
         }
         
@@ -225,14 +223,9 @@ class Core {
         return self::get_embedding($text, $model_name, $api_base, $api_key);
     }
 
-    // Add a logging function
+    // Add a logging function (deprecated - use Logger class directly)
     public static function log_error($message, $context = []) {
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('WPVDB Error: ' . $message . ' ' . wp_json_encode($context));
-        }
-        
-        // Maybe store in database for admin viewing
-        // ...
+        Logger::error($message, $context);
     }
 
     /**

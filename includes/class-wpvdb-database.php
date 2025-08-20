@@ -42,14 +42,14 @@ class Database {
             if (null === $this->db_type) {
                 global $wpdb;
                 $version = $wpdb->get_var('SELECT VERSION()');
-                error_log('[WPVDB DEBUG] Database version: ' . $version);
+                Logger::debug('Database version detected', ['version' => $version]);
                 
                 $this->db_type = stripos($version, 'mariadb') !== false ? 'mariadb' : 'mysql';
-                error_log('[WPVDB DEBUG] Detected database type: ' . $this->db_type);
+                Logger::info('Database type determined', ['type' => $this->db_type]);
             }
             return $this->db_type;
         } catch (\Exception $e) {
-            error_log('[WPVDB ERROR] Failed to detect database type: ' . $e->getMessage());
+            Logger::log_exception($e, 'Failed to detect database type');
             return 'unknown';
         }
     }
@@ -161,10 +161,10 @@ class Database {
                 }
             }
             
-            error_log('[WPVDB] Database has native vector support: ' . ($this->has_vector_support ? 'Yes' : 'No'));
+            Logger::info('Vector support determination completed', ['has_support' => $this->has_vector_support]);
             return $this->has_vector_support;
         } catch (\Exception $e) {
-            error_log('[WPVDB] Fatal error checking vector support: ' . $e->getMessage());
+            Logger::log_exception($e, 'Fatal error checking vector support');
             return false;
         }
     }

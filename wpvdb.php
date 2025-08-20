@@ -44,6 +44,7 @@ if (file_exists(WPVDB_PLUGIN_DIR . 'vendor/woocommerce/action-scheduler/action-s
 }
 
 // Include class files.
+require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-logger.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-security.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-cache.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-database.php';
