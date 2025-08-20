@@ -203,7 +203,11 @@ class Admin {
         register_setting(
             'wpvdb_settings', 
             'wpvdb_settings',
-            [$this, 'validate_settings']
+            [
+                'sanitize_callback' => [$this, 'validate_settings'],
+                'show_in_rest' => false,
+                'default' => []
+            ]
         );
         
         // Initialize default settings if they don't exist
@@ -219,7 +223,7 @@ class Admin {
                     'default_model' => 'a8cai-embeddings-small-1',
                 ],
                 'chunk_size' => 1000,
-                'chunk_overlap' => 200,
+                'chunk_overlap' => 20,
                 'auto_embed' => false,
                 'post_types' => ['post', 'page'],
                 'active_provider' => '',
@@ -246,6 +250,12 @@ class Admin {
         // Get the current settings
         $current_settings = get_option('wpvdb_settings', []);
         
+        // Ensure input is an array
+        if (!is_array($input)) {
+            error_log('WPVDB: Invalid input - not an array');
+            return $current_settings;
+        }
+        
         // If we're receiving settings from the Automattic connect page
         if (isset($input['automattic']['api_key']) && !empty($input['automattic']['api_key'])) {
             error_log('WPVDB: Automattic API key received from connect page');
@@ -268,18 +278,40 @@ class Admin {
         if (isset($input['openai']['api_key'])) {
             $input['openai']['api_key'] = sanitize_text_field($input['openai']['api_key']);
         }
+        if (isset($input['openai']['organization'])) {
+            $input['openai']['organization'] = sanitize_text_field($input['openai']['organization']);
+        }
+        if (isset($input['openai']['api_version'])) {
+            $input['openai']['api_version'] = sanitize_text_field($input['openai']['api_version']);
+        }
         if (isset($input['automattic']['api_key'])) {
             $input['automattic']['api_key'] = sanitize_text_field($input['automattic']['api_key']);
+        }
+        if (isset($input['automattic']['api_base'])) {
+            $input['automattic']['api_base'] = sanitize_text_field($input['automattic']['api_base']);
+        }
+        if (isset($input['specter']['api_base'])) {
+            $input['specter']['api_base'] = sanitize_text_field($input['specter']['api_base']);
         }
         if (isset($input['active_provider'])) {
             $input['active_provider'] = sanitize_text_field($input['active_provider']);
             // For backwards compatibility
             $input['provider'] = $input['active_provider'];
             update_option('wpvdb_provider', $input['provider']);
+        } elseif (!isset($input['provider']) && isset($current_settings['active_provider'])) {
+            // If no provider in input, keep the current one
+            $input['provider'] = $current_settings['active_provider'];
+            $input['active_provider'] = $current_settings['active_provider'];
         }
         if (isset($input['openai']['default_model'])) {
             $input['openai']['default_model'] = sanitize_text_field($input['openai']['default_model']);
             update_option('wpvdb_openai_model', $input['openai']['default_model']);
+        }
+        if (isset($input['automattic']['default_model'])) {
+            $input['automattic']['default_model'] = sanitize_text_field($input['automattic']['default_model']);
+        }
+        if (isset($input['specter']['default_model'])) {
+            $input['specter']['default_model'] = sanitize_text_field($input['specter']['default_model']);
         }
         
         // Update individual options for backwards compatibility
@@ -303,13 +335,13 @@ class Admin {
         
         // Make sure each sub-array (openai, automattic) actually exists
         if (!isset($input['openai']) || !is_array($input['openai'])) {
-            $input['openai'] = [];
+            $input['openai'] = isset($current_settings['openai']) && is_array($current_settings['openai']) ? $current_settings['openai'] : [];
         }
         if (!isset($input['automattic']) || !is_array($input['automattic'])) {
-            $input['automattic'] = [];
+            $input['automattic'] = isset($current_settings['automattic']) && is_array($current_settings['automattic']) ? $current_settings['automattic'] : [];
         }
         if (!isset($input['specter']) || !is_array($input['specter'])) {
-            $input['specter'] = [];
+            $input['specter'] = isset($current_settings['specter']) && is_array($current_settings['specter']) ? $current_settings['specter'] : [];
         }
         
         // Make sure api_key and default_model at least exist (even if empty)
@@ -337,11 +369,44 @@ class Admin {
         // Explicitly handle checkboxes
         // If not set in input, they were unchecked
         $input['auto_embed'] = isset($input['auto_embed']) ? 1 : 0;
-        $input['enable_summarization'] = isset($input['enable_summarization']) ? 1 : 0;
+        $input['summarize_chunks'] = isset($input['summarize_chunks']) ? 1 : 0;
+        $input['include_metadata'] = isset($input['include_metadata']) ? 1 : 0;
+        $input['include_taxonomies'] = isset($input['include_taxonomies']) ? 1 : 0;
+        $input['include_acf'] = isset($input['include_acf']) ? 1 : 0;
+        $input['include_comments'] = isset($input['include_comments']) ? 1 : 0;
+        $input['include_featured_image'] = isset($input['include_featured_image']) ? 1 : 0;
         
         // Ensure chunk_size and chunk_overlap have values
         $input['chunk_size'] = isset($input['chunk_size']) ? intval($input['chunk_size']) : 1000;
-        $input['chunk_overlap'] = isset($input['chunk_overlap']) ? intval($input['chunk_overlap']) : 200;
+        $input['chunk_overlap'] = isset($input['chunk_overlap']) ? intval($input['chunk_overlap']) : 20;
+        
+        // Handle queue batch size
+        $input['queue_batch_size'] = isset($input['queue_batch_size']) ? intval($input['queue_batch_size']) : 10;
+        
+        // Handle comma-separated fields for taxonomies and custom fields
+        if (isset($input['exclude_taxonomies'])) {
+            if (is_string($input['exclude_taxonomies'])) {
+                $input['exclude_taxonomies'] = array_filter(array_map('trim', explode(',', $input['exclude_taxonomies'])));
+            }
+        } else {
+            $input['exclude_taxonomies'] = [];
+        }
+        
+        if (isset($input['include_custom_fields'])) {
+            if (is_string($input['include_custom_fields'])) {
+                $input['include_custom_fields'] = array_filter(array_map('trim', explode(',', $input['include_custom_fields'])));
+            }
+        } else {
+            $input['include_custom_fields'] = [];
+        }
+        
+        if (isset($input['exclude_custom_fields'])) {
+            if (is_string($input['exclude_custom_fields'])) {
+                $input['exclude_custom_fields'] = array_filter(array_map('trim', explode(',', $input['exclude_custom_fields'])));
+            }
+        } else {
+            $input['exclude_custom_fields'] = [];
+        }
         
         // Ensure post_types exists
         if (!isset($input['post_types']) || !is_array($input['post_types'])) {
@@ -393,14 +458,16 @@ class Admin {
         // Check if we have active provider/model defined yet
         if (empty($current_settings['active_provider']) && empty($current_settings['active_model'])) {
             // This is the first-time setup - set active and pending to the current selection
-            $input['active_provider'] = $input['provider'];
+            $current_provider = isset($input['provider']) ? $input['provider'] : (isset($input['active_provider']) ? $input['active_provider'] : 'openai');
+            $input['active_provider'] = $current_provider;
+            $input['provider'] = $current_provider;
             
-            if ($input['provider'] === 'openai') {
-                $input['active_model'] = $input['openai']['default_model'];
-            } else if ($input['provider'] === 'automattic') {
-                $input['active_model'] = $input['automattic']['default_model'];
-            } else if ($input['provider'] === 'specter') {
-                $input['active_model'] = isset($_POST['wpvdb_specter_model']) ? sanitize_text_field($_POST['wpvdb_specter_model']) : 'specter2';
+            if ($current_provider === 'openai') {
+                $input['active_model'] = isset($input['openai']['default_model']) ? $input['openai']['default_model'] : 'text-embedding-3-small';
+            } else if ($current_provider === 'automattic') {
+                $input['active_model'] = isset($input['automattic']['default_model']) ? $input['automattic']['default_model'] : 'a8cai-embeddings-small-1';
+            } else if ($current_provider === 'specter') {
+                $input['active_model'] = isset($input['specter']['default_model']) ? $input['specter']['default_model'] : 'specter2';
             }
             
             // Clear pending values
@@ -411,15 +478,15 @@ class Admin {
             $current_provider = $current_settings['active_provider'];
             $current_model = $current_settings['active_model'];
             
-            $new_provider = $input['provider'];
+            $new_provider = isset($input['provider']) ? $input['provider'] : (isset($input['active_provider']) ? $input['active_provider'] : $current_provider);
             $new_model = '';
             
             if ($new_provider === 'openai') {
-                $new_model = $input['openai']['default_model'];
+                $new_model = isset($input['openai']['default_model']) ? $input['openai']['default_model'] : (isset($current_settings['openai']['default_model']) ? $current_settings['openai']['default_model'] : 'text-embedding-3-small');
             } else if ($new_provider === 'automattic') {
-                $new_model = $input['automattic']['default_model'];
+                $new_model = isset($input['automattic']['default_model']) ? $input['automattic']['default_model'] : (isset($current_settings['automattic']['default_model']) ? $current_settings['automattic']['default_model'] : 'a8cai-embeddings-small-1');
             } else if ($new_provider === 'specter') {
-                $new_model = isset($_POST['wpvdb_specter_model']) ? sanitize_text_field($_POST['wpvdb_specter_model']) : 'specter2';
+                $new_model = isset($input['specter']['default_model']) ? $input['specter']['default_model'] : 'specter2';
             }
             
             // If provider or model changed, set pending values

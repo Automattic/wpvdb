@@ -13,7 +13,7 @@ $has_pending_change = \WPVDB\Settings::has_pending_provider_change();
 // Get other settings
 $auto_embed_post_types = isset($settings['post_types']) ? $settings['post_types'] : ['post'];
 $chunk_size = isset($settings['chunk_size']) ? $settings['chunk_size'] : 1000;
-$chunk_overlap = isset($settings['chunk_overlap']) ? $settings['chunk_overlap'] : 200;
+$chunk_overlap = isset($settings['chunk_overlap']) ? $settings['chunk_overlap'] : 20;
 $summarize_chunks = isset($settings['summarize_chunks']) ? $settings['summarize_chunks'] : false;
 $include_metadata = isset($settings['include_metadata']) ? $settings['include_metadata'] : true;
 $include_taxonomies = isset($settings['include_taxonomies']) ? $settings['include_taxonomies'] : true;
@@ -105,6 +105,9 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
     
     <form method="post" action="options.php" id="wpvdb-settings-form">
         <?php settings_fields('wpvdb_settings'); ?>
+        <?php if ($current_section !== 'api'): ?>
+            <input type="hidden" name="_wp_http_referer" value="<?php echo esc_attr(add_query_arg(['page' => 'wpvdb-settings', 'section' => $current_section], admin_url('admin.php'))); ?>" />
+        <?php endif; ?>
         
         <!-- API Configuration Section -->
         <div class="wpvdb-settings-section" <?php echo $current_section !== 'api' ? 'style="display: none;"' : ''; ?>>
@@ -194,7 +197,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <input type="text" 
-                               name="wpvdb_openai_organization" 
+                               name="wpvdb_settings[openai][organization]" 
                                id="wpvdb_openai_organization" 
                                value="<?php echo esc_attr($openai_organization); ?>" 
                                class="regular-text">
@@ -210,7 +213,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <input type="text" 
-                               name="wpvdb_openai_api_version" 
+                               name="wpvdb_settings[openai][api_version]" 
                                id="wpvdb_openai_api_version" 
                                value="<?php echo esc_attr($openai_api_version); ?>" 
                                placeholder="Leave blank for latest version"
@@ -243,7 +246,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                         <label for="wpvdb_automattic_model"><?php esc_html_e('Automattic AI Embedding Model', 'wpvdb'); ?></label>
                     </th>
                     <td>
-                        <select name="wpvdb_automattic_model" id="wpvdb_automattic_model">
+                        <select name="wpvdb_settings[automattic][default_model]" id="wpvdb_automattic_model">
                             <?php if (isset($available_models['automattic']) && is_array($available_models['automattic'])): ?>
                                 <?php foreach ($available_models['automattic'] as $model_id => $model_data): ?>
                                 <option value="<?php echo esc_attr($model_id); ?>" <?php selected($active_model, $model_id); ?>>
@@ -267,7 +270,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <input type="text" 
-                               name="wpvdb_automattic_endpoint" 
+                               name="wpvdb_settings[automattic][api_base]" 
                                id="wpvdb_automattic_endpoint" 
                                value="<?php echo esc_attr($automattic_endpoint); ?>" 
                                class="regular-text">
@@ -294,7 +297,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                         <label for="wpvdb_specter_model"><?php esc_html_e('SPECTER Embedding Model', 'wpvdb'); ?></label>
                     </th>
                     <td>
-                        <select name="wpvdb_specter_model" id="wpvdb_specter_model">
+                        <select name="wpvdb_settings[specter][default_model]" id="wpvdb_specter_model">
                             <?php if (isset($available_models['specter']) && is_array($available_models['specter'])): ?>
                                 <?php foreach ($available_models['specter'] as $model_id => $model_data): ?>
                                 <option value="<?php echo esc_attr($model_id); ?>" <?php selected($active_model, $model_id); ?>>
@@ -317,7 +320,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <input type="text" 
-                               name="wpvdb_specter_endpoint" 
+                               name="wpvdb_settings[specter][api_base]" 
                                id="wpvdb_specter_endpoint" 
                                value="<?php echo esc_attr(\WPVDB\Providers::get_api_base('specter')); ?>" 
                                class="regular-text">
@@ -333,7 +336,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <input type="number" 
-                               name="wpvdb_embedding_batch_size" 
+                               name="wpvdb_settings[queue_batch_size]" 
                                id="wpvdb_embedding_batch_size" 
                                value="<?php echo esc_attr($embedding_batch_size); ?>" 
                                min="1" 
@@ -409,7 +412,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                                 <p>
                                     <label>
                                         <input type="checkbox" 
-                                               name="wpvdb_auto_embed_post_types[]" 
+                                               name="wpvdb_settings[post_types][]" 
                                                value="<?php echo esc_attr($post_type->name); ?>" 
                                                <?php echo $checked; ?>
                                                class="wpvdb-post-type-checkbox">
@@ -431,7 +434,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <input type="number" 
-                               name="wpvdb_chunk_size" 
+                               name="wpvdb_settings[chunk_size]" 
                                id="wpvdb_chunk_size" 
                                value="<?php echo esc_attr($chunk_size); ?>" 
                                min="50" 
@@ -450,7 +453,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <input type="number" 
-                               name="wpvdb_chunk_overlap" 
+                               name="wpvdb_settings[chunk_overlap]" 
                                id="wpvdb_chunk_overlap" 
                                value="<?php echo esc_attr($chunk_overlap); ?>" 
                                min="0" 
@@ -469,7 +472,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     <td>
                         <label>
                             <input type="checkbox" 
-                                   name="wpvdb_summarize_chunks" 
+                                   name="wpvdb_settings[summarize_chunks]" 
                                    id="wpvdb_summarize_chunks" 
                                    value="1" 
                                    <?php checked($summarize_chunks, true); ?>>
@@ -495,7 +498,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     <td>
                         <label>
                             <input type="checkbox" 
-                                   name="wpvdb_include_metadata" 
+                                   name="wpvdb_settings[include_metadata]" 
                                    id="wpvdb_include_metadata" 
                                    value="1" 
                                    <?php checked($include_metadata, true); ?>>
@@ -514,7 +517,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     <td>
                         <label>
                             <input type="checkbox" 
-                                   name="wpvdb_include_taxonomies" 
+                                   name="wpvdb_settings[include_taxonomies]" 
                                    id="wpvdb_include_taxonomies" 
                                    value="1" 
                                    <?php checked($include_taxonomies, true); ?>>
@@ -532,7 +535,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <input type="text" 
-                               name="wpvdb_exclude_taxonomies" 
+                               name="wpvdb_settings[exclude_taxonomies]" 
                                id="wpvdb_exclude_taxonomies" 
                                value="<?php echo esc_attr(implode(', ', $exclude_taxonomies)); ?>" 
                                class="regular-text">
@@ -549,7 +552,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     <td>
                         <label>
                             <input type="checkbox" 
-                                   name="wpvdb_include_acf" 
+                                   name="wpvdb_settings[include_acf]" 
                                    id="wpvdb_include_acf" 
                                    value="1" 
                                    <?php checked($include_acf, true); ?>>
@@ -568,7 +571,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     <td>
                         <label>
                             <input type="checkbox" 
-                                   name="wpvdb_include_comments" 
+                                   name="wpvdb_settings[include_comments]" 
                                    id="wpvdb_include_comments" 
                                    value="1" 
                                    <?php checked($include_comments, true); ?>>
@@ -587,7 +590,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     <td>
                         <label>
                             <input type="checkbox" 
-                                   name="wpvdb_include_featured_image" 
+                                   name="wpvdb_settings[include_featured_image]" 
                                    id="wpvdb_include_featured_image" 
                                    value="1" 
                                    <?php checked($include_featured_image, true); ?>>
@@ -605,7 +608,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <input type="text" 
-                               name="wpvdb_include_custom_fields" 
+                               name="wpvdb_settings[include_custom_fields]" 
                                id="wpvdb_include_custom_fields" 
                                value="<?php echo esc_attr(implode(', ', $include_custom_fields)); ?>" 
                                class="regular-text">
@@ -621,7 +624,7 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <input type="text" 
-                               name="wpvdb_exclude_custom_fields" 
+                               name="wpvdb_settings[exclude_custom_fields]" 
                                id="wpvdb_exclude_custom_fields" 
                                value="<?php echo esc_attr(implode(', ', $exclude_custom_fields)); ?>" 
                                class="regular-text">
