@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<phpunit
+    bootstrap="tests/bootstrap.php"
+    backupGlobals="false"
+    colors="true"
+    convertErrorsToExceptions="true"
+    convertNoticesToExceptions="true"
+    convertWarningsToExceptions="true"
+    processIsolation="false"
+    stopOnFailure="false"
+    verbose="true"
+>
+    <testsuites>
+        <testsuite name="unit">
+            <directory>tests/unit</directory>
+        </testsuite>
+        <testsuite name="integration">
+            <directory>tests/integration</directory>
+        </testsuite>
+        <testsuite name="api">
+            <directory>tests/api</directory>
+        </testsuite>
+    </testsuites>
+    <coverage processUncoveredFiles="true">
+        <include>
+            <directory suffix=".php">includes</directory>
+        </include>
+        <exclude>
+            <directory>vendor</directory>
+            <directory>tests</directory>
+        </exclude>
+    </coverage>
+    <php>
+        <const name="WP_TESTS_DOMAIN" value="example.org" />
+        <const name="WP_TESTS_EMAIL" value="admin@example.org" />
+        <const name="WP_TESTS_TITLE" value="Test Blog" />
+        <const name="WP_PHP_BINARY" value="php" />
+        <const name="WP_TESTS_FORCE_KNOWN_BUGS" value="true" />
+        <server name="SERVER_NAME" value="http://example.org" />
+    </php>
+</phpunit>
