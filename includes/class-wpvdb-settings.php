@@ -532,17 +532,6 @@ class Settings {
         return Models::get_default_model_for_provider($provider);
     }
 
-    /**
-     * Get active provider from settings
-     * 
-     * @return string Active provider name
-     */
-    public static function get_active_provider() {
-        $settings = get_option('wpvdb_settings', []);
-        return isset($settings['active_provider']) && !empty($settings['active_provider']) 
-            ? $settings['active_provider'] 
-            : 'openai';
-    }
 
     /**
      * Get active model from settings
@@ -558,53 +547,6 @@ class Settings {
         
         $active_provider = self::get_active_provider();
         return self::get_model_for_provider($active_provider);
-    }
-    
-    /**
-     * Get chunk size setting
-     */
-    public static function get_chunk_size() {
-        $settings = get_option('wpvdb_settings', []);
-        return isset($settings['chunk_size']) ? $settings['chunk_size'] : 1000;
-    }
-    
-    /**
-     * Get auto-embed post types
-     */
-    public static function get_auto_embed_post_types() {
-        $settings = get_option('wpvdb_settings', []);
-        return isset($settings['post_types']) && is_array($settings['post_types']) 
-            ? $settings['post_types'] 
-            : ['post'];
-    }
-    
-    /**
-     * Check if summarization is enabled
-     * 
-     * @return bool Whether summarization is enabled
-     */
-    public static function is_summarization_enabled() {
-        $settings = get_option('wpvdb_settings', []);
-        return isset($settings['enable_summarization']) && $settings['enable_summarization'] === '1';
-    }
-    
-    /**
-     * Get the batch size for queue processing
-     * 
-     * @return int Batch size (between 1 and 50)
-     */
-    public static function get_batch_size() {
-        $settings = get_option('wpvdb_settings', []);
-        $batch_size = isset($settings['queue_batch_size']) ? absint($settings['queue_batch_size']) : 10;
-        
-        // Ensure a reasonable value
-        if ($batch_size < 1) {
-            $batch_size = 1;
-        } else if ($batch_size > 50) {
-            $batch_size = 50;
-        }
-        
-        return $batch_size;
     }
     
     /**

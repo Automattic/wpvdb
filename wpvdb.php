@@ -1,15 +1,19 @@
 <?php
 /**
  * Plugin Name: WPVDB - WordPress Vector Database
- * Plugin URI:  https://wordpress.com/blog/wordpress-as-a-vector-database
+ * Plugin URI:  https://github.com/automattic/wpvdb
  * Description: Transform WordPress into a vector database with native or fallback support for vector columns, chunking, embedding, and REST endpoints.
  * Version:     1.0.13
- * Author:      Automattic AI, James LePage
- * Author URI:  https://automattic.ai
+ * Author:      Automattic, James LePage
+ * Author URI:  https://automattic.com
  * Text Domain: wpvdb
  * Domain Path: /languages/
+ * Network:     false
+ * License:     GPL v2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  *
  * Requires at least: 6.0
+ * Tested up to: 6.4
  * Requires PHP: 7.4
  *
  * @package WPVDB

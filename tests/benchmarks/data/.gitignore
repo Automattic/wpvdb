@@ -1,0 +1,11 @@
+# Benchmark data files - too large for git
+**/cohere_embeddings/
+**/ms_marco/
+**/pinecone_wikipedia/
+*.json
+*.parquet
+*.bin
+
+# Keep directory structure but ignore large datasets
+!.gitignore
+!README.md

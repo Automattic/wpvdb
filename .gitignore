@@ -1,6 +1,8 @@
 # Docker volumes created at runtime
 docker-compose.override.yml
 
+/benchmark_data/
+
 # PHP dependencies (if you add them later)
 /vendor/
 
@@ -28,7 +30,7 @@ Thumbs.db
 # Built/distribution files
 *.zip
 /dist/
-/build/ 
+/build/
 
 /docker/wordpress/setup/test-data.xml
 # Ignore scripts directory
