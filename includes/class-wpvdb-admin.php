@@ -200,6 +200,13 @@ class Admin {
      * Register plugin settings
      */
     public function register_settings() {
+        global $wp_registered_settings;
+
+        // Avoid re-registering if Settings class has already registered the option.
+        if (isset($wp_registered_settings['wpvdb_settings'])) {
+            return;
+        }
+
         register_setting(
             'wpvdb_settings', 
             'wpvdb_settings',
@@ -245,21 +252,16 @@ class Admin {
      * Validate settings and handle provider/model changes
      */
     public function validate_settings($input) {
-        error_log('WPVDB Settings Input: ' . print_r($input, true));
-        
         // Get the current settings
         $current_settings = get_option('wpvdb_settings', []);
         
         // Ensure input is an array
         if (!is_array($input)) {
-            error_log('WPVDB: Invalid input - not an array');
             return $current_settings;
         }
         
         // If we're receiving settings from the Automattic connect page
         if (isset($input['automattic']['api_key']) && !empty($input['automattic']['api_key'])) {
-            error_log('WPVDB: Automattic API key received from connect page');
-            
             // If this is a new connection, set Automattic as the active provider
             if (empty($current_settings['automattic']['api_key'])) {
                 $input['active_provider'] = 'automattic';
@@ -276,7 +278,7 @@ class Admin {
         
         // Sanitize the input data
         if (isset($input['openai']['api_key'])) {
-            $input['openai']['api_key'] = sanitize_text_field($input['openai']['api_key']);
+            $input['openai']['api_key'] = Settings::encrypt_api_key(sanitize_text_field($input['openai']['api_key']));
         }
         if (isset($input['openai']['organization'])) {
             $input['openai']['organization'] = sanitize_text_field($input['openai']['organization']);
@@ -285,7 +287,7 @@ class Admin {
             $input['openai']['api_version'] = sanitize_text_field($input['openai']['api_version']);
         }
         if (isset($input['automattic']['api_key'])) {
-            $input['automattic']['api_key'] = sanitize_text_field($input['automattic']['api_key']);
+            $input['automattic']['api_key'] = Settings::encrypt_api_key(sanitize_text_field($input['automattic']['api_key']));
         }
         if (isset($input['automattic']['api_base'])) {
             $input['automattic']['api_base'] = sanitize_text_field($input['automattic']['api_base']);
@@ -324,9 +326,6 @@ class Admin {
         if (isset($input['automattic']['default_model'])) {
             update_option('wpvdb_automattic_model', $input['automattic']['default_model']);
         }
-        
-        error_log('WPVDB Settings validated: ' . print_r($input, true));
-        
         
         // Ensure `$input` is an array at all
         if (!is_array($input)) {
@@ -948,23 +947,11 @@ class Admin {
      * Ajax handler for confirming provider/model changes
      */
     public function ajax_confirm_provider_change() {
-        // Debug - log all the request data first
-        error_log('WPVDB: Confirm provider change request received');
-        error_log('WPVDB: POST data: ' . print_r($_POST, true));
-        
         // Check nonce - be slightly more flexible in how we accept it
-        $has_valid_nonce = false;
-        
-        if (isset($_POST['nonce'])) {
-            $has_valid_nonce = wp_verify_nonce($_POST['nonce'], 'wpvdb-admin');
-            error_log('WPVDB: Nonce verification result: ' . ($has_valid_nonce ? 'valid' : 'invalid'));
-        } else {
-            error_log('WPVDB: No nonce provided in request');
-        }
-        
+        $has_valid_nonce = isset($_POST['nonce']) && wp_verify_nonce($_POST['nonce'], 'wpvdb-admin');
+
         // Don't immediately exit if nonce fails - log more information first
         if (!$has_valid_nonce) {
-            error_log('WPVDB: Invalid nonce - security check failed');
             // For added security, verify user capabilities regardless of nonce
             if (!current_user_can('manage_options')) {
                 wp_send_json_error(['message' => __('Permission denied - invalid security token (nonce)', 'wpvdb')]);
@@ -1034,15 +1021,8 @@ class Admin {
         }
         
         // Add debug information to the log
-        error_log('WPVDB: Current settings before change: ' . print_r($settings, true));
-        
         if ($cancel) {
             // User wants to cancel the pending change
-            error_log('WPVDB: Cancelling pending provider change');
-            
-            // Store the original settings for logging
-            $original_settings = $settings;
-            
             $settings['provider'] = $settings['active_provider'];
             if ($settings['active_provider'] === 'openai') {
                 $settings['openai']['default_model'] = $settings['active_model'];
@@ -1059,26 +1039,16 @@ class Admin {
             
             update_option('wpvdb_settings', $settings);
             
-            // Log the changes
-            error_log('WPVDB: Provider change cancelled');
-            error_log('WPVDB: Original settings: ' . print_r($original_settings, true));
-            error_log('WPVDB: Updated settings: ' . print_r($settings, true));
-            
             wp_send_json_success([
                 'message' => __('Provider change cancelled', 'wpvdb'),
                 'debug' => [
-                    'action' => 'cancel',
-                    'original_settings' => $original_settings,
-                    'updated_settings' => $settings
+                    'action' => 'cancel'
                 ]
             ]);
         } else {
             // User confirms the provider change
             global $wpdb;
             $table_name = $wpdb->prefix . 'wpvdb_embeddings';
-            
-            // Store the original settings for logging
-            $original_settings = $settings;
             
             // Get embedding count before deletion
             $embedding_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_name}");
@@ -1120,23 +1090,16 @@ class Admin {
                 update_option('wpvdb_settings', $settings);
                 
                 // Log the updated settings
-                error_log('WPVDB: Provider change applied successfully');
-                error_log('WPVDB: Original settings: ' . print_r($original_settings, true));
-                error_log('WPVDB: Updated settings: ' . print_r($settings, true));
-                error_log('WPVDB: Deleted ' . $embedding_count . ' embeddings');
-                
-                wp_send_json_success([
-                    'message' => sprintf(
-                        __('Provider changed successfully. %d embeddings have been deleted. Please re-index your content.', 'wpvdb'),
-                        $embedding_count
-                    ),
-                    'debug' => [
-                        'action' => 'apply',
-                        'embedding_count_deleted' => $embedding_count,
-                        'original_settings' => $original_settings,
-                        'updated_settings' => $settings
-                    ]
-                ]);
+                    wp_send_json_success([
+                        'message' => sprintf(
+                            __('Provider changed successfully. %d embeddings have been deleted. Please re-index your content.', 'wpvdb'),
+                            $embedding_count
+                        ),
+                        'debug' => [
+                            'action' => 'apply',
+                            'embedding_count_deleted' => $embedding_count,
+                        ]
+                    ]);
             } else {
                 error_log('WPVDB: No pending provider change found');
                 wp_send_json_error([
@@ -2265,9 +2228,6 @@ class Admin {
         // Get current settings
         $settings = get_option('wpvdb_settings', []);
         
-        // Debug log the original settings
-        error_log('WPVDB CRITICAL: handle_apply_provider_change called. Original settings: ' . print_r($settings, true));
-        
         if (!isset($settings['pending_provider']) || !isset($settings['pending_model'])) {
             wp_die('No pending provider change found.');
         }
@@ -2311,23 +2271,8 @@ class Admin {
         $settings['pending_provider'] = '';
         $settings['pending_model'] = '';
         
-        // Debug log before saving
-        error_log('WPVDB CRITICAL: About to update settings. New values:');
-        error_log('  - active_provider: ' . $original_active_provider . ' -> ' . $settings['active_provider']);
-        error_log('  - active_model: ' . $original_active_model . ' -> ' . $settings['active_model']);
-        error_log('  - provider: ' . $original_provider . ' -> ' . $settings['provider']);
-        error_log('  - pending_provider: ' . $pending_provider . ' -> ' . $settings['pending_provider']);
-        error_log('  - pending_model: ' . $pending_model . ' -> ' . $settings['pending_model']);
-        
         // Save settings - FORCE autoload to true to ensure the option is loaded on every page
         $update_result = update_option('wpvdb_settings', $settings, true);
-        
-        // Debug log the update result
-        error_log('WPVDB CRITICAL: update_option result: ' . ($update_result ? 'SUCCESS' : 'FAILED'));
-        
-        // Double-check that settings were saved correctly
-        $updated_settings = get_option('wpvdb_settings', []);
-        error_log('WPVDB CRITICAL: Re-fetched settings after update: ' . print_r($updated_settings, true));
         
         // Delete any transients that might be caching the settings
         delete_transient('wpvdb_settings');
@@ -2357,7 +2302,6 @@ class Admin {
             'cache-bust' => time() // Add a timestamp to bust any caching
         ], admin_url('admin.php'));
         
-        error_log('WPVDB CRITICAL: Redirecting to: ' . $redirect_url);
         wp_redirect($redirect_url);
         exit;
     }
@@ -2377,9 +2321,6 @@ class Admin {
         // Get current settings
         $settings = get_option('wpvdb_settings', []);
         
-        // Debug log the original settings
-        error_log('WPVDB CRITICAL: handle_cancel_provider_change called. Original settings: ' . print_r($settings, true));
-        
         // Store original values for debug logs
         $original_pending_provider = isset($settings['pending_provider']) ? $settings['pending_provider'] : 'none';
         $original_pending_model = isset($settings['pending_model']) ? $settings['pending_model'] : 'none';
@@ -2392,22 +2333,8 @@ class Admin {
         $settings['pending_provider'] = '';
         $settings['pending_model'] = '';
         
-        // Debug log before saving
-        error_log('WPVDB CRITICAL: About to update settings. Changes:');
-        error_log('  - pending_provider: ' . $original_pending_provider . ' -> ' . $settings['pending_provider']);
-        error_log('  - pending_model: ' . $original_pending_model . ' -> ' . $settings['pending_model']);
-        error_log('  - provider: ' . $original_provider . ' -> ' . $settings['provider']);
-        
         // Save settings with forced autoload
         $update_result = update_option('wpvdb_settings', $settings, true);
-        
-        // Debug log the update result
-        error_log('WPVDB CRITICAL: update_option result: ' . ($update_result ? 'SUCCESS' : 'FAILED'));
-        
-        // Double-check that settings were saved correctly
-        $updated_settings = get_option('wpvdb_settings', []);
-        error_log('WPVDB CRITICAL: Re-fetched settings after update: ' . print_r($updated_settings, true));
-        
         // Delete any transients that might be caching the settings
         delete_transient('wpvdb_settings');
         

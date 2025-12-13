@@ -558,9 +558,6 @@ class Settings {
         // CRITICAL FIX: Get settings directly from database, bypassing cache
         $settings = get_option('wpvdb_settings', []);
         
-        // Debug log for troubleshooting
-        error_log('WPVDB CRITICAL: has_pending_provider_change check. Settings: ' . print_r($settings, true));
-        
         if (!is_array($settings)) {
             error_log('WPVDB CRITICAL: Invalid settings format - not an array');
             return false;
