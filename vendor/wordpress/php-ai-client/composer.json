@@ -1,0 +1,79 @@
+{
+    "name": "wordpress/php-ai-client",
+    "description": "A provider agnostic PHP AI client SDK to communicate with any generative AI models of various capabilities using a uniform API.",
+    "license": "GPL-2.0-or-later",
+    "type": "library",
+    "keywords": [
+        "ai",
+        "api",
+        "llm"
+    ],
+    "authors": [
+        {
+            "name": "WordPress AI Team",
+            "homepage": "https://make.wordpress.org/ai/"
+        }
+    ],
+    "homepage": "https://github.com/WordPress/php-ai-client",
+    "support": {
+        "issues": "https://github.com/WordPress/php-ai-client/issues",
+        "source": "https://github.com/WordPress/php-ai-client"
+    },
+    "require": {
+        "php": ">=7.4",
+        "ext-json": "*",
+        "php-http/discovery": "^1.0",
+        "php-http/httplug": "^2.0",
+        "php-http/message-factory": "^1.0",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.0",
+        "psr/http-message": "^1.0 || ^2.0"
+    },
+    "require-dev": {
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+        "guzzlehttp/psr7": "^1.0 || ^2.0",
+        "php-http/curl-client": "^2.0",
+        "php-http/mock-client": "^1.0",
+        "phpcompatibility/php-compatibility": "dev-develop",
+        "phpstan/phpstan": "~2.1",
+        "phpunit/phpunit": "^9.5 || ^10.0",
+        "slevomat/coding-standard": "^8.20",
+        "squizlabs/php_codesniffer": "^3.7"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "autoload": {
+        "psr-4": {
+            "WordPress\\AiClient\\": "src/"
+        },
+        "files": [
+            "src/polyfills.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "WordPress\\AiClient\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "php-http/discovery": true
+        },
+        "optimize-autoloader": true,
+        "platform": {
+            "php": "7.4"
+        },
+        "sort-packages": true
+    },
+    "scripts": {
+        "lint": [
+            "@phpcs",
+            "@phpstan"
+        ],
+        "phpcbf": "phpcbf",
+        "phpcs": "phpcs",
+        "phpstan": "phpstan analyze --memory-limit=256M",
+        "phpunit": "phpunit"
+    }
+}
