@@ -4,10 +4,13 @@
     // Display debug information if needed
     $show_debug = isset($_GET['debug']);
     
-    // Also check for debug constant if defined
-    if (defined('WPVDB_DEBUG')) {
-        $show_debug = $show_debug || (constant('WPVDB_DEBUG') === true);
-    }
+// Also check for debug constant if defined
+if (defined('WPVDB_DEBUG')) {
+    $show_debug = $show_debug || (constant('WPVDB_DEBUG') === true);
+}
+
+$active_provider = \WPVDB\Settings::get_active_provider();
+$api_key = \WPVDB\Settings::get_api_key();
     
     if ($show_debug) {
         // Get and display settings information
@@ -81,7 +84,6 @@
         $database = new \WPVDB\Database();
         
         // Get plugin settings
-        $settings = \WPVDB\Settings::get_instance();
         $model = \WPVDB\Settings::get_default_model();
         $api_base = \WPVDB\Settings::get_api_base();
         $db_type = $database->get_db_type();

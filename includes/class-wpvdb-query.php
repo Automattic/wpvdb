@@ -61,6 +61,9 @@ class Query {
         // We'll do a direct call to the REST method or replicate logic from REST::handle_query.
         $api_key = apply_filters('wpvdb_default_api_key', '');
         if (!$api_key) {
+            $api_key = Settings::get_api_key();
+        }
+        if (!$api_key) {
             // If there's no stored key, we can't generate embeddings. We skip.
             error_log('[WPVDB ERROR] No API key found, skipping vector search');
             return;

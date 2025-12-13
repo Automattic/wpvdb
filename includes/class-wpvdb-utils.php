@@ -324,3 +324,16 @@ class Utils {
         return esc_attr($text);
     }
 }
+
+/**
+ * Check whether Action Scheduler is available.
+ *
+ * @since 1.0.13
+ *
+ * @return bool
+ */
+if (!function_exists('wpvdb_has_action_scheduler')) {
+    function wpvdb_has_action_scheduler() {
+        return class_exists('ActionScheduler') && function_exists('as_schedule_single_action');
+    }
+}

@@ -131,9 +131,11 @@ class Activation {
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
             doc_id bigint(20) unsigned NOT NULL,
             doc_type varchar(20) NOT NULL DEFAULT 'post',
-            model varchar(64) NOT NULL,
+            chunk_id varchar(191) NOT NULL DEFAULT 'chunk-0',
             chunk_index int(11) NOT NULL DEFAULT 0,
-            chunk_text longtext NOT NULL,
+            chunk_content longtext NOT NULL,
+            summary longtext DEFAULT NULL,
+            model varchar(64) NOT NULL DEFAULT '',
             embedding {$embedding_type} NOT NULL,
             embedding_date datetime DEFAULT NULL,
             meta longtext DEFAULT NULL,
@@ -142,6 +144,7 @@ class Activation {
             KEY model_idx (model),
             KEY doc_type_idx (doc_type),
             KEY embedding_date_idx (embedding_date),
+            KEY chunk_id_idx (chunk_id),
             KEY compound_search_idx (doc_type, model, embedding_date)
         ) $collate;\n";
 

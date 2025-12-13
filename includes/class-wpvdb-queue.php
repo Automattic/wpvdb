@@ -410,7 +410,10 @@ class WPVDB_Queue {
                 'chunk-' . $index,
                 $chunk,
                 $summary,
-                $embedding_result
+                $embedding_result,
+                $model,
+                $post->post_type,
+                $index
             );
             
             if (is_wp_error($result)) {

@@ -12,6 +12,12 @@ namespace WPVDB;
  */
 class Database {
     /**
+     * Singleton instance.
+     *
+     * @var Database|null
+     */
+    private static $instance = null;
+    /**
      * Cache for database type
      *
      * @var string|null
@@ -31,6 +37,18 @@ class Database {
      * @var bool|null
      */
     private $fallbacks_enabled = null;
+
+    /**
+     * Get singleton instance.
+     *
+     * @return Database
+     */
+    public static function get_instance() {
+        if (null === self::$instance) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
 
     /**
      * Get the database type (mysql or mariadb)
@@ -78,7 +96,7 @@ class Database {
      */
     public function has_native_vector_support() {
         global $wpdb;
-        
+
         try {
             // If we've already determined vector support, return cached result
             if (isset($this->has_vector_support)) {
@@ -165,6 +183,81 @@ class Database {
             return $this->has_vector_support;
         } catch (\Exception $e) {
             Logger::log_exception($e, 'Fatal error checking vector support');
+            return false;
+        }
+    }
+
+    /**
+     * Verify MariaDB vector functions exist.
+     *
+     * @return bool
+     */
+    private function test_mariadb_vector_functions() {
+        global $wpdb;
+
+        try {
+            $probe_table = $wpdb->prefix . 'wpvdb_vector_probe';
+            $wpdb->query("DROP TABLE IF EXISTS {$probe_table}");
+            $create = $wpdb->query("CREATE TABLE {$probe_table} (id INT PRIMARY KEY AUTO_INCREMENT, embedding VECTOR(3) NOT NULL)");
+            if ($create === false) {
+                return false;
+            }
+
+            $wpdb->query("INSERT INTO {$probe_table} (embedding) VALUES (VEC_FromText('[1,0,0]')), (VEC_FromText('[0,1,0]'))");
+            $distance = $wpdb->get_var("SELECT VEC_DISTANCE_COSINE(embedding, VEC_FromText('[1,0,0]')) FROM {$probe_table} LIMIT 1");
+            $wpdb->query("DROP TABLE IF EXISTS {$probe_table}");
+
+            return is_numeric($distance);
+        } catch (\Exception $e) {
+            Logger::log_exception($e, 'MariaDB vector function probe failed');
+            return false;
+        }
+    }
+
+    /**
+     * Verify MySQL VECTOR storage is available.
+     *
+     * @return bool
+     */
+    private function test_mysql_vector_storage() {
+        global $wpdb;
+
+        try {
+            $probe_table = $wpdb->prefix . 'wpvdb_vector_probe';
+            $wpdb->query("DROP TABLE IF EXISTS {$probe_table}");
+            $create = $wpdb->query("CREATE TABLE {$probe_table} (id INT PRIMARY KEY AUTO_INCREMENT, embedding VECTOR(3) NOT NULL)");
+            if ($create === false) {
+                return false;
+            }
+
+            $wpdb->query($wpdb->prepare("INSERT INTO {$probe_table} (embedding) VALUES (STRING_TO_VECTOR(%s))", '[1,0,0]'));
+            $row_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$probe_table}");
+            $wpdb->query("DROP TABLE IF EXISTS {$probe_table}");
+
+            return $row_count === 1;
+        } catch (\Exception $e) {
+            Logger::log_exception($e, 'MySQL vector storage probe failed');
+            return false;
+        }
+    }
+
+    /**
+     * Check for custom MySQL vector helper functions.
+     *
+     * @return bool
+     */
+    private function has_custom_mysql_functions() {
+        global $wpdb;
+
+        try {
+            $count = $wpdb->get_var(
+                "SELECT COUNT(*) FROM information_schema.ROUTINES 
+                 WHERE ROUTINE_TYPE='FUNCTION' 
+                 AND ROUTINE_NAME IN ('WPVDB_COSINE_DISTANCE','WPVDB_EUCLIDEAN_DISTANCE','WPVDB_DOT_PRODUCT')"
+            );
+            return is_numeric($count) && (int) $count > 0;
+        } catch (\Exception $e) {
+            Logger::log_exception($e, 'Custom MySQL function check failed');
             return false;
         }
     }
@@ -398,7 +491,7 @@ class Database {
             // Delete all embeddings for this post
             $wpdb->delete(
                 $table_name,
-                ['post_id' => $post_id],
+                ['doc_id' => $post_id],
                 ['%d']
             );
             

@@ -289,7 +289,7 @@ class Maintenance {
         $corrupted = $wpdb->get_var("
             SELECT COUNT(*) FROM {$table_name} 
             WHERE embedding IS NULL 
-            OR chunk_text = '' 
+            OR chunk_content = '' 
             OR doc_id = 0
         ");
         

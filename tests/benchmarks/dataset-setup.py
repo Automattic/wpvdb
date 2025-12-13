@@ -32,7 +32,7 @@ def setup_directories():
 
 def download_cohere_dataset(sample_size=140000):
     """Download Cohere Wikipedia embeddings dataset"""
-    print(f"📥 Downloading Cohere Wikipedia embeddings (sample: {sample_size:,} records)")
+    print(f"[INFO] Downloading Cohere Wikipedia embeddings (sample: {sample_size:,} records)")
 
     try:
         # Load dataset from HuggingFace
@@ -53,7 +53,7 @@ def download_cohere_dataset(sample_size=140000):
         current_chunk = []
         total_processed = 0
 
-        print(f"💾 Processing {sample_size:,} records in chunks of {chunk_size:,}")
+        print(f"[INFO] Processing {sample_size:,} records in chunks of {chunk_size:,}")
 
         for item in tqdm(dataset, desc="Processing"):
             # Extract relevant fields
@@ -85,7 +85,7 @@ def download_cohere_dataset(sample_size=140000):
                 json.dump(current_chunk, f, separators=(',', ':'))
             print(f"✅ Saved final chunk {chunk_num:,}: {len(current_chunk):,} records")
 
-        print(f"🎉 Dataset download complete: {total_processed:,} records in {chunk_num + 1:,} chunks")
+        print(f"[INFO] Dataset download complete: {total_processed:,} records in {chunk_num + 1:,} chunks")
         return True
 
     except Exception as e:
@@ -94,7 +94,7 @@ def download_cohere_dataset(sample_size=140000):
 
 def validate_dataset():
     """Validate downloaded dataset"""
-    print("🔍 Validating dataset...")
+    print("[INFO] Validating dataset...")
 
     cohere_dir = DATA_DIR / "cohere_embeddings"
     if not cohere_dir.exists():
@@ -145,7 +145,7 @@ def main():
     if not validate_dataset():
         sys.exit(1)
 
-    print("\n🎉 Dataset setup complete!")
+    print("\n[INFO] Dataset setup complete!")
     print("\nNext steps:")
     print("1. Run benchmarks: php tests/benchmarks/wpvdb-benchmark.php")
     print("2. Load data: Use the benchmark script's load function")

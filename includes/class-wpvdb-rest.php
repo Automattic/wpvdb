@@ -205,7 +205,7 @@ class REST {
             }
 
             // Insert into DB
-            $res = self::insert_embedding_row($doc_id, 'chunk-' . $index, $chunk, $summary, $embedding_result);
+            $res = self::insert_embedding_row($doc_id, 'chunk-' . $index, $chunk, $summary, $embedding_result, $model, 'post', $index);
             if (is_wp_error($res)) {
                 return $res;
             }
@@ -279,7 +279,7 @@ class REST {
             'embedding_dimensions' => count($validated_embedding)
         ]);
 
-        $res = self::insert_embedding_row($doc_id, $chunk_id, $chunk_content, $summary, $validated_embedding);
+        $res = self::insert_embedding_row($doc_id, $chunk_id, $chunk_content, $summary, $validated_embedding, $model_for_insert, 'post', $chunk_index);
         if (is_wp_error($res)) {
             return $res;
         }

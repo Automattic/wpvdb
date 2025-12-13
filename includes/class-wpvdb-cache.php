@@ -234,7 +234,7 @@ class Cache {
         // Simple approach: cache recent embeddings
         $recent_embeddings = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT chunk_text, model, embedding FROM {$table_name} 
+                "SELECT chunk_content, model, embedding FROM {$table_name} 
                  WHERE embedding_date > DATE_SUB(NOW(), INTERVAL 1 DAY)
                  ORDER BY embedding_date DESC 
                  LIMIT %d",
@@ -245,10 +245,10 @@ class Cache {
         
         $preloaded = 0;
         foreach ($recent_embeddings as $row) {
-            if (!empty($row['chunk_text']) && !empty($row['embedding'])) {
+            if (!empty($row['chunk_content']) && !empty($row['embedding'])) {
                 $embedding = json_decode($row['embedding'], true);
                 if (is_array($embedding)) {
-                    self::set_embedding($row['chunk_text'], $row['model'], $embedding);
+                    self::set_embedding($row['chunk_content'], $row['model'], $embedding);
                     $preloaded++;
                 }
             }

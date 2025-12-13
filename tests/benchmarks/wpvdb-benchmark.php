@@ -24,27 +24,27 @@ $embedding_table = $wpdb->prefix . 'wpvdb_embeddings';
 
 // Check if we have the data
 $embedding_count = $wpdb->get_var("SELECT COUNT(*) FROM $embedding_table");
-echo "📊 Embeddings available: " . number_format($embedding_count) . "\n";
+echo "[INFO] Embeddings available: " . number_format($embedding_count) . "\n";
 
 if ($embedding_count < 1000) {
-    echo "❌ Need at least 1,000 embeddings for benchmarking\n";
+    echo "[ERROR] Need at least 1,000 embeddings for benchmarking\n";
     exit(1);
 }
 
 // Get a sample embedding for testing
 $sample = $wpdb->get_row("SELECT embedding FROM $embedding_table LIMIT 1", ARRAY_A);
 if (!$sample) {
-    echo "❌ No sample embedding found\n";
+    echo "[ERROR] No sample embedding found\n";
     exit(1);
 }
 
 $test_embedding = json_decode($sample['embedding'], true);
 if (!is_array($test_embedding) || count($test_embedding) < 100) {
-    echo "❌ Invalid embedding format\n";
+    echo "[ERROR] Invalid embedding format\n";
     exit(1);
 }
 
-echo "✅ Using " . count($test_embedding) . "-dimensional embedding for testing\n\n";
+echo "[OK] Using " . count($test_embedding) . "-dimensional embedding for testing\n\n";
 
 // Test WPVDB's native similarity search
 echo "=== WPVDB API Similarity Search Test ===\n";
@@ -82,7 +82,7 @@ for ($i = 0; $i < $queries_to_run; $i++) {
         }
 
     } catch (Exception $e) {
-        echo "❌ Query failed: " . $e->getMessage() . "\n";
+        echo "[ERROR] Query failed: " . $e->getMessage() . "\n";
         break;
     }
 }
@@ -90,7 +90,7 @@ for ($i = 0; $i < $queries_to_run; $i++) {
 $total_time = microtime(true) - $start_total;
 
 if (empty($times)) {
-    echo "❌ No successful queries completed\n";
+    echo "[ERROR] No successful queries completed\n";
     exit(1);
 }
 
@@ -112,13 +112,13 @@ echo "Queries per second: " . number_format($qps, 1) . "\n";
 
 // Performance assessment
 if ($qps > 100) {
-    $assessment = "🟢 EXCELLENT";
+    $assessment = "EXCELLENT";
 } elseif ($qps > 50) {
-    $assessment = "🟡 GOOD";
+    $assessment = "GOOD";
 } elseif ($qps > 10) {
-    $assessment = "🟠 MODERATE";
+    $assessment = "MODERATE";
 } else {
-    $assessment = "🔴 POOR";
+    $assessment = "POOR";
 }
 
 echo "Performance: $assessment\n";
@@ -153,7 +153,7 @@ function wpvdb_query_similar($embedding, $limit = 10) {
     if ($has_vector) {
         // Use native vector functions
         $sql = $wpdb->prepare(
-            "SELECT doc_id, chunk_text, VECTOR_DISTANCE(embedding, VECTOR_FROM_JSON(%s)) as distance
+            "SELECT doc_id, chunk_content, VECTOR_DISTANCE(embedding, VECTOR_FROM_JSON(%s)) as distance
              FROM $table
              ORDER BY distance ASC
              LIMIT %d",
@@ -163,7 +163,7 @@ function wpvdb_query_similar($embedding, $limit = 10) {
     } else {
         // JSON fallback - just return random sample for benchmark
         $sql = $wpdb->prepare(
-            "SELECT doc_id, chunk_text, 0.5 as distance
+            "SELECT doc_id, chunk_content, 0.5 as distance
              FROM $table
              ORDER BY RAND()
              LIMIT %d",
