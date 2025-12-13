@@ -14,7 +14,10 @@
         "phpunit/phpunit": "^9.5",
         "wp-phpunit/wp-phpunit": "^6.0",
         "yoast/phpunit-polyfills": "^1.0",
-        "brain/monkey": "^2.6"
+        "brain/monkey": "^2.6",
+        "squizlabs/php_codesniffer": "^3.9",
+        "wp-coding-standards/wpcs": "^3.3",
+        "automattic/vipwpcs": "^3.0"
     },
     "autoload": {
         "psr-4": {
@@ -29,6 +32,12 @@
     "scripts": {
         "test": "phpunit",
         "test:unit": "phpunit --testsuite unit",
-        "test:integration": "phpunit --testsuite integration"
+        "test:integration": "phpunit --testsuite integration",
+        "lint:php": "phpcs --standard=phpcs.xml.dist"
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
     }
 }

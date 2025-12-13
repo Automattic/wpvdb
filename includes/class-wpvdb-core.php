@@ -1,6 +1,11 @@
 <?php
 namespace WPVDB;
 
+use WordPress\AiClient\Providers\Http\DTO\ApiKeyRequestAuthentication;
+use WordPress\AiClient\Providers\Http\DTO\Request;
+use WordPress\AiClient\Providers\Http\Enums\HttpMethodEnum;
+use WordPress\AiClient\Providers\Http\HttpTransporterFactory;
+
 defined('ABSPATH') || exit;
 
 class Core {
@@ -175,25 +180,45 @@ class Core {
             return new \WP_Error('embedding_error', __('API base URL is required for embedding.', 'wpvdb'));
         }
         
-        $args = [
-            'headers' => [
-                'Content-Type'  => 'application/json',
-                'Authorization' => 'Bearer ' . $api_key,
-            ],
-            'body'    => wp_json_encode($body),
-            'timeout' => 30,
-        ];
+        // Try AI Client transporter first for consistency with the WP AI stack.
+        try {
+            $transporter = HttpTransporterFactory::createTransporter();
+            $request     = new Request(
+                HttpMethodEnum::POST(),
+                $url,
+                ['Content-Type' => 'application/json'],
+                wp_json_encode($body)
+            );
 
-        $response = wp_remote_post($url, $args);
-        if (is_wp_error($response)) {
-            return $response;
+            $auth    = new ApiKeyRequestAuthentication($api_key);
+            $request = $auth->authenticate($request);
+
+            $response = $transporter->send($request);
+            $code     = $response->getStatusCode();
+            $data     = $response->getData();
+        } catch (\Throwable $e) {
+            // Fallback to wp_remote_post if transporter or SDK pieces are unavailable.
+            $args = [
+                'headers' => [
+                    'Content-Type'  => 'application/json',
+                    'Authorization' => 'Bearer ' . $api_key,
+                ],
+                'body'    => wp_json_encode($body),
+                'timeout' => 30,
+            ];
+
+            $response = wp_remote_post($url, $args);
+            if (is_wp_error($response)) {
+                return $response;
+            }
+            $code = wp_remote_retrieve_response_code($response);
+            $data = json_decode(wp_remote_retrieve_body($response), true);
         }
-        $code = wp_remote_retrieve_response_code($response);
+
         if ($code !== 200) {
-            return new \WP_Error('embedding_error', 'Failed to get embedding: ' . $code . ' ' . wp_remote_retrieve_body($response));
+            return new \WP_Error('embedding_error', 'Failed to get embedding: ' . $code . ' ' . (is_string($data) ? $data : wp_json_encode($data)));
         }
 
-        $data = json_decode(wp_remote_retrieve_body($response), true);
         if (!isset($data['data'][0]['embedding']) || !is_array($data['data'][0]['embedding'])) {
             return new \WP_Error('embedding_error', 'Invalid embedding response structure.');
         }
