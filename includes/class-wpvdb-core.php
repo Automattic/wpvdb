@@ -138,6 +138,8 @@ class Core {
         if ($text === null || $text === '') {
             return new \WP_Error('embedding_error', 'Empty or null text cannot be embedded.');
         }
+
+        $custom_options = self::get_embedding_custom_options($model, $api_base);
         
         // Check cache first
         $cached_embedding = Cache::get_embedding($text, $model);
@@ -164,10 +166,8 @@ class Core {
         $body = [
             'model' => $model,
             'input' => $text,
-            // If the provider supports controlling dimension or format, you could add:
-            // 'dimensions' => WPVDB_DEFAULT_EMBED_DIM,
-            // 'encoding_format' => 'float',
         ];
+        $body = self::merge_custom_options($body, $custom_options);
 
         // Validate required parameters
         if (empty($api_key) || !is_string($api_key)) {
@@ -183,7 +183,7 @@ class Core {
         }
 
         // Prefer PHP AI Client embeddings when using the default OpenAI endpoint.
-        $ai_client_embedding = self::maybe_get_embedding_via_ai_client($text, $model, $api_base, $api_key);
+        $ai_client_embedding = self::maybe_get_embedding_via_ai_client($text, $model, $api_base, $api_key, $custom_options);
         if (is_array($ai_client_embedding)) {
             Cache::set_embedding($text, $model, $ai_client_embedding);
             return $ai_client_embedding;
@@ -244,7 +244,7 @@ class Core {
         
         // Cache the successful embedding
         Cache::set_embedding($text, $model, $embedding);
-        
+
         return $embedding;
     }
     
@@ -287,7 +287,7 @@ class Core {
      * @param string $api_key The API key.
      * @return array|\WP_Error|null Embedding vector, error, or null to continue with fallback.
      */
-    private static function maybe_get_embedding_via_ai_client($text, $model, $api_base, $api_key) {
+    private static function maybe_get_embedding_via_ai_client($text, $model, $api_base, $api_key, $custom_options = []) {
         if (!class_exists('\WordPress\AiClient\AiClient')) {
             return null;
         }
@@ -305,6 +305,12 @@ class Core {
             );
 
             $model_instance = $registry->getProviderModel(OpenAiProvider::class, $model);
+            if (!empty($custom_options)) {
+                $config = $model_instance->getConfig();
+                $config->setCustomOptions($custom_options);
+                $model_instance->setConfig($config);
+            }
+
             $vectors        = AiClient::generateEmbeddingsResult($text, $model_instance, $registry)->toVectors();
 
             if (empty($vectors) || !isset($vectors[0]) || !is_array($vectors[0])) {
@@ -313,8 +319,84 @@ class Core {
 
             return $vectors[0];
         } catch (\Throwable $e) {
-            return new \WP_Error('embedding_error', $e->getMessage());
+            return self::map_embedding_exception($e);
         }
+    }
+
+    /**
+     * Normalize and validate custom embedding options.
+     *
+     * @param string $model The model identifier.
+     * @param string $api_base The API base URL.
+     * @return array<string, mixed>
+     */
+    private static function get_embedding_custom_options($model, $api_base) {
+        $options = apply_filters('wpvdb_embedding_custom_options', [], $model, $api_base);
+        if (!is_array($options)) {
+            return [];
+        }
+
+        // Optionally add dimensions from constant if not provided and using OpenAI-compatible endpoints.
+        if (
+            !isset($options['dimensions']) &&
+            defined('WPVDB_DEFAULT_EMBED_DIM') &&
+            strpos($api_base, 'openai') !== false
+        ) {
+            $options['dimensions'] = (int) WPVDB_DEFAULT_EMBED_DIM;
+        }
+
+        return array_filter(
+            $options,
+            static function ($value) {
+                return $value !== null;
+            }
+        );
+    }
+
+    /**
+     * Merge custom options into the request body without overwriting required keys.
+     *
+     * @param array $body Base request payload.
+     * @param array $custom_options Custom options from filters.
+     * @return array
+     */
+    private static function merge_custom_options(array $body, array $custom_options) {
+        foreach ($custom_options as $key => $value) {
+            if (isset($body[$key])) {
+                continue;
+            }
+            $body[$key] = $value;
+        }
+        return $body;
+    }
+
+    /**
+     * Map SDK exceptions to structured WP_Error codes.
+     *
+     * @param \Throwable $e Exception thrown by the SDK.
+     * @return \WP_Error
+     */
+    private static function map_embedding_exception(\Throwable $e) {
+        $code    = $e->getCode();
+        $message = $e->getMessage();
+
+        if ($code === 401) {
+            return new \WP_Error('embedding_auth_error', $message);
+        }
+        if ($code === 403) {
+            return new \WP_Error('embedding_forbidden', $message);
+        }
+        if ($code === 404) {
+            return new \WP_Error('embedding_model_not_found', $message);
+        }
+        if ($code === 429) {
+            return new \WP_Error('embedding_rate_limited', $message);
+        }
+        if ($code >= 500 && $code < 600) {
+            return new \WP_Error('embedding_provider_error', $message);
+        }
+
+        return new \WP_Error('embedding_error', $message);
     }
 
     // Add a logging function (deprecated - use Logger class directly)
