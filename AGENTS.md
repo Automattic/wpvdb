@@ -1,4 +1,4 @@
-# WPVDB Claude Code Agent Instructions
+# WPVDB Code Agent Instructions
 
 ## Project Guidelines
 
@@ -51,8 +51,6 @@
 - Follow existing commit message format from repository
 - Include detailed technical descriptions
 - Reference specific improvements and changes
-- Always include Claude Code attribution without emojis
-
 ### File Organization
 - Prefer editing existing files over creating new ones
 - Never create documentation files unless explicitly requested

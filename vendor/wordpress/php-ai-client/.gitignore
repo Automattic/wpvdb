@@ -17,14 +17,12 @@ vendor/
 ## AI Tools
 ############
 
-.claude/
 .clinerules
 .clinerules/
 .codex/
 .cursor/
 .gemini/
 .windsurf/
-CLAUDE.md
 GEMINI.md
 
 ############
