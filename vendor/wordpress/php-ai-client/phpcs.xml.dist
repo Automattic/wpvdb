@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<ruleset name="PHP AI Client Coding Standards">
+    <description>PSR-12 coding standards for PHP AI Client SDK</description>
+
+    <!-- Scan these files -->
+    <file>src</file>
+    <file>tests</file>
+
+    <!-- Ignore vendor directory -->
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+
+    <!-- Show progress, show sniff codes in all reports -->
+    <arg value="sp"/>
+
+    <!-- Set minimum supported PHP version -->
+    <config name="testVersion" value="7.4-"/>
+
+    <!-- Enable colors in output -->
+    <arg name="colors"/>
+
+    <!-- Use PSR-12 standard -->
+    <rule ref="PSR12"/>
+
+    <!-- Check PHP 7.4 compatibility -->
+    <rule ref="PHPCompatibility">
+        <!-- Exclude functions that are polyfilled in src/polyfills.php -->
+        <exclude name="PHPCompatibility.FunctionUse.NewFunctions.array_is_listFound"/>
+        <exclude name="PHPCompatibility.FunctionUse.NewFunctions.str_containsFound"/>
+        <exclude name="PHPCompatibility.FunctionUse.NewFunctions.str_starts_withFound"/>
+        <exclude name="PHPCompatibility.FunctionUse.NewFunctions.str_ends_withFound"/>
+    </rule>
+
+    <!-- Enforce namespace best practices -->
+	<rule ref="SlevomatCodingStandard.Namespaces.DisallowGroupUse" />
+	<rule ref="SlevomatCodingStandard.Namespaces.UseDoesNotStartWithBackslash" />
+	<rule ref="SlevomatCodingStandard.Namespaces.AlphabeticallySortedUses" />
+	<rule ref="SlevomatCodingStandard.Namespaces.UseFromSameNamespace" />
+	<rule ref="SlevomatCodingStandard.Namespaces.UnusedUses">
+		<properties>
+			<property name="searchAnnotations" value="true" />
+		</properties>
+	</rule>
+</ruleset>

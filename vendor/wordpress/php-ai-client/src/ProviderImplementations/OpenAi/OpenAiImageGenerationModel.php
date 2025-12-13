@@ -24,8 +24,7 @@ class OpenAiImageGenerationModel extends AbstractOpenAiCompatibleImageGeneration
             $method,
             OpenAiProvider::url($path),
             $headers,
-            $data,
-            $this->getRequestOptions()
+            $data
         );
     }
 

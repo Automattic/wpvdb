@@ -1,6 +1,8 @@
 <?php
 namespace WPVDB;
 
+use WordPress\AiClient\AiClient;
+use WordPress\AiClient\ProviderImplementations\OpenAi\OpenAiProvider;
 use WordPress\AiClient\Providers\Http\DTO\ApiKeyRequestAuthentication;
 use WordPress\AiClient\Providers\Http\DTO\Request;
 use WordPress\AiClient\Providers\Http\Enums\HttpMethodEnum;
@@ -179,6 +181,21 @@ class Core {
         if (empty($api_base) || !is_string($api_base)) {
             return new \WP_Error('embedding_error', __('API base URL is required for embedding.', 'wpvdb'));
         }
+
+        // Prefer PHP AI Client embeddings when using the default OpenAI endpoint.
+        $ai_client_embedding = self::maybe_get_embedding_via_ai_client($text, $model, $api_base, $api_key);
+        if (is_array($ai_client_embedding)) {
+            Cache::set_embedding($text, $model, $ai_client_embedding);
+            return $ai_client_embedding;
+        } elseif (is_wp_error($ai_client_embedding)) {
+            Logger::debug(
+                'AI Client embedding failed, falling back to HTTP request.',
+                [
+                    'error' => $ai_client_embedding->get_error_message(),
+                    'model' => $model,
+                ]
+            );
+        }
         
         // Try AI Client transporter first for consistency with the WP AI stack.
         try {
@@ -256,6 +273,48 @@ class Core {
         
         // Call the embedding function
         return self::get_embedding($text, $model_name, $api_base, $api_key);
+    }
+
+    /**
+     * Attempt to generate embeddings using the PHP AI Client SDK when available.
+     *
+     * Uses the OpenAI provider when the API base matches the default OpenAI endpoint.
+     * Falls back to null when the SDK is unavailable or when a non-default base is configured.
+     *
+     * @param string $text The text to embed.
+     * @param string $model The model identifier.
+     * @param string $api_base The API base URL.
+     * @param string $api_key The API key.
+     * @return array|\WP_Error|null Embedding vector, error, or null to continue with fallback.
+     */
+    private static function maybe_get_embedding_via_ai_client($text, $model, $api_base, $api_key) {
+        if (!class_exists('\WordPress\AiClient\AiClient')) {
+            return null;
+        }
+
+        $normalized_base = untrailingslashit($api_base);
+        if ('https://api.openai.com/v1' !== $normalized_base) {
+            return null;
+        }
+
+        try {
+            $registry = AiClient::defaultRegistry();
+            $registry->setProviderRequestAuthentication(
+                OpenAiProvider::class,
+                new ApiKeyRequestAuthentication($api_key)
+            );
+
+            $model_instance = $registry->getProviderModel(OpenAiProvider::class, $model);
+            $vectors        = AiClient::generateEmbeddingsResult($text, $model_instance, $registry)->toVectors();
+
+            if (empty($vectors) || !isset($vectors[0]) || !is_array($vectors[0])) {
+                return new \WP_Error('embedding_error', __('Empty embedding response from AI Client.', 'wpvdb'));
+            }
+
+            return $vectors[0];
+        } catch (\Throwable $e) {
+            return new \WP_Error('embedding_error', $e->getMessage());
+        }
     }
 
     // Add a logging function (deprecated - use Logger class directly)

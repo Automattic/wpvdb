@@ -24,8 +24,7 @@ class GoogleImageGenerationModel extends AbstractOpenAiCompatibleImageGeneration
             $method,
             GoogleProvider::url('openai/' . ltrim($path, '/')),
             $headers,
-            $data,
-            $this->getRequestOptions()
+            $data
         );
     }
 }

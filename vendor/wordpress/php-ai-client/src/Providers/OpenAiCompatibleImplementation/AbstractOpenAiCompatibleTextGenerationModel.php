@@ -347,7 +347,7 @@ abstract class AbstractOpenAiCompatibleTextGenerationModel extends AbstractApiBa
                 return [
                     'type' => 'image_url',
                     'image_url' => [
-                        'url' => $file->getDataUri(),
+                        'url' => $file->getBase64Data(),
                     ],
                 ];
             }
@@ -535,9 +535,6 @@ abstract class AbstractOpenAiCompatibleTextGenerationModel extends AbstractApiBa
 
     /**
      * Creates a request object for the provider's API.
-     *
-     * Implementations should use $this->getRequestOptions() to attach any
-     * configured request options to the Request.
      *
      * @since 0.1.0
      *

@@ -26,8 +26,7 @@ class GoogleTextGenerationModel extends AbstractOpenAiCompatibleTextGenerationMo
             $method,
             GoogleProvider::url('openai/' . ltrim($path, '/')),
             $headers,
-            $data,
-            $this->getRequestOptions()
+            $data
         );
     }
 }

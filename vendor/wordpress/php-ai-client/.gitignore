@@ -1,0 +1,41 @@
+############
+## Vendor
+############
+
+vendor/
+
+############
+## OSes
+############
+
+[Tt]humbs.db
+[Dd]esktop.ini
+*.DS_store
+.DS_store?
+
+############
+## AI Tools
+############
+
+.claude/
+.clinerules
+.clinerules/
+.codex/
+.cursor/
+.gemini/
+.windsurf/
+CLAUDE.md
+GEMINI.md
+
+############
+## PHPUnit
+############
+
+.phpunit.cache/
+
+############
+## IDEs
+############
+
+.idea/
+.vscode/

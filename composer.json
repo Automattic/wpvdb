@@ -6,7 +6,7 @@
     "require": {
         "php": ">=7.4",
         "woocommerce/action-scheduler": "^3.9",
-        "wordpress/php-ai-client": "^0.3.1",
+        "wordpress/php-ai-client": "dev-add/embeddings-support as 0.3.1",
         "wordpress/wp-ai-client": "^0.2.1"
     },
     "require-dev": {
@@ -19,6 +19,12 @@
         "wp-coding-standards/wpcs": "^3.3",
         "automattic/vipwpcs": "^3.0"
     },
+    "repositories": [
+        {
+            "type": "git",
+            "url": "https://github.com/WordPress/php-ai-client.git"
+        }
+    ],
     "autoload": {
         "psr-4": {
             "WPVDB\\": "includes/"

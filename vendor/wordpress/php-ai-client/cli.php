@@ -1,0 +1,255 @@
+<?php
+/**
+ * CLI script for interacting with the AI client.
+ *
+ * This script allows users to send prompts to the AI and receive responses.
+ * It supports named arguments for provider and model selection.
+ *
+ * Usage:
+ *   GOOGLE_API_KEY=123456 php cli.php 'Your prompt here' --providerId=google --modelId=gemini-2.5-flash
+ *   OPENAI_API_KEY=123456 php cli.php 'Your prompt here' --providerId=openai
+ *   GOOGLE_API_KEY=123456 OPENAI_API_KEY=123456 php cli.php 'Your prompt here'
+ *   OPENAI_API_KEY=123456 php cli.php '["Embed this", "and this"]' --capability=embeddings --outputFormat=embeddings-json
+ */
+
+declare(strict_types=1);
+
+use WordPress\AiClient\AiClient;
+use WordPress\AiClient\Providers\Http\Exception\ResponseException;
+use WordPress\AiClient\Providers\Models\DTO\ModelConfig;
+
+require_once __DIR__ . '/vendor/autoload.php';
+
+/**
+ * Prints the output to stdout.
+ *
+ * @param string $output The output to print.
+ */
+function printOutput(string $output): void
+{
+    echo $output . PHP_EOL;
+}
+
+/**
+ * Logs an informational message to stderr.
+ *
+ * @param string $message The message to log.
+ */
+function logInfo(string $message): void
+{
+    fwrite(STDERR, '[INFO] ' . $message . PHP_EOL);
+}
+
+/**
+ * Logs a warning message to stderr.
+ *
+ * @param string $message The message to log.
+ */
+function logWarning(string $message): void
+{
+    fwrite(STDERR, '[WARNING] ' . $message . PHP_EOL);
+}
+
+/**
+ * Logs an error message to stderr and terminates the script.
+ *
+ * @param string $message The message to log.
+ * @param int    $exit_code The exit code to use.
+ */
+function logError(string $message, int $exit_code = 1): void
+{
+    fwrite(STDERR, '[ERROR] ' . $message . PHP_EOL);
+    exit($exit_code);
+}
+
+// --- Argument parsing ---
+
+$positional_args = [];
+$named_args      = [];
+
+for ($i = 1; $i < $argc; $i++) {
+    $arg = $argv[$i];
+    if (str_starts_with($arg, '--')) {
+        $parts = explode('=', substr($arg, 2), 2);
+        $key   = $parts[0];
+        $value = $parts[1] ?? true;
+        if (empty($key)) {
+            logWarning("Ignoring invalid named argument: {$arg}");
+            continue;
+        }
+        $named_args[$key] = $value;
+    } else {
+        $positional_args[] = $arg;
+    }
+}
+
+// --- Input validation ---
+
+if (empty($positional_args[0])) {
+    logError('Missing required positional argument "prompt input".');
+}
+
+// Prompt input. Allow complex input as a JSON string.
+$promptInput = $positional_args[0];
+if (str_starts_with($promptInput, '{') || str_starts_with($promptInput, '[')) {
+    $decodedInput = json_decode($promptInput, true);
+    if ($decodedInput) {
+        $promptInput = $decodedInput;
+    }
+}
+
+// Provider ID, model ID, and capability/output format.
+$providerId = $named_args['providerId'] ?? null;
+$modelId = $named_args['modelId'] ?? null;
+$modelPreference = $named_args['modelPreference'] ?? null;
+$capabilityInput = $named_args['capability'] ?? 'text';
+$capability = is_string($capabilityInput) ? strtolower($capabilityInput) : 'text';
+$validCapabilities = ['text', 'image', 'embeddings'];
+if (!in_array($capability, $validCapabilities, true)) {
+    logWarning(sprintf('Invalid capability "%s". Defaulting to "text".', (string) $capabilityInput));
+    $capability = 'text';
+}
+$defaultOutputFormat = 'message-text';
+if ($capability === 'image') {
+    $defaultOutputFormat = 'image-json';
+} elseif ($capability === 'embeddings') {
+    $defaultOutputFormat = 'embeddings-vectors';
+}
+$outputFormat = $named_args['outputFormat'] ?? $defaultOutputFormat;
+$imageOutputFormats = ['image-json', 'image-base64'];
+if ($capability === 'embeddings' && in_array($outputFormat, $imageOutputFormats, true)) {
+    logWarning('Image output formats are not supported for embeddings. Using embeddings-vectors.');
+    $outputFormat = 'embeddings-vectors';
+}
+if ($capability !== 'embeddings' && in_array($outputFormat, $imageOutputFormats, true)) {
+    $capability = 'image';
+}
+
+// Any model configuration options.
+$schema = ModelConfig::getJsonSchema()['properties'];
+$model_config_data = [];
+foreach ($named_args as $key => $value) {
+    if (!isset($schema[$key])) {
+        continue;
+    }
+
+    $property_schema = $schema[$key];
+    $type = $property_schema['type'] ?? null;
+
+    $processed_value = $value;
+    if ($type === 'array' || $type === 'object') {
+        $decoded = json_decode((string) $value, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            logWarning("Invalid JSON for argument --{$key}: " . json_last_error_msg());
+            continue;
+        }
+        $processed_value = $decoded;
+    } elseif ($type === 'integer') {
+        $processed_value = (int) $value;
+    } elseif ($type === 'number') {
+        $processed_value = (float) $value;
+    } elseif ($type === 'boolean') {
+        $processed_value = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if (null === $processed_value) {
+            logWarning("Invalid boolean for argument --{$key}: {$value}");
+            continue;
+        }
+    }
+
+    $model_config_data[$key] = $processed_value;
+}
+
+// --- Main logic ---
+
+try {
+    $modelConfig = ModelConfig::fromArray($model_config_data);
+
+    $initialPrompt = $capability === 'embeddings' ? null : $promptInput;
+    $promptBuilder = AiClient::prompt($initialPrompt);
+    $promptBuilder = $promptBuilder->usingModelConfig($modelConfig);
+    if ($providerId && $modelId) {
+        $providerClassName = AiClient::defaultRegistry()->getProviderClassName($providerId);
+        $promptBuilder = $promptBuilder->usingModel($providerClassName::model($modelId));
+    } elseif ($providerId) {
+        $promptBuilder = $promptBuilder->usingProvider($providerId);
+    }
+    if ($modelPreference) {
+        $modelPreference = array_map(
+            static function ($item) {
+                $item = trim($item);
+                if (str_contains($item, '::')) {
+                    return explode('::', $item, 2);
+                }
+                return $item;
+            },
+            explode(',', $modelPreference)
+        );
+        $promptBuilder = $promptBuilder->usingModelPreference(...$modelPreference);
+    }
+    if ($capability === 'embeddings') {
+        $promptBuilder = $promptBuilder->withEmbeddingInputs($promptInput);
+    }
+} catch (InvalidArgumentException $e) {
+    logError('Invalid arguments while trying to set up prompt builder: ' . $e->getMessage());
+} catch (ResponseException $e) {
+    logError('Request failed while trying to set up prompt builder: ' . $e->getMessage());
+}
+
+try {
+    $generationAction = 'generate text result';
+    if ($capability === 'image') {
+        $generationAction = 'generate image result';
+    } elseif ($capability === 'embeddings') {
+        $generationAction = 'generate embeddings result';
+    }
+
+    if ($capability === 'image') {
+        $result = $promptBuilder->generateImageResult();
+    } elseif ($capability === 'embeddings') {
+        $result = $promptBuilder->generateEmbeddingsResult();
+    } else {
+        $result = $promptBuilder->generateTextResult();
+    }
+} catch (InvalidArgumentException $e) {
+    logError('Invalid arguments while trying to ' . $generationAction . ': ' . $e->getMessage());
+} catch (ResponseException $e) {
+    logError('Request failed while trying to ' . $generationAction . ': ' . $e->getMessage());
+}
+
+logInfo("Using provider ID: \"{$result->getProviderMetadata()->getId()}\"");
+logInfo("Using model ID: \"{$result->getModelMetadata()->getId()}\"");
+
+if ($capability === 'embeddings') {
+    switch ($outputFormat) {
+        case 'embeddings-json':
+            $output = json_encode($result, JSON_PRETTY_PRINT);
+            break;
+        case 'embedding-first-vector':
+            $output = json_encode($result->toVector(), JSON_PRETTY_PRINT);
+            break;
+        case 'embeddings-vectors':
+        default:
+            $output = json_encode($result->toVectors(), JSON_PRETTY_PRINT);
+            break;
+    }
+} else {
+    switch ($outputFormat) {
+        case 'result-json':
+            $output = json_encode($result, JSON_PRETTY_PRINT);
+            break;
+        case 'candidates-json':
+            $output = json_encode($result->getCandidates(), JSON_PRETTY_PRINT);
+            break;
+        case 'image-json':
+            $output = json_encode($result->toFile(), JSON_PRETTY_PRINT);
+            break;
+        case 'image-base64':
+            $output = $result->toFile()->getBase64Data();
+            break;
+        case 'message-text':
+        default:
+            $output = $result->toText();
+    }
+}
+
+printOutput($output);

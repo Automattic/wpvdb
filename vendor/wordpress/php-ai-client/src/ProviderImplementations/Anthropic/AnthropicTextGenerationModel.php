@@ -26,8 +26,7 @@ class AnthropicTextGenerationModel extends AbstractOpenAiCompatibleTextGeneratio
             $method,
             AnthropicProvider::url($path),
             $headers,
-            $data,
-            $this->getRequestOptions()
+            $data
         );
     }
 }

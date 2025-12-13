@@ -65,8 +65,7 @@ class GoogleProvider extends AbstractApiProvider
         return new ProviderMetadata(
             'google',
             'Google',
-            ProviderTypeEnum::cloud(),
-            'https://aistudio.google.com/app/api-keys'
+            ProviderTypeEnum::cloud()
         );
     }
 
