@@ -759,7 +759,7 @@ class Admin {
             if ($tab === 'status') {
                 // Ensure admin script is enqueued
                 if (!wp_script_is('wpvdb-admin', 'enqueued')) {
-                    error_log('WPVDB: Forcing admin script enqueue for status page');
+                    if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: Forcing admin script enqueue for status page'); }
                     
                     wp_enqueue_script(
                         'wpvdb-admin',
@@ -836,16 +836,16 @@ class Admin {
         $is_wpvdb_page = (strpos($hook, 'wpvdb') !== false || in_array($hook, ['toplevel_page_wpvdb-dashboard']));
         
         // Debug - log the current hook
-        error_log('WPVDB: Current admin page hook: ' . $hook);
-        error_log('WPVDB: Is wpvdb page? ' . ($is_wpvdb_page ? 'YES' : 'NO'));
+        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: Current admin page hook: ' . $hook); }
+        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: Is wpvdb page? ' . ($is_wpvdb_page ? 'YES' : 'NO')); }
         
         // Only load our assets on our admin pages or post edit screens
         if (!$is_wpvdb_page && $hook !== 'post.php' && $hook !== 'post-new.php') {
-            error_log('WPVDB: Not loading assets for hook: ' . $hook);
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: Not loading assets for hook: ' . $hook); }
             return;
         }
         
-        error_log('WPVDB: Loading assets for hook: ' . $hook);
+        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: Loading assets for hook: ' . $hook); }
         
         // Core WordPress admin styles are already loaded
         
@@ -983,7 +983,7 @@ class Admin {
                 $cancel = true;
             }
         }
-        error_log('WPVDB: Cancel flag: ' . ($cancel ? 'true' : 'false'));
+        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: Cancel flag: ' . ($cancel ? 'true' : 'false')); }
         
         $settings = get_option('wpvdb_settings', []);
         
@@ -1057,7 +1057,7 @@ class Admin {
             $result = $wpdb->query("TRUNCATE TABLE {$table_name}");
             
             if ($result === false) {
-                error_log('WPVDB: Error truncating embeddings table: ' . $wpdb->last_error);
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: Error truncating embeddings table: ' . $wpdb->last_error); }
                 wp_send_json_error([
                     'message' => __('Error deleting embeddings: ', 'wpvdb') . $wpdb->last_error,
                 ]);
@@ -1067,8 +1067,8 @@ class Admin {
             // Activate the pending provider/model
             if (!empty($settings['pending_provider']) && !empty($settings['pending_model'])) {
                 // Log the change
-                error_log('WPVDB: Applying provider change');
-                error_log('WPVDB: From ' . $settings['active_provider'] . '/' . $settings['active_model'] . ' to ' . $settings['pending_provider'] . '/' . $settings['pending_model']);
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: Applying provider change'); }
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: From ' . $settings['active_provider'] . '/' . $settings['active_model'] . ' to ' . $settings['pending_provider'] . '/' . $settings['pending_model']); }
                 
                 $settings['active_provider'] = $settings['pending_provider'];
                 $settings['active_model'] = $settings['pending_model'];
@@ -1101,7 +1101,7 @@ class Admin {
                         ]
                     ]);
             } else {
-                error_log('WPVDB: No pending provider change found');
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: No pending provider change found'); }
                 wp_send_json_error([
                     'message' => __('No pending provider change found.', 'wpvdb'),
                 ]);
@@ -1781,7 +1781,7 @@ class Admin {
             }
             
             // Log that diagnostics were run
-            error_log('[WPVDB ADMIN] Running database diagnostics from admin UI');
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ADMIN] Running database diagnostics from admin UI'); }
             
             // Redirect back to the page with a parameter to show diagnostics
             wp_redirect(add_query_arg('diagnostics', 'run', admin_url('admin.php?page=wpvdb-status')));
@@ -2240,9 +2240,9 @@ class Admin {
         $embedding_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_name}");
         $truncate_result = $wpdb->query("TRUNCATE TABLE {$table_name}");
         if ($truncate_result === false) {
-            error_log('WPVDB CRITICAL: Error truncating embeddings table: ' . $wpdb->last_error);
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB CRITICAL: Error truncating embeddings table: ' . $wpdb->last_error); }
         } else {
-            error_log('WPVDB CRITICAL: Deleted ' . $embedding_count . ' embeddings');
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB CRITICAL: Deleted ' . $embedding_count . ' embeddings'); }
         }
         
         // Apply the pending change - store the original values for debug logs
@@ -2360,7 +2360,7 @@ class Admin {
             'cache-bust' => time() // Add a timestamp to bust any caching
         ], admin_url('admin.php'));
         
-        error_log('WPVDB CRITICAL: Redirecting to: ' . $redirect_url);
+        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB CRITICAL: Redirecting to: ' . $redirect_url); }
         wp_redirect($redirect_url);
         exit;
     }

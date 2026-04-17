@@ -363,7 +363,7 @@ class REST {
         
         self::init_database();
         
-        error_log('[WPVDB DEBUG] handle_query called');
+        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] handle_query called'); }
         $data = $request->get_json_params();
         
         // Security logging
@@ -670,13 +670,13 @@ class REST {
         
         // First, check if the table exists
         if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") !== $table_name) {
-            error_log('[WPVDB ERROR] Embeddings table does not exist');
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Embeddings table does not exist'); }
             return false;
         }
         
         // Check for vector support and handle storage differently
         $has_vector = self::$database->has_native_vector_support();
-        error_log('[WPVDB DEBUG] Vector support detected: ' . ($has_vector ? 'Yes' : 'No'));
+        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Vector support detected: ' . ($has_vector ? 'Yes' : 'No')); }
 
         if ($has_vector) {
             try {
@@ -685,7 +685,7 @@ class REST {
                 
                 // Use the Database class to determine the vector function to use
                 $vector_function = self::$database->get_vector_from_string_function($embedding_json);
-                error_log('[WPVDB DEBUG] Vector function: ' . $vector_function);
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Vector function: ' . $vector_function); }
                 
                 // For MySQL, the prepare statement handles the quoting properly
                 // For MariaDB, we need to make sure the vector function is inserted as-is
@@ -704,7 +704,7 @@ class REST {
                     $result = $wpdb->query($sql);
                     
                     if ($result === false) {
-                        error_log('[WPVDB ERROR] Failed to insert embedding with vector function');
+                        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Failed to insert embedding with vector function'); }
                         
                         // Fallback to JSON storage
                         $result = $wpdb->insert(
@@ -738,7 +738,7 @@ class REST {
                     ));
                     
                     if ($result === false) {
-                        error_log('[WPVDB ERROR] Failed to insert embedding with vector function');
+                        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Failed to insert embedding with vector function'); }
                         
                         // Fallback to JSON storage
                         $result = $wpdb->insert(
@@ -761,7 +761,7 @@ class REST {
                     }
                 }
             } catch (\Exception $e) {
-                error_log('[WPVDB ERROR] Exception in insert_embedding_row: ' . $e->getMessage());
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Exception in insert_embedding_row: ' . $e->getMessage()); }
                 
                 // Fallback to JSON storage
                 $result = $wpdb->insert(
@@ -804,7 +804,7 @@ class REST {
         }
         
         if ($result === false) {
-            error_log('[WPVDB ERROR] Failed to insert embedding row: ' . $wpdb->last_error);
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Failed to insert embedding row: ' . $wpdb->last_error); }
             return false;
         }
         

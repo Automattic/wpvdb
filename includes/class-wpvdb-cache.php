@@ -114,7 +114,7 @@ class Cache {
         
         // Log cache invalidation
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log("[WPVDB CACHE] Invalidated cache for document {$doc_id}");
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log("[WPVDB CACHE] Invalidated cache for document {$doc_id}"); }
         }
     }
     
@@ -169,7 +169,7 @@ class Cache {
         wp_cache_set('cache_invalidation_timestamp', $timestamp, self::CACHE_GROUP, DAY_IN_SECONDS);
         
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('[WPVDB CACHE] Flushed all caches');
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB CACHE] Flushed all caches'); }
         }
     }
     
@@ -255,7 +255,7 @@ class Cache {
         }
         
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log("[WPVDB CACHE] Preloaded {$preloaded} embeddings");
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log("[WPVDB CACHE] Preloaded {$preloaded} embeddings"); }
         }
         
         return $preloaded;

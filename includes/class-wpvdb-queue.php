@@ -363,7 +363,7 @@ class WPVDB_Queue {
         $existing_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_name WHERE doc_id = %d", $post->ID));
         
         if ($existing_count > 0) {
-            error_log("[WPVDB] Deleting {$existing_count} existing embeddings for post {$post->ID} before creating new ones.");
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log("[WPVDB] Deleting {$existing_count} existing embeddings for post {$post->ID} before creating new ones."); }
             $wpdb->delete($table_name, ['doc_id' => $post->ID], ['%d']);
             
             // Also delete the post meta about embeddings

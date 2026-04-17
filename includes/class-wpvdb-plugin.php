@@ -198,7 +198,7 @@ class Plugin {
                 // Set a transient to show a notice after deactivation
                 set_transient('wpvdb_was_deactivated', true, 60 * 60);
                 
-                error_log('[WPVDB] Plugin deactivated due to incompatible database.');
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Plugin deactivated due to incompatible database.'); }
                 
                 // If this is running in a CRON or admin context without a screen, we're done
                 if (!function_exists('get_current_screen') || !get_current_screen()) {
