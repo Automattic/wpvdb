@@ -242,18 +242,24 @@ class WPVDB_Queue {
         if (empty($items) || !is_array($items)) {
             return [];
         }
-        
+
         $results = [];
-        
+
         foreach ($items as $item) {
             $post_id = isset($item['post_id']) ? absint($item['post_id']) : 0;
             $success = self::process_item($item);
             $results[$post_id] = $success;
-            
-            // Schedule the next batch to run immediately after this one completes
-            self::maybe_process_next_batch();
         }
-        
+
+        // Do NOT drain the queue here. Action Scheduler is the scheduler of
+        // record: each batch action should be a self-contained unit of work
+        // so AS can track per-batch status (complete / failed) accurately.
+        // Inline recursion into the next batch inside process_batch() caused
+        // subsequent batches to be unscheduled (marked "canceled") and
+        // processed within the same request, defeating retries, timeouts,
+        // and accurate bookkeeping. Use the explicit run_queue_now async
+        // action if you need to kick the queue immediately.
+
         return $results;
     }
     
