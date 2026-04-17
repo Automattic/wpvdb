@@ -40,18 +40,46 @@ class REST {
     public static function register_routes() {
         // Initialize database
         self::init_database();
-        
-        // Register the system info endpoint
-        register_rest_route('wpvdb/v1', '/system', [
+
+        $namespace = 'wpvdb/v1';
+
+        register_rest_route($namespace, '/system', [
             'methods' => 'GET',
             'callback' => [__CLASS__, 'get_system_info'],
             'permission_callback' => function() {
                 return current_user_can('manage_options');
-            }
+            },
         ]);
-        
-        // Register other endpoints
-        // ...
+
+        register_rest_route($namespace, '/embed', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'handle_embed'],
+            'permission_callback' => [__CLASS__, 'default_permission_check'],
+        ]);
+
+        register_rest_route($namespace, '/vectors', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'handle_vectors'],
+            'permission_callback' => [__CLASS__, 'default_permission_check'],
+        ]);
+
+        register_rest_route($namespace, '/query', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'handle_query'],
+            'permission_callback' => [__CLASS__, 'default_permission_check'],
+        ]);
+
+        register_rest_route($namespace, '/metadata', [
+            'methods' => 'GET',
+            'callback' => [__CLASS__, 'handle_metadata'],
+            'permission_callback' => [__CLASS__, 'default_permission_check'],
+        ]);
+
+        register_rest_route($namespace, '/reembed', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'handle_reembed'],
+            'permission_callback' => [__CLASS__, 'default_permission_check'],
+        ]);
     }
 
     /**
