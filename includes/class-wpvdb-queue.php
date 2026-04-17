@@ -272,12 +272,11 @@ class WPVDB_Queue {
             
             if (!empty($actions)) {
                 $action = reset($actions);
-                $action_id = $action->get_id();
                 $args = $action->get_args();
-                
+
                 // Remove this action from the queue to avoid duplicate processing
                 as_unschedule_action(self::PROCESS_BATCH_ACTION, $args, 'wpvdb');
-                
+
                 // Process the batch
                 self::process_batch($args[0]);
             } else {
@@ -302,19 +301,18 @@ class WPVDB_Queue {
             
             if (!empty($actions)) {
                 $batch_items = [];
-                
+
                 foreach ($actions as $action) {
-                    $action_id = $action->get_id();
                     $args = $action->get_args();
-                    
+
                     // Add to our batch
                     if (!empty($args[0])) {
                         $batch_items[] = $args[0];
                     }
-                    
+
                     // Remove this action from the queue to avoid duplicate processing
                     as_unschedule_action(self::PROCESS_SINGLE_ACTION, $args, 'wpvdb');
-                    
+
                     // If we've reached our batch size, stop
                     if (count($batch_items) >= self::get_batch_size()) {
                         break;
