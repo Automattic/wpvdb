@@ -290,24 +290,26 @@ class REST {
         $chunk_content= sanitize_textarea_field($request->get_param('chunk_content')) ?: '';
         $embedding    = $request->get_param('embedding');
         $summary      = sanitize_textarea_field($request->get_param('summary')) ?: '';
+        $model        = sanitize_text_field($request->get_param('model')) ?: Settings::get_default_model();
+        $chunk_index  = absint($request->get_param('chunk_index'));
 
         if (!$doc_id || !$embedding || !is_array($embedding)) {
             return new WP_Error('invalid_params', 'Missing or invalid doc_id or embedding.', ['status' => 400]);
         }
-        
+
         // Use security class to validate embedding
         $validated_embedding = Security::validate_embedding($embedding);
         if (is_wp_error($validated_embedding)) {
             return $validated_embedding;
         }
-        
+
         // Security logging
         Security::log_security_event('vectors_request', [
             'doc_id' => $doc_id,
             'embedding_dimensions' => count($validated_embedding)
         ]);
 
-        $res = self::insert_embedding_row($doc_id, $chunk_id, $chunk_content, $summary, $validated_embedding, $model_for_insert, 'post', $chunk_index);
+        $res = self::insert_embedding_row($doc_id, $chunk_id, $chunk_content, $summary, $validated_embedding, $model, 'post', $chunk_index);
         if (is_wp_error($res)) {
             return $res;
         }
