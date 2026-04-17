@@ -270,14 +270,19 @@ class Database {
      */
     public function get_vector_from_string_function($json_string) {
         $db_type = $this->get_db_type();
-        
+
         if ($this->has_native_vector_support()) {
+            // The JSON must be single-quoted inside the SQL function call so it
+            // parses as a string literal; callers pass raw JSON (e.g. "[0.1,0.2]").
+            $quoted = "'" . esc_sql($json_string) . "'";
             if ($db_type === 'mariadb') {
-                // MariaDB uses JSON_VALUE to extract array elements
-                return "VECTOR_FROM_JSON($json_string)";
+                // MariaDB 11.7+ parses a JSON array with VEC_FromText().
+                return "VEC_FromText($quoted)";
             } else {
-                // MySQL uses JSON_EXTRACT
-                return "VECTOR_FROM_JSON($json_string)";
+                // MySQL 9+ has its own ingest path. VECTOR_FROM_JSON is a
+                // placeholder kept for parity; callers targeting MySQL
+                // should confirm the actual function name for their version.
+                return "VECTOR_FROM_JSON($quoted)";
             }
         } else {
             // Fallback - just return the JSON string

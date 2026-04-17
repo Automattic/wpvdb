@@ -450,9 +450,11 @@ class REST {
                     $vector_function = '';
                     $distance_function = '';
                     
-                    // Build safe SQL based on database type
+                    // Build safe SQL based on database type. MariaDB 11.7+ uses
+                    // VEC_FromText to parse a JSON array; MySQL 9 uses its own
+                    // ingest function (VECTOR_FROM_JSON here is a placeholder).
                     if ($db_type === 'mariadb') {
-                        $vector_function = "VECTOR_FROM_JSON('" . esc_sql($embedding_json) . "')";
+                        $vector_function = "VEC_FromText('" . esc_sql($embedding_json) . "')";
                         $distance_function = "VEC_DISTANCE_COSINE(embedding, " . $vector_function . ")";
                     } else if ($db_type === 'mysql') {
                         $vector_function = "VECTOR_FROM_JSON('" . esc_sql($embedding_json) . "')";
@@ -460,9 +462,9 @@ class REST {
                     } else {
                         return new \WP_Error('db_error', __('Unsupported database type for vector operations', 'wpvdb'), ['status' => 500]);
                     }
-                    
+
                     Logger::debug('Vector SQL components', [
-                        'vector_function' => 'VECTOR_FROM_JSON(...)',
+                        'vector_function' => substr($vector_function, 0, 30) . '...',
                         'distance_function' => substr($distance_function, 0, 50) . '...',
                         'db_type' => $db_type
                     ]);
