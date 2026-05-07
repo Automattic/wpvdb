@@ -31,7 +31,7 @@ $openai_organization = isset($settings['openai']['organization']) ? $settings['o
 $openai_api_version = isset($settings['openai']['api_version']) ? $settings['openai']['api_version'] : '';
 $automattic_api_key = isset($settings['automattic']['api_key']) ? $settings['automattic']['api_key'] : '';
 $automattic_endpoint = isset($settings['automattic']['api_base']) ? $settings['automattic']['api_base'] : \WPVDB\Providers::get_api_base('automattic');
-$embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_batch_size'] : 10;
+$embedding_batch_size = isset($settings['batch_size']) ? $settings['batch_size'] : \WPVDB\Settings::DEFAULTS['batch_size'];
 ?>
 
 <div class="wrap wpvdb-settings">
@@ -335,12 +335,12 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                         <label for="wpvdb_embedding_batch_size"><?php esc_html_e('Embedding Batch Size', 'wpvdb'); ?></label>
                     </th>
                     <td>
-                        <input type="number" 
-                               name="wpvdb_settings[queue_batch_size]" 
-                               id="wpvdb_embedding_batch_size" 
-                               value="<?php echo esc_attr($embedding_batch_size); ?>" 
-                               min="1" 
-                               max="100"
+                        <input type="number"
+                               name="wpvdb_settings[batch_size]"
+                               id="wpvdb_embedding_batch_size"
+                               value="<?php echo esc_attr($embedding_batch_size); ?>"
+                               min="1"
+                               max="50"
                                class="small-text">
                         <p class="description">
                             <?php esc_html_e('Number of chunks to process in a single API request. Higher values may be more efficient but increase the risk of API timeouts.', 'wpvdb'); ?>
