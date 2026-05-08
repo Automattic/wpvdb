@@ -99,10 +99,13 @@ $embedding = WPVDB\Core::get_embedding('Your text to embed', 'text-embedding-3-s
 // Store the embedding
 WPVDB\REST::insert_embedding_row(
     $post_id,
-    'chunk-id',
+    'chunk-0',
     'Your text to embed',
     'Optional summary',
-    $embedding
+    $embedding,
+    'text-embedding-3-small', // model identifier
+    'post',                   // doc_type (defaults to 'post')
+    0                         // chunk_index (zero-based position)
 );
 ```
 
