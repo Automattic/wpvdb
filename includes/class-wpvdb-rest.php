@@ -668,7 +668,7 @@ class REST {
      *                              so the function can detect callers that forget to pass a value
      *                              (the column would otherwise silently get `0`, masking the same
      *                              class of bug this signature was widened to fix).
-     * @return int|false            Row ID or false on error
+     * @return int|WP_Error         Row ID, or WP_Error on validation failure or DB insert failure.
      */
     public static function insert_embedding_row($doc_id, $chunk_id, $chunk_content, $summary, $embedding, $model = '', $doc_type = 'post', $chunk_index = null) {
         // Detect callers using the legacy 5/6/7-arg signature; fall back to 0 for backward
@@ -678,6 +678,12 @@ class REST {
             $chunk_index = 0;
         }
         $chunk_index = (int) $chunk_index;
+
+        if (!Core::is_valid_embedding($embedding)) {
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] insert_embedding_row rejected invalid embedding for doc_id=' . $doc_id . ' chunk_index=' . $chunk_index); }
+            return new \WP_Error('embedding_invalid', 'Refused to store an embedding that is empty, non-finite, or zero-magnitude.', ['doc_id' => $doc_id, 'chunk_index' => $chunk_index]);
+        }
+
         self::init_database();
         
         global $wpdb;
@@ -686,7 +692,7 @@ class REST {
         // First, check if the table exists
         if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") !== $table_name) {
             if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Embeddings table does not exist'); }
-            return false;
+            return new \WP_Error('embedding_table_missing', 'The wpvdb embeddings table does not exist. Run plugin activation or the schema migration.', ['doc_id' => $doc_id, 'chunk_index' => $chunk_index]);
         }
         
         // Check for vector support and handle storage differently
@@ -720,35 +726,6 @@ class REST {
                     );
 
                     $result = $wpdb->query($sql);
-
-                    if ($result === false) {
-                        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Failed to insert embedding with vector function'); }
-
-                        // Fallback to JSON storage
-                        $result = $wpdb->insert(
-                            $table_name,
-                            [
-                                'doc_id' => $doc_id,
-                                'chunk_id' => $chunk_id,
-                                'chunk_content' => $chunk_content,
-                                'summary' => $summary,
-                                'embedding' => $embedding_json,
-                                'model' => $model,
-                                'doc_type' => $doc_type,
-                                'chunk_index' => $chunk_index,
-                            ],
-                            [
-                                '%d',
-                                '%s',
-                                '%s',
-                                '%s',
-                                '%s',
-                                '%s',
-                                '%s',
-                                '%d',
-                            ]
-                        );
-                    }
                 } else {
                     // With MySQL, use wpdb->insert with the vector function
                     $result = $wpdb->query($wpdb->prepare(
@@ -763,63 +740,11 @@ class REST {
                         $doc_type,
                         $chunk_index
                     ));
-
-                    if ($result === false) {
-                        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Failed to insert embedding with vector function'); }
-
-                        // Fallback to JSON storage
-                        $result = $wpdb->insert(
-                            $table_name,
-                            [
-                                'doc_id' => $doc_id,
-                                'chunk_id' => $chunk_id,
-                                'chunk_content' => $chunk_content,
-                                'summary' => $summary,
-                                'embedding' => $embedding_json,
-                                'model' => $model,
-                                'doc_type' => $doc_type,
-                                'chunk_index' => $chunk_index,
-                            ],
-                            [
-                                '%d',
-                                '%s',
-                                '%s',
-                                '%s',
-                                '%s',
-                                '%s',
-                                '%s',
-                                '%d',
-                            ]
-                        );
-                    }
                 }
+
             } catch (\Exception $e) {
                 if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Exception in insert_embedding_row: ' . $e->getMessage()); }
-
-                // Fallback to JSON storage
-                $result = $wpdb->insert(
-                    $table_name,
-                    [
-                        'doc_id' => $doc_id,
-                        'chunk_id' => $chunk_id,
-                        'chunk_content' => $chunk_content,
-                        'summary' => $summary,
-                        'embedding' => json_encode($embedding),
-                        'model' => $model,
-                        'doc_type' => $doc_type,
-                        'chunk_index' => $chunk_index,
-                    ],
-                    [
-                        '%d',
-                        '%s',
-                        '%s',
-                        '%s',
-                        '%s',
-                        '%s',
-                        '%s',
-                        '%d',
-                    ]
-                );
+                $result = false;
             }
         } else {
             // No vector support, store as JSON
@@ -850,7 +775,7 @@ class REST {
         
         if ($result === false) {
             if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Failed to insert embedding row: ' . $wpdb->last_error); }
-            return false;
+            return new \WP_Error('embedding_insert_failed', 'Database insert failed: ' . $wpdb->last_error, ['doc_id' => $doc_id, 'chunk_index' => $chunk_index]);
         }
         
         // Invalidate caches since we added new embeddings

@@ -141,20 +141,21 @@ class Core {
 
         $custom_options = self::get_embedding_custom_options($model, $api_base);
         
-        // Check cache first
+        // Check cache first. A poisoned cache entry falls through to the fresh path,
+        // which will overwrite it on success via Cache::set_embedding().
         $cached_embedding = Cache::get_embedding($text, $model);
-        if ($cached_embedding !== false && is_array($cached_embedding)) {
+        if ($cached_embedding !== false && is_array($cached_embedding) && self::is_valid_embedding($cached_embedding)) {
             Logger::debug('Using cached embedding', ['text_length' => strlen($text), 'model' => $model]);
             return $cached_embedding;
         }
-        
+
         // Allow plugins to provide custom embedding generation
         $custom_embedding = apply_filters('wpvdb_generate_embedding', null, $text, $model, $api_base, $api_key);
         if ($custom_embedding !== null) {
-            // Cache custom embeddings too
-            if (is_array($custom_embedding)) {
-                Cache::set_embedding($text, $model, $custom_embedding);
+            if (!is_array($custom_embedding) || !self::is_valid_embedding($custom_embedding)) {
+                return new \WP_Error('embedding_error', 'wpvdb_generate_embedding filter returned an invalid embedding.');
             }
+            Cache::set_embedding($text, $model, $custom_embedding);
             return $custom_embedding;
         }
         
@@ -185,6 +186,9 @@ class Core {
         // Prefer PHP AI Client embeddings when using the default OpenAI endpoint.
         $ai_client_embedding = self::maybe_get_embedding_via_ai_client($text, $model, $api_base, $api_key, $custom_options);
         if (is_array($ai_client_embedding)) {
+            if (!self::is_valid_embedding($ai_client_embedding)) {
+                return new \WP_Error('embedding_error', 'AI Client returned an invalid embedding.');
+            }
             Cache::set_embedding($text, $model, $ai_client_embedding);
             return $ai_client_embedding;
         } elseif (is_wp_error($ai_client_embedding)) {
@@ -241,11 +245,50 @@ class Core {
         }
 
         $embedding = $data['data'][0]['embedding'];
-        
+
+        if (!self::is_valid_embedding($embedding)) {
+            return new \WP_Error('embedding_error', 'Provider returned an empty or zero-magnitude embedding.');
+        }
+
         // Cache the successful embedding
         Cache::set_embedding($text, $model, $embedding);
 
         return $embedding;
+    }
+
+    /**
+     * True when $embedding is a non-empty zero-indexed list of finite int|float values
+     * whose L2 norm is comfortably non-zero.
+     *
+     * Numeric strings and associative arrays are rejected so the value JSON-encodes
+     * as a number array, not a string or object (VEC_FromText rejects both).
+     * The 1e-30 squared-norm floor is a semantic near-zero guard, well above float32's
+     * smallest normal (~1.18e-38).
+     *
+     * @param mixed $embedding Candidate embedding. Expected to be array<int, int|float>.
+     * @return bool True if the candidate is a usable embedding; false otherwise.
+     */
+    public static function is_valid_embedding($embedding) {
+        if (!is_array($embedding) || count($embedding) === 0) {
+            return false;
+        }
+        $expected_key = 0;
+        $sum_sq = 0.0;
+        foreach ($embedding as $k => $v) {
+            if ($k !== $expected_key) {
+                return false;
+            }
+            $expected_key++;
+            if (!is_int($v) && !is_float($v)) {
+                return false;
+            }
+            $f = (float) $v;
+            if (!is_finite($f)) {
+                return false;
+            }
+            $sum_sq += $f * $f;
+        }
+        return $sum_sq > 1e-30;
     }
     
     /**
