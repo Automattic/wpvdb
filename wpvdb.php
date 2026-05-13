@@ -3,7 +3,7 @@
  * Plugin Name: WPVDB - WordPress Vector Database
  * Plugin URI:  https://github.com/automattic/wpvdb
  * Description: Transform WordPress into a vector database with native or fallback support for vector columns, chunking, embedding, and REST endpoints.
- * Version:     1.0.14
+ * Version:     1.0.16
  * Author:      Automattic, James LePage
  * Author URI:  https://automattic.com
  * Text Domain: wpvdb
@@ -22,7 +22,7 @@
 defined('ABSPATH') || exit; // No direct access.
 
 // Define plugin version and constants.
-define('WPVDB_VERSION', '1.0.14');
+define('WPVDB_VERSION', '1.0.16');
 define('WPVDB_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WPVDB_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WPVDB_PLUGIN_FILE', __FILE__);
@@ -63,7 +63,11 @@ require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-query.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-settings.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-queue.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-admin.php';
+require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-embedding-enqueuer.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-plugin.php';
+if (defined('WP_CLI') && WP_CLI) {
+    require_once WPVDB_PLUGIN_DIR . 'includes/cli/class-wpvdb-cli.php';
+}
 
 /**
  * Global helper: whether Action Scheduler is available for scheduling.
@@ -118,10 +122,10 @@ add_action('plugins_loaded', function() {
     
     // If version has changed, run update procedures
     if (version_compare($current_version, WPVDB_VERSION, '<')) {
-        // Add vector index to existing tables
-        \WPVDB\Activation::add_vector_index_to_existing_table();
+        // Apply schema migrations (new tables, new indexes, vector index).
+        \WPVDB\Activation::upgrade_schema();
         \WPVDB\Settings::migrate_stored_settings();
-        
+
         // Update stored version
         update_option('wpvdb_version', WPVDB_VERSION);
     }

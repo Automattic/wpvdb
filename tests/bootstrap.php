@@ -437,4 +437,5 @@ require_once dirname( __DIR__ ) . '/includes/class-wpvdb-models.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-settings.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-core.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-database.php';
+require_once dirname( __DIR__ ) . '/includes/class-wpvdb-embedding-enqueuer.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-security.php';

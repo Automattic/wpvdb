@@ -145,15 +145,50 @@ class Activation {
             KEY doc_type_idx (doc_type),
             KEY embedding_date_idx (embedding_date),
             KEY chunk_id_idx (chunk_id),
-            KEY compound_search_idx (doc_type, model, embedding_date)
+            KEY compound_search_idx (doc_type, model, embedding_date),
+            KEY doc_id_doc_type_model_idx (doc_id, doc_type, model)
         ) $collate;\n";
 
         if (!$has_meta_column) {
             // Add meta column if it doesn't exist (for upgrade from older versions)
             $sql .= "ALTER TABLE {$table_name} ADD COLUMN meta longtext DEFAULT NULL;\n";
         }
-        
+
+        $jobs_table = $wpdb->prefix . 'wpvdb_reindex_jobs';
+        $sql .= "CREATE TABLE {$jobs_table} (
+            job_id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            status varchar(20) NOT NULL DEFAULT 'pending',
+            provider varchar(64) NOT NULL DEFAULT '',
+            model varchar(64) NOT NULL DEFAULT '',
+            scope_args longtext NOT NULL,
+            fingerprint char(64) NOT NULL DEFAULT '',
+            last_seen_id bigint(20) unsigned NOT NULL DEFAULT 0,
+            upper_bound_id bigint(20) unsigned NOT NULL DEFAULT 0,
+            scanned_count bigint(20) unsigned NOT NULL DEFAULT 0,
+            queued_count bigint(20) unsigned NOT NULL DEFAULT 0,
+            skipped_count bigint(20) unsigned NOT NULL DEFAULT 0,
+            lock_until datetime DEFAULT NULL,
+            lock_token varchar(36) DEFAULT NULL,
+            last_error text DEFAULT NULL,
+            created_at datetime DEFAULT NULL,
+            updated_at datetime DEFAULT NULL,
+            PRIMARY KEY  (job_id),
+            KEY fingerprint_status_idx (fingerprint, status),
+            KEY status_idx (status)
+        ) $collate;\n";
+
         return $sql;
+    }
+
+    /**
+     * Run schema migrations idempotently for sites that already have the
+     * plugin installed at an older version.
+     */
+    public static function upgrade_schema() {
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        self::init_database();
+        dbDelta(self::get_schema_sql());
+        self::add_vector_index_to_existing_table();
     }
     
     /**

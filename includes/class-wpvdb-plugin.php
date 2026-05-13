@@ -134,6 +134,7 @@ class Plugin {
             add_action('wpvdb_process_embedding', [WPVDB_Queue::class, 'process_item'], 10, 1);
             add_action('wpvdb_process_embedding_batch', [WPVDB_Queue::class, 'process_batch'], 10, 1);
             add_action('wpvdb_run_queue_now', [$this, 'run_queue_immediately']);
+            add_action(Embedding_Enqueuer::AS_HOOK, [Embedding_Enqueuer::class, 'process_page'], 10, 1);
 
             // Add more frequent runner for Action Scheduler
             add_action('init', [$this, 'maybe_run_action_scheduler']);
