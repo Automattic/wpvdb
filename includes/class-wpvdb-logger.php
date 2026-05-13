@@ -32,6 +32,20 @@ class Logger {
      * Maximum number of log entries to keep
      */
     const MAX_LOG_ENTRIES = 1000;
+
+    /**
+     * Log entries buffered for a single option write at shutdown.
+     *
+     * @var array
+     */
+    private static $pending_entries = [];
+
+    /**
+     * Whether the shutdown flush has been registered.
+     *
+     * @var bool
+     */
+    private static $flush_registered = false;
     
     /**
      * Log an emergency message
@@ -160,6 +174,18 @@ class Logger {
         // Allow plugins to hook into logging
         do_action('wpvdb_log_entry', $level, $message, $context, $entry);
     }
+
+    /**
+     * Check whether log entries should be persisted to the options table.
+     *
+     * @return bool Whether option-backed log storage is enabled
+     */
+    public static function storage_enabled() {
+        return (bool) apply_filters(
+            'wpvdb_store_logs',
+            defined('WPVDB_STORE_LOGS') && WPVDB_STORE_LOGS
+        );
+    }
     
     /**
      * Check if we should log for this level
@@ -263,18 +289,34 @@ class Logger {
      * @param array $entry Log entry
      */
     private static function store_log_entry($entry) {
-        // Get current logs
+        self::$pending_entries[] = $entry;
+
+        if (self::storage_enabled() && !self::$flush_registered) {
+            self::$flush_registered = true;
+            register_shutdown_function([__CLASS__, 'flush_pending_entries']);
+        }
+    }
+
+    /**
+     * Flush buffered log entries.
+     */
+    public static function flush_pending_entries() {
+        if (!self::storage_enabled() || empty(self::$pending_entries)) {
+            return;
+        }
+
         $logs = get_option(self::LOG_OPTION, []);
-        
-        // Add new entry
-        array_unshift($logs, $entry);
-        
-        // Limit number of entries
+        if (!is_array($logs)) {
+            $logs = [];
+        }
+
+        $logs = array_merge(array_reverse(self::$pending_entries), $logs);
+        self::$pending_entries = [];
+
         if (count($logs) > self::MAX_LOG_ENTRIES) {
             $logs = array_slice($logs, 0, self::MAX_LOG_ENTRIES);
         }
-        
-        // Update option
+
         update_option(self::LOG_OPTION, $logs, false);
     }
     
@@ -286,7 +328,18 @@ class Logger {
      * @return array Log entries
      */
     public static function get_logs($level = null, $limit = 100) {
-        $logs = get_option(self::LOG_OPTION, []);
+        $logs = [];
+
+        if (self::storage_enabled()) {
+            $logs = get_option(self::LOG_OPTION, []);
+            if (!is_array($logs)) {
+                $logs = [];
+            }
+        }
+
+        if (!empty(self::$pending_entries)) {
+            $logs = array_merge(array_reverse(self::$pending_entries), $logs);
+        }
         
         // Filter by level if specified
         if ($level && isset(self::LEVELS[$level])) {
@@ -307,8 +360,8 @@ class Logger {
      * Clear all log entries
      */
     public static function clear_logs() {
+        self::$pending_entries = [];
         delete_option(self::LOG_OPTION);
-        self::info('Log entries cleared');
     }
     
     /**
@@ -317,7 +370,7 @@ class Logger {
      * @return array Log statistics
      */
     public static function get_log_stats() {
-        $logs = get_option(self::LOG_OPTION, []);
+        $logs = self::get_logs(null, 0);
         
         $stats = [
             'total_entries' => count($logs),

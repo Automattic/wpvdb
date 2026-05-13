@@ -166,7 +166,15 @@ class Maintenance {
      * @since 1.0.13
      */
     private static function cleanup_old_logs() {
+        if (!Logger::storage_enabled()) {
+            return;
+        }
+
         $logs = get_option('wpvdb_logs', []);
+        if (!is_array($logs)) {
+            return;
+        }
+
         $max_age = apply_filters('wpvdb_log_max_age_days', 30);
         $cutoff_date = strtotime("-{$max_age} days");
         

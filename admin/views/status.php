@@ -61,13 +61,6 @@ $active_model = isset($settings['active_model']) ? $settings['active_model'] : '
 $pending_provider = $pending_details ? $pending_details['pending_provider'] : '';
 $pending_model = $pending_details ? $pending_details['pending_model'] : '';
 
-// Debug output for settings status
-error_log('WPVDB STATUS PAGE: Current settings: ' . print_r($settings, true));
-error_log('WPVDB STATUS PAGE: Has pending change: ' . ($has_pending_change ? 'YES' : 'NO'));
-if ($pending_details) {
-    error_log('WPVDB STATUS PAGE: Pending details: ' . print_r($pending_details, true));
-}
-
 // Get system information 
 $system_info = [];
 $system_info['php_version'] = phpversion();
