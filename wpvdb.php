@@ -120,6 +120,7 @@ add_action('plugins_loaded', function() {
     if (version_compare($current_version, WPVDB_VERSION, '<')) {
         // Add vector index to existing tables
         \WPVDB\Activation::add_vector_index_to_existing_table();
+        \WPVDB\Settings::migrate_stored_settings();
         
         // Update stored version
         update_option('wpvdb_version', WPVDB_VERSION);

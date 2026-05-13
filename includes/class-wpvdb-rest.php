@@ -384,8 +384,10 @@ class REST {
             10
         );
         
-        // Check cache first for expensive queries
+        $text = sanitize_textarea_field($data['query']);
         $model = isset($data['model']) ? sanitize_text_field($data['model']) : Settings::get_default_model();
+
+        // Check cache first for expensive queries
         $cached_result = Cache::get_query_result($text, $model, $limit);
         if ($cached_result !== false) {
             Logger::debug('Using cached query result', ['query_length' => strlen($text), 'limit' => $limit]);
@@ -399,12 +401,10 @@ class REST {
             global $wpdb;
             $table_name = $wpdb->prefix . 'wpvdb_embeddings';
             
-            // For simplicity, we'll handle all embedding here - in real apps, you might externalize this
-            $text = sanitize_textarea_field($data['query']);
             Logger::debug('Processing query request', ['query_length' => strlen($text), 'limit' => $limit]);
             
             // Determine which model to use (from settings or provided in request) 
-            $provider = isset($data['provider']) ? sanitize_text_field($data['provider']) : 'openai';
+            $provider = isset($data['provider']) ? sanitize_text_field($data['provider']) : Settings::get_active_provider();
             
             Logger::debug('Using configuration', ['model' => $model, 'provider' => $provider]);
             

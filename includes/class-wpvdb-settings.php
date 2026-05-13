@@ -97,6 +97,13 @@ class Settings {
                 $validated['default_model'] = $model;
             }
         }
+
+        if (!empty($input['active_model'])) {
+            $model = Utils::validate_model_name($input['active_model']);
+            if ($model !== false) {
+                $validated['active_model'] = $model;
+            }
+        }
         
         // Validate chunk size
         $validated['chunk_size'] = Utils::validate_positive_int(
@@ -141,10 +148,19 @@ class Settings {
             if (!empty($provider_settings['api_base'])) {
                 $url = Utils::validate_url($provider_settings['api_base']);
                 if ($url !== false) {
-                    $validated[$provider]['api_base'] = $url;
+                    $validated[$provider]['api_base'] = self::normalize_api_base_for_provider($provider, $url);
+                }
+            }
+
+            if (!empty($provider_settings['default_model'])) {
+                $model = Utils::validate_model_name($provider_settings['default_model']);
+                if ($model !== false && Models::get_model($provider, $model)) {
+                    $validated[$provider]['default_model'] = $model;
                 }
             }
         }
+
+        $validated = self::normalize_settings_for_storage($validated);
         
         // Log settings update
         Logger::info('Settings updated', [
@@ -167,7 +183,76 @@ class Settings {
      */
     public static function get_validated_settings() {
         $settings = get_option('wpvdb_settings', []);
-        return wp_parse_args($settings, self::DEFAULTS);
+        return wp_parse_args($settings, self::get_defaults());
+    }
+
+    /**
+     * Normalize settings that are already sanitized enough to store.
+     *
+     * @param array $settings Settings array
+     * @return array Normalized settings array
+     */
+    public static function normalize_settings_for_storage($settings) {
+        if (!is_array($settings)) {
+            return self::get_defaults();
+        }
+
+        foreach (array_keys(Providers::get_available_providers()) as $provider) {
+            if (isset($settings[$provider]) && is_array($settings[$provider]) && !empty($settings[$provider]['api_base'])) {
+                $settings[$provider]['api_base'] = self::normalize_api_base_for_provider($provider, $settings[$provider]['api_base']);
+            }
+        }
+
+        $active_provider = '';
+        if (!empty($settings['active_provider'])) {
+            $active_provider = sanitize_key($settings['active_provider']);
+        } elseif (!empty($settings['provider'])) {
+            $active_provider = sanitize_key($settings['provider']);
+        }
+
+        if ($active_provider !== '' && Providers::get_provider($active_provider)) {
+            $settings['active_provider'] = $active_provider;
+            $settings['provider'] = $active_provider;
+
+            $provider_model = self::get_model_from_settings($settings, $active_provider);
+            $active_model = !empty($settings['active_model']) ? sanitize_text_field($settings['active_model']) : '';
+
+            if ($active_model === '' || !Models::get_model($active_provider, $active_model)) {
+                $settings['active_model'] = $provider_model;
+            }
+
+            if (!empty($settings['active_model'])) {
+                $settings['default_model'] = $settings['active_model'];
+                if (!isset($settings[$active_provider]) || !is_array($settings[$active_provider])) {
+                    $settings[$active_provider] = [];
+                }
+                if (empty($settings[$active_provider]['default_model']) || !Models::get_model($active_provider, $settings[$active_provider]['default_model'])) {
+                    $settings[$active_provider]['default_model'] = $settings['active_model'];
+                }
+            }
+        }
+
+        return $settings;
+    }
+
+    /**
+     * Normalize saved settings in-place.
+     *
+     * @return bool Whether settings were updated
+     */
+    public static function migrate_stored_settings() {
+        $settings = get_option('wpvdb_settings', []);
+        if (!is_array($settings)) {
+            return false;
+        }
+
+        $normalized = self::normalize_settings_for_storage($settings);
+        if ($normalized === $settings) {
+            return false;
+        }
+
+        update_option('wpvdb_settings', $normalized);
+        return true;
     }
     
     /**
@@ -561,12 +646,28 @@ class Settings {
             return Models::get_default_model_for_provider($provider);
         }
         
-        // Check in the provider-specific settings
         if (isset($settings[$provider]['default_model']) && !empty($settings[$provider]['default_model'])) {
             return $settings[$provider]['default_model'];
         }
         
-        // Otherwise get default from Models registry
+        return Models::get_default_model_for_provider($provider);
+    }
+
+    /**
+     * Get a valid provider model from settings or registry defaults.
+     *
+     * @param array $settings Settings array
+     * @param string $provider Provider name
+     * @return string Model name
+     */
+    private static function get_model_from_settings($settings, $provider) {
+        if (!empty($settings[$provider]['default_model'])) {
+            $model = sanitize_text_field($settings[$provider]['default_model']);
+            if (Models::get_model($provider, $model)) {
+                return $model;
+            }
+        }
+
         return Models::get_default_model_for_provider($provider);
     }
 

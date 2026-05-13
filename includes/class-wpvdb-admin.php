@@ -466,7 +466,7 @@ class Admin {
                 }
                 
                 // Skip the rest of provider change validation
-                return $input;
+                return Settings::normalize_settings_for_storage($input);
             }
         }
         
@@ -525,7 +525,7 @@ class Admin {
             }
         }
         
-        return $input;
+        return Settings::normalize_settings_for_storage($input);
     }
     
     /**
@@ -727,6 +727,8 @@ class Admin {
             
             update_option('wpvdb_settings', $settings);
         }
+
+        Settings::migrate_stored_settings();
     }
     
     /**
@@ -1087,7 +1089,7 @@ class Admin {
                 $settings['pending_provider'] = '';
                 $settings['pending_model'] = '';
                 
-                update_option('wpvdb_settings', $settings);
+                update_option('wpvdb_settings', Settings::normalize_settings_for_storage($settings));
                 
                 // Log the updated settings
                     wp_send_json_success([
@@ -2272,7 +2274,7 @@ class Admin {
         $settings['pending_model'] = '';
         
         // Save settings - FORCE autoload to true to ensure the option is loaded on every page
-        $update_result = update_option('wpvdb_settings', $settings, true);
+        $update_result = update_option('wpvdb_settings', Settings::normalize_settings_for_storage($settings), true);
         
         // Delete any transients that might be caching the settings
         delete_transient('wpvdb_settings');
@@ -2334,7 +2336,7 @@ class Admin {
         $settings['pending_model'] = '';
         
         // Save settings with forced autoload
-        $update_result = update_option('wpvdb_settings', $settings, true);
+        $update_result = update_option('wpvdb_settings', Settings::normalize_settings_for_storage($settings), true);
         // Delete any transients that might be caching the settings
         delete_transient('wpvdb_settings');
         
