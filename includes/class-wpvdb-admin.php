@@ -1057,7 +1057,7 @@ class Admin {
             
             // Delete all existing embeddings
             $result = $wpdb->query("TRUNCATE TABLE {$table_name}");
-            
+
             if ($result === false) {
                 if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: Error truncating embeddings table: ' . $wpdb->last_error); }
                 wp_send_json_error([
@@ -1065,7 +1065,11 @@ class Admin {
                 ]);
                 return;
             }
-            
+
+            // Embeddings table was truncated. Invalidate query cache so prior
+            // result sets do not survive into post-change requests.
+            Cache::invalidate_query_cache();
+
             // Activate the pending provider/model
             if (!empty($settings['pending_provider']) && !empty($settings['pending_model'])) {
                 // Log the change
@@ -1129,8 +1133,9 @@ class Admin {
         global $wpdb;
         $table_name = $wpdb->prefix . 'wpvdb_embeddings';
         $result = $wpdb->delete($table_name, ['id' => $id], ['%d']);
-        
+
         if ($result) {
+            Cache::invalidate_query_cache();
             wp_send_json_success(['message' => __('Embedding deleted successfully', 'wpvdb')]);
         } else {
             wp_send_json_error(['message' => __('Failed to delete embedding', 'wpvdb')]);
@@ -1608,8 +1613,11 @@ class Admin {
         // Delete any existing embeddings for this post
         global $wpdb;
         $table_name = $wpdb->prefix . 'wpvdb_embeddings';
-        $wpdb->delete($table_name, ['doc_id' => $post_id], ['%d']);
-        
+        $deleted = $wpdb->delete($table_name, ['doc_id' => $post_id], ['%d']);
+        if ($deleted !== false && $deleted > 0) {
+            Cache::invalidate_query_cache();
+        }
+
         // Delete post meta
         delete_post_meta($post_id, '_wpvdb_embedded');
         delete_post_meta($post_id, '_wpvdb_chunks_count');
@@ -1828,6 +1836,7 @@ class Admin {
             
             if ($table_exists) {
                 $wpdb->query("TRUNCATE TABLE {$table_name}");
+                Cache::invalidate_query_cache();
             }
             
             // Store the status message in a transient
@@ -2245,6 +2254,7 @@ class Admin {
             if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB CRITICAL: Error truncating embeddings table: ' . $wpdb->last_error); }
         } else {
             if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB CRITICAL: Deleted ' . $embedding_count . ' embeddings'); }
+            Cache::invalidate_query_cache();
         }
         
         // Apply the pending change - store the original values for debug logs

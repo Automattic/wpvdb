@@ -494,12 +494,18 @@ class Database {
         
         if ($table_exists) {
             // Delete all embeddings for this post
-            $wpdb->delete(
+            $deleted = $wpdb->delete(
                 $table_name,
                 ['doc_id' => $post_id],
                 ['%d']
             );
-            
+
+            // Invalidate query cache so subsequent /query calls don't return
+            // results referencing the just-deleted document.
+            if ($deleted !== false && $deleted > 0) {
+                Cache::invalidate_query_cache();
+            }
+
             // Log the deletion
             if (defined('WP_DEBUG') && WP_DEBUG) { error_log("[WPVDB] Deleted embeddings for post ID: $post_id"); }
         }

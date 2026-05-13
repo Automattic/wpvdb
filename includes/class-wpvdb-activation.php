@@ -280,10 +280,13 @@ class Activation {
         
         // Drop the existing table
         $wpdb->query("DROP TABLE IF EXISTS $table_name");
-        
+
         // Create the table with the current schema
         self::activate();
-        
+
+        // Invalidate query cache after the destructive schema change.
+        Cache::invalidate_query_cache();
+
         // Add vector index with optimized parameters for MariaDB
         if (self::$database->get_db_type() === 'mariadb') {
             try {

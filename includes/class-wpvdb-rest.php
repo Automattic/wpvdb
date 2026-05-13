@@ -874,8 +874,11 @@ class REST {
         // Delete any existing embeddings for this post
         global $wpdb;
         $table_name = $wpdb->prefix . 'wpvdb_embeddings';
-        $wpdb->delete($table_name, ['doc_id' => $post_id], ['%d']);
-        
+        $deleted = $wpdb->delete($table_name, ['doc_id' => $post_id], ['%d']);
+        if ($deleted !== false && $deleted > 0) {
+            Cache::invalidate_query_cache();
+        }
+
         // Delete post meta
         delete_post_meta($post_id, '_wpvdb_embedded');
         delete_post_meta($post_id, '_wpvdb_chunks_count');
