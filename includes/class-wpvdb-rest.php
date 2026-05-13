@@ -711,11 +711,13 @@ class REST {
                 // For MySQL, the prepare statement handles the quoting properly
                 // For MariaDB, we need to make sure the vector function is inserted as-is
                 if (self::$database->get_db_type() === 'mariadb') {
-                    // Use a direct query for MariaDB with proper quoting
+                    // Use a direct query for MariaDB with proper quoting.
+                    // embedding_date uses NOW() so the column matches the DB clock that
+                    // Cache::get_relevant_embeddings() and Maintenance compare against.
                     $sql = $wpdb->prepare(
                         "INSERT INTO $table_name
-                        (doc_id, chunk_id, chunk_content, summary, embedding, model, doc_type, chunk_index)
-                        VALUES (%d, %s, %s, %s, $vector_function, %s, %s, %d)",
+                        (doc_id, chunk_id, chunk_content, summary, embedding, model, doc_type, chunk_index, embedding_date)
+                        VALUES (%d, %s, %s, %s, $vector_function, %s, %s, %d, NOW())",
                         $doc_id,
                         $chunk_id,
                         $chunk_content,
@@ -730,8 +732,8 @@ class REST {
                     // With MySQL, use wpdb->insert with the vector function
                     $result = $wpdb->query($wpdb->prepare(
                         "INSERT INTO $table_name
-                        (doc_id, chunk_id, chunk_content, summary, embedding, model, doc_type, chunk_index)
-                        VALUES (%d, %s, %s, %s, $vector_function, %s, %s, %d)",
+                        (doc_id, chunk_id, chunk_content, summary, embedding, model, doc_type, chunk_index, embedding_date)
+                        VALUES (%d, %s, %s, %s, $vector_function, %s, %s, %d, NOW())",
                         $doc_id,
                         $chunk_id,
                         $chunk_content,
@@ -747,30 +749,21 @@ class REST {
                 $result = false;
             }
         } else {
-            // No vector support, store as JSON
-            $result = $wpdb->insert(
-                $table_name,
-                [
-                    'doc_id' => $doc_id,
-                    'chunk_id' => $chunk_id,
-                    'chunk_content' => $chunk_content,
-                    'summary' => $summary,
-                    'embedding' => json_encode($embedding),
-                    'model' => $model,
-                    'doc_type' => $doc_type,
-                    'chunk_index' => $chunk_index,
-                ],
-                [
-                    '%d',
-                    '%s',
-                    '%s',
-                    '%s',
-                    '%s',
-                    '%s',
-                    '%s',
-                    '%d',
-                ]
-            );
+            // No vector support, store as JSON. Use NOW() for embedding_date so the
+            // column shares the DB clock used by Cache and Maintenance read sites.
+            $result = $wpdb->query($wpdb->prepare(
+                "INSERT INTO $table_name
+                (doc_id, chunk_id, chunk_content, summary, embedding, model, doc_type, chunk_index, embedding_date)
+                VALUES (%d, %s, %s, %s, %s, %s, %s, %d, NOW())",
+                $doc_id,
+                $chunk_id,
+                $chunk_content,
+                $summary,
+                json_encode($embedding),
+                $model,
+                $doc_type,
+                $chunk_index
+            ));
         }
         
         if ($result === false) {
