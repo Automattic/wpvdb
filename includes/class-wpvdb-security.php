@@ -175,7 +175,7 @@ class Security {
         
         // Log to WordPress error log if debug is enabled
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('[WPVDB SECURITY] ' . wp_json_encode($log_data));
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB SECURITY] ' . wp_json_encode($log_data)); }
         }
         
         // Allow plugins to hook into security logging

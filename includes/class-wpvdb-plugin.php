@@ -131,11 +131,88 @@ class Plugin {
         
         // Register Action Scheduler handler (if available)
         if ($this->has_action_scheduler()) {
-            add_action('wpvdb_process_embedding', [$this->queue, 'process_item']);
-            
+            add_action('wpvdb_process_embedding', [WPVDB_Queue::class, 'process_item'], 10, 1);
+            add_action('wpvdb_process_embedding_batch', [WPVDB_Queue::class, 'process_batch'], 10, 1);
+            add_action('wpvdb_run_queue_now', [$this, 'run_queue_immediately']);
+
             // Add more frequent runner for Action Scheduler
             add_action('init', [$this, 'maybe_run_action_scheduler']);
         }
+    }
+
+    /**
+     * Drain the embedding queue immediately (batch first, then singles).
+     *
+     * Registered as the 'wpvdb_run_queue_now' callback so callers that enqueue
+     * an async run_queue_now action actually get their jobs processed.
+     *
+     * @param int $limit Maximum number of items to process (0 for unlimited).
+     * @return int Number of items processed.
+     */
+    public function run_queue_immediately($limit = 0) {
+        $processed = 0;
+
+        if (!function_exists('as_get_scheduled_actions')) {
+            return $processed;
+        }
+
+        $batch_actions = as_get_scheduled_actions([
+            'hook'     => 'wpvdb_process_embedding_batch',
+            'status'   => \ActionScheduler_Store::STATUS_PENDING,
+            'per_page' => 1,
+            'orderby'  => 'date',
+            'order'    => 'ASC',
+        ]);
+
+        if (!empty($batch_actions)) {
+            $action = reset($batch_actions);
+            $args   = $action->get_args();
+            as_unschedule_action('wpvdb_process_embedding_batch', $args, 'wpvdb');
+
+            $batch_results = WPVDB_Queue::process_batch($args[0]);
+            $processed += count(array_filter($batch_results));
+
+            if ($limit === 0 || $processed < $limit) {
+                WPVDB_Queue::maybe_process_next_batch();
+            }
+            return $processed;
+        }
+
+        $batch_size = WPVDB_Queue::get_batch_size();
+        if ($limit > 0 && $batch_size > $limit) {
+            $batch_size = $limit;
+        }
+
+        $actions = as_get_scheduled_actions([
+            'hook'     => 'wpvdb_process_embedding',
+            'status'   => \ActionScheduler_Store::STATUS_PENDING,
+            'per_page' => $batch_size,
+            'orderby'  => 'date',
+            'order'    => 'ASC',
+        ]);
+
+        if (empty($actions)) {
+            return $processed;
+        }
+
+        $batch_items = [];
+        foreach ($actions as $action) {
+            $args = $action->get_args();
+            if (!empty($args[0])) {
+                $batch_items[] = $args[0];
+            }
+            as_unschedule_action('wpvdb_process_embedding', $args, 'wpvdb');
+            if ($limit > 0 && count($batch_items) >= $limit) {
+                break;
+            }
+        }
+
+        if (!empty($batch_items)) {
+            $batch_results = WPVDB_Queue::process_batch($batch_items);
+            $processed += count(array_filter($batch_results));
+        }
+
+        return $processed;
     }
 
     /**
@@ -198,7 +275,7 @@ class Plugin {
                 // Set a transient to show a notice after deactivation
                 set_transient('wpvdb_was_deactivated', true, 60 * 60);
                 
-                error_log('[WPVDB] Plugin deactivated due to incompatible database.');
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Plugin deactivated due to incompatible database.'); }
                 
                 // If this is running in a CRON or admin context without a screen, we're done
                 if (!function_exists('get_current_screen') || !get_current_screen()) {

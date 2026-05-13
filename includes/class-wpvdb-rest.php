@@ -40,18 +40,46 @@ class REST {
     public static function register_routes() {
         // Initialize database
         self::init_database();
-        
-        // Register the system info endpoint
-        register_rest_route('wpvdb/v1', '/system', [
+
+        $namespace = 'wpvdb/v1';
+
+        register_rest_route($namespace, '/system', [
             'methods' => 'GET',
             'callback' => [__CLASS__, 'get_system_info'],
             'permission_callback' => function() {
                 return current_user_can('manage_options');
-            }
+            },
         ]);
-        
-        // Register other endpoints
-        // ...
+
+        register_rest_route($namespace, '/embed', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'handle_embed'],
+            'permission_callback' => [__CLASS__, 'default_permission_check'],
+        ]);
+
+        register_rest_route($namespace, '/vectors', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'handle_vectors'],
+            'permission_callback' => [__CLASS__, 'default_permission_check'],
+        ]);
+
+        register_rest_route($namespace, '/query', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'handle_query'],
+            'permission_callback' => [__CLASS__, 'default_permission_check'],
+        ]);
+
+        register_rest_route($namespace, '/metadata', [
+            'methods' => 'GET',
+            'callback' => [__CLASS__, 'handle_metadata'],
+            'permission_callback' => [__CLASS__, 'default_permission_check'],
+        ]);
+
+        register_rest_route($namespace, '/reembed', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'handle_reembed'],
+            'permission_callback' => [__CLASS__, 'default_permission_check'],
+        ]);
     }
 
     /**
@@ -262,24 +290,26 @@ class REST {
         $chunk_content= sanitize_textarea_field($request->get_param('chunk_content')) ?: '';
         $embedding    = $request->get_param('embedding');
         $summary      = sanitize_textarea_field($request->get_param('summary')) ?: '';
+        $model        = sanitize_text_field($request->get_param('model')) ?: Settings::get_default_model();
+        $chunk_index  = absint($request->get_param('chunk_index'));
 
         if (!$doc_id || !$embedding || !is_array($embedding)) {
             return new WP_Error('invalid_params', 'Missing or invalid doc_id or embedding.', ['status' => 400]);
         }
-        
+
         // Use security class to validate embedding
         $validated_embedding = Security::validate_embedding($embedding);
         if (is_wp_error($validated_embedding)) {
             return $validated_embedding;
         }
-        
+
         // Security logging
         Security::log_security_event('vectors_request', [
             'doc_id' => $doc_id,
             'embedding_dimensions' => count($validated_embedding)
         ]);
 
-        $res = self::insert_embedding_row($doc_id, $chunk_id, $chunk_content, $summary, $validated_embedding, $model_for_insert, 'post', $chunk_index);
+        $res = self::insert_embedding_row($doc_id, $chunk_id, $chunk_content, $summary, $validated_embedding, $model, 'post', $chunk_index);
         if (is_wp_error($res)) {
             return $res;
         }
@@ -333,7 +363,7 @@ class REST {
         
         self::init_database();
         
-        error_log('[WPVDB DEBUG] handle_query called');
+        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] handle_query called'); }
         $data = $request->get_json_params();
         
         // Security logging
@@ -354,8 +384,10 @@ class REST {
             10
         );
         
-        // Check cache first for expensive queries
+        $text = sanitize_textarea_field($data['query']);
         $model = isset($data['model']) ? sanitize_text_field($data['model']) : Settings::get_default_model();
+
+        // Check cache first for expensive queries
         $cached_result = Cache::get_query_result($text, $model, $limit);
         if ($cached_result !== false) {
             Logger::debug('Using cached query result', ['query_length' => strlen($text), 'limit' => $limit]);
@@ -369,12 +401,10 @@ class REST {
             global $wpdb;
             $table_name = $wpdb->prefix . 'wpvdb_embeddings';
             
-            // For simplicity, we'll handle all embedding here - in real apps, you might externalize this
-            $text = sanitize_textarea_field($data['query']);
             Logger::debug('Processing query request', ['query_length' => strlen($text), 'limit' => $limit]);
             
             // Determine which model to use (from settings or provided in request) 
-            $provider = isset($data['provider']) ? sanitize_text_field($data['provider']) : 'openai';
+            $provider = isset($data['provider']) ? sanitize_text_field($data['provider']) : Settings::get_active_provider();
             
             Logger::debug('Using configuration', ['model' => $model, 'provider' => $provider]);
             
@@ -420,9 +450,11 @@ class REST {
                     $vector_function = '';
                     $distance_function = '';
                     
-                    // Build safe SQL based on database type
+                    // Build safe SQL based on database type. MariaDB 11.7+ uses
+                    // VEC_FromText to parse a JSON array; MySQL 9 uses its own
+                    // ingest function (VECTOR_FROM_JSON here is a placeholder).
                     if ($db_type === 'mariadb') {
-                        $vector_function = "VECTOR_FROM_JSON('" . esc_sql($embedding_json) . "')";
+                        $vector_function = "VEC_FromText('" . esc_sql($embedding_json) . "')";
                         $distance_function = "VEC_DISTANCE_COSINE(embedding, " . $vector_function . ")";
                     } else if ($db_type === 'mysql') {
                         $vector_function = "VECTOR_FROM_JSON('" . esc_sql($embedding_json) . "')";
@@ -430,9 +462,9 @@ class REST {
                     } else {
                         return new \WP_Error('db_error', __('Unsupported database type for vector operations', 'wpvdb'), ['status' => 500]);
                     }
-                    
+
                     Logger::debug('Vector SQL components', [
-                        'vector_function' => 'VECTOR_FROM_JSON(...)',
+                        'vector_function' => substr($vector_function, 0, 30) . '...',
                         'distance_function' => substr($distance_function, 0, 50) . '...',
                         'db_type' => $db_type
                     ]);
@@ -630,9 +662,28 @@ class REST {
      * @param string $chunk_content Chunk content
      * @param string $summary       Summary of the chunk
      * @param array  $embedding     Embedding vector
-     * @return int|false            Row ID or false on error
+     * @param string   $model       Embedding model identifier (e.g. "text-embedding-3-small")
+     * @param string   $doc_type    Document type (e.g. "post")
+     * @param int|null $chunk_index Zero-based chunk position within the document. Defaults to null
+     *                              so the function can detect callers that forget to pass a value
+     *                              (the column would otherwise silently get `0`, masking the same
+     *                              class of bug this signature was widened to fix).
+     * @return int|WP_Error         Row ID, or WP_Error on validation failure or DB insert failure.
      */
-    public static function insert_embedding_row($doc_id, $chunk_id, $chunk_content, $summary, $embedding) {
+    public static function insert_embedding_row($doc_id, $chunk_id, $chunk_content, $summary, $embedding, $model = '', $doc_type = 'post', $chunk_index = null) {
+        // Detect callers using the legacy 5/6/7-arg signature; fall back to 0 for backward
+        // compatibility but emit a debug-only warning so the regression is visible.
+        if ($chunk_index === null) {
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB WARN] insert_embedding_row called without chunk_index; defaulting to 0'); }
+            $chunk_index = 0;
+        }
+        $chunk_index = (int) $chunk_index;
+
+        if (!Core::is_valid_embedding($embedding)) {
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] insert_embedding_row rejected invalid embedding for doc_id=' . $doc_id . ' chunk_index=' . $chunk_index); }
+            return new \WP_Error('embedding_invalid', 'Refused to store an embedding that is empty, non-finite, or zero-magnitude.', ['doc_id' => $doc_id, 'chunk_index' => $chunk_index]);
+        }
+
         self::init_database();
         
         global $wpdb;
@@ -640,13 +691,13 @@ class REST {
         
         // First, check if the table exists
         if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") !== $table_name) {
-            error_log('[WPVDB ERROR] Embeddings table does not exist');
-            return false;
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Embeddings table does not exist'); }
+            return new \WP_Error('embedding_table_missing', 'The wpvdb embeddings table does not exist. Run plugin activation or the schema migration.', ['doc_id' => $doc_id, 'chunk_index' => $chunk_index]);
         }
         
         // Check for vector support and handle storage differently
         $has_vector = self::$database->has_native_vector_support();
-        error_log('[WPVDB DEBUG] Vector support detected: ' . ($has_vector ? 'Yes' : 'No'));
+        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Vector support detected: ' . ($has_vector ? 'Yes' : 'No')); }
 
         if ($has_vector) {
             try {
@@ -655,127 +706,69 @@ class REST {
                 
                 // Use the Database class to determine the vector function to use
                 $vector_function = self::$database->get_vector_from_string_function($embedding_json);
-                error_log('[WPVDB DEBUG] Vector function: ' . $vector_function);
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Vector function: ' . $vector_function); }
                 
                 // For MySQL, the prepare statement handles the quoting properly
                 // For MariaDB, we need to make sure the vector function is inserted as-is
                 if (self::$database->get_db_type() === 'mariadb') {
-                    // Use a direct query for MariaDB with proper quoting
+                    // Use a direct query for MariaDB with proper quoting.
+                    // embedding_date uses NOW() so the column matches the DB clock that
+                    // Cache::get_relevant_embeddings() and Maintenance compare against.
                     $sql = $wpdb->prepare(
-                        "INSERT INTO $table_name 
-                        (doc_id, chunk_id, chunk_content, summary, embedding) 
-                        VALUES (%d, %s, %s, %s, $vector_function)",
+                        "INSERT INTO $table_name
+                        (doc_id, chunk_id, chunk_content, summary, embedding, model, doc_type, chunk_index, embedding_date)
+                        VALUES (%d, %s, %s, %s, $vector_function, %s, %s, %d, NOW())",
                         $doc_id,
                         $chunk_id,
                         $chunk_content,
-                        $summary
+                        $summary,
+                        $model,
+                        $doc_type,
+                        $chunk_index
                     );
-                    
+
                     $result = $wpdb->query($sql);
-                    
-                    if ($result === false) {
-                        error_log('[WPVDB ERROR] Failed to insert embedding with vector function');
-                        
-                        // Fallback to JSON storage
-                        $result = $wpdb->insert(
-                            $table_name,
-                            [
-                                'doc_id' => $doc_id,
-                                'chunk_id' => $chunk_id,
-                                'chunk_content' => $chunk_content,
-                                'summary' => $summary,
-                                'embedding' => $embedding_json
-                            ],
-                            [
-                                '%d',
-                                '%s',
-                                '%s',
-                                '%s',
-                                '%s'
-                            ]
-                        );
-                    }
                 } else {
                     // With MySQL, use wpdb->insert with the vector function
                     $result = $wpdb->query($wpdb->prepare(
-                        "INSERT INTO $table_name 
-                        (doc_id, chunk_id, chunk_content, summary, embedding) 
-                        VALUES (%d, %s, %s, %s, $vector_function)",
+                        "INSERT INTO $table_name
+                        (doc_id, chunk_id, chunk_content, summary, embedding, model, doc_type, chunk_index, embedding_date)
+                        VALUES (%d, %s, %s, %s, $vector_function, %s, %s, %d, NOW())",
                         $doc_id,
                         $chunk_id,
                         $chunk_content,
-                        $summary
+                        $summary,
+                        $model,
+                        $doc_type,
+                        $chunk_index
                     ));
-                    
-                    if ($result === false) {
-                        error_log('[WPVDB ERROR] Failed to insert embedding with vector function');
-                        
-                        // Fallback to JSON storage
-                        $result = $wpdb->insert(
-                            $table_name,
-                            [
-                                'doc_id' => $doc_id,
-                                'chunk_id' => $chunk_id,
-                                'chunk_content' => $chunk_content,
-                                'summary' => $summary,
-                                'embedding' => $embedding_json
-                            ],
-                            [
-                                '%d',
-                                '%s',
-                                '%s',
-                                '%s',
-                                '%s'
-                            ]
-                        );
-                    }
                 }
+
             } catch (\Exception $e) {
-                error_log('[WPVDB ERROR] Exception in insert_embedding_row: ' . $e->getMessage());
-                
-                // Fallback to JSON storage
-                $result = $wpdb->insert(
-                    $table_name,
-                    [
-                        'doc_id' => $doc_id,
-                        'chunk_id' => $chunk_id,
-                        'chunk_content' => $chunk_content,
-                        'summary' => $summary,
-                        'embedding' => json_encode($embedding)
-                    ],
-                    [
-                        '%d',
-                        '%s',
-                        '%s',
-                        '%s',
-                        '%s'
-                    ]
-                );
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Exception in insert_embedding_row: ' . $e->getMessage()); }
+                $result = false;
             }
         } else {
-            // No vector support, store as JSON
-            $result = $wpdb->insert(
-                $table_name,
-                [
-                    'doc_id' => $doc_id,
-                    'chunk_id' => $chunk_id,
-                    'chunk_content' => $chunk_content,
-                    'summary' => $summary,
-                    'embedding' => json_encode($embedding)
-                ],
-                [
-                    '%d',
-                    '%s',
-                    '%s',
-                    '%s',
-                    '%s'
-                ]
-            );
+            // No vector support, store as JSON. Use NOW() for embedding_date so the
+            // column shares the DB clock used by Cache and Maintenance read sites.
+            $result = $wpdb->query($wpdb->prepare(
+                "INSERT INTO $table_name
+                (doc_id, chunk_id, chunk_content, summary, embedding, model, doc_type, chunk_index, embedding_date)
+                VALUES (%d, %s, %s, %s, %s, %s, %s, %d, NOW())",
+                $doc_id,
+                $chunk_id,
+                $chunk_content,
+                $summary,
+                json_encode($embedding),
+                $model,
+                $doc_type,
+                $chunk_index
+            ));
         }
         
         if ($result === false) {
-            error_log('[WPVDB ERROR] Failed to insert embedding row: ' . $wpdb->last_error);
-            return false;
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Failed to insert embedding row: ' . $wpdb->last_error); }
+            return new \WP_Error('embedding_insert_failed', 'Database insert failed: ' . $wpdb->last_error, ['doc_id' => $doc_id, 'chunk_index' => $chunk_index]);
         }
         
         // Invalidate caches since we added new embeddings
@@ -881,8 +874,11 @@ class REST {
         // Delete any existing embeddings for this post
         global $wpdb;
         $table_name = $wpdb->prefix . 'wpvdb_embeddings';
-        $wpdb->delete($table_name, ['doc_id' => $post_id], ['%d']);
-        
+        $deleted = $wpdb->delete($table_name, ['doc_id' => $post_id], ['%d']);
+        if ($deleted !== false && $deleted > 0) {
+            Cache::invalidate_query_cache();
+        }
+
         // Delete post meta
         delete_post_meta($post_id, '_wpvdb_embedded');
         delete_post_meta($post_id, '_wpvdb_chunks_count');
@@ -897,7 +893,7 @@ class REST {
         
         // Get active provider/model
         $provider = !empty($settings['active_provider']) ? $settings['active_provider'] : 'openai';
-        $model = !empty($settings['active_model']) ? $settings['active_model'] : 'text-embedding-3-small';
+        $model = !empty($settings['active_model']) ? $settings['active_model'] : Models::get_default_model_for_provider($provider);
         
         // Prepare item for processing
         $item = [

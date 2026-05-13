@@ -65,6 +65,22 @@ require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-queue.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-admin.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-plugin.php';
 
+/**
+ * Global helper: whether Action Scheduler is available for scheduling.
+ *
+ * Must live in the global namespace (not WPVDB\) because WPVDB_Queue checks it
+ * via the unqualified function_exists('wpvdb_has_action_scheduler'). If this
+ * function is missing or namespaced, push_batch_to_queue falls through to the
+ * wp_options fallback queue silently.
+ *
+ * @return bool
+ */
+if (!function_exists('wpvdb_has_action_scheduler')) {
+    function wpvdb_has_action_scheduler() {
+        return class_exists('ActionScheduler') && function_exists('as_schedule_single_action');
+    }
+}
+
 // Get the plugin instance
 $wpvdb_plugin = \WPVDB\Plugin::get_instance();
 
@@ -104,6 +120,7 @@ add_action('plugins_loaded', function() {
     if (version_compare($current_version, WPVDB_VERSION, '<')) {
         // Add vector index to existing tables
         \WPVDB\Activation::add_vector_index_to_existing_table();
+        \WPVDB\Settings::migrate_stored_settings();
         
         // Update stored version
         update_option('wpvdb_version', WPVDB_VERSION);

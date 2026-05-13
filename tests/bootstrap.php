@@ -104,6 +104,12 @@ if ( ! function_exists( 'current_time' ) ) {
     }
 }
 
+if ( ! function_exists( 'size_format' ) ) {
+    function size_format( $bytes, $decimals = 0 ) {
+        return number_format( $bytes, $decimals ) . ' B';
+    }
+}
+
 if ( ! function_exists( 'wp_json_encode' ) ) {
     function wp_json_encode( $data, $options = 0, $depth = 512 ) {
         return json_encode( $data, $options, $depth );
@@ -414,30 +420,6 @@ if ( ! isset( $GLOBALS['wpdb'] ) ) {
     $GLOBALS['wpdb'] = new wpdb();
 }
 
-// Mock Logger class methods
-if ( ! class_exists( 'WPVDB\Logger' ) ) {
-    class MockLogger {
-        public static function debug( $message, $context = [] ) {
-            // Mock implementation
-        }
-
-        public static function info( $message, $context = [] ) {
-            // Mock implementation
-        }
-
-        public static function log_exception( $exception, $message = '' ) {
-            // Mock implementation
-        }
-
-        public static function error( $message, $context = [] ) {
-            // Mock implementation
-        }
-    }
-
-    // Create alias in WPVDB namespace
-    class_alias( 'MockLogger', 'WPVDB\Logger' );
-}
-
 // Define basic WordPress constants if not defined
 if ( ! defined( 'ABSPATH' ) ) {
     define( 'ABSPATH', '/tmp/' );
@@ -448,8 +430,11 @@ if ( ! defined( 'WP_PLUGIN_DIR' ) ) {
 }
 
 // Load essential classes that can work in isolation
+require_once dirname( __DIR__ ) . '/includes/class-wpvdb-logger.php';
+require_once dirname( __DIR__ ) . '/includes/class-wpvdb-utils.php';
+require_once dirname( __DIR__ ) . '/includes/class-wpvdb-providers.php';
+require_once dirname( __DIR__ ) . '/includes/class-wpvdb-models.php';
+require_once dirname( __DIR__ ) . '/includes/class-wpvdb-settings.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-core.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-database.php';
-require_once dirname( __DIR__ ) . '/includes/class-wpvdb-models.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-security.php';
-require_once dirname( __DIR__ ) . '/includes/class-wpvdb-utils.php';

@@ -8,6 +8,8 @@ if (isset($_GET['settings-updated']) && $_GET['settings-updated'] == 'true') {
     wp_safe_redirect('http://localhost:9081/wp-admin/admin.php?page=wpvdb-settings');
     exit;
 }
+
+$automattic_default_model = \WPVDB\Models::get_default_model_for_provider('automattic');
 ?>
 <div class="wpvdb-automattic-connect">
     <div class="wpvdb-connect-container">
@@ -47,9 +49,9 @@ if (isset($_GET['settings-updated']) && $_GET['settings-updated'] == 'true') {
                     <form id="wpvdb-manual-connect-form" method="post" action="options.php">
                         <?php settings_fields('wpvdb_settings'); ?>
                         <input type="hidden" name="wpvdb_settings[provider]" value="automattic">
-                        <input type="hidden" name="wpvdb_settings[automattic][default_model]" value="a8cai-embeddings-small-1">
+                        <input type="hidden" name="wpvdb_settings[automattic][default_model]" value="<?php echo esc_attr($automattic_default_model); ?>">
                         <input type="hidden" name="wpvdb_settings[active_provider]" value="automattic">
-                        <input type="hidden" name="wpvdb_settings[active_model]" value="a8cai-embeddings-small-1">
+                        <input type="hidden" name="wpvdb_settings[active_model]" value="<?php echo esc_attr($automattic_default_model); ?>">
                         <input type="hidden" name="_wp_http_referer" value="<?php echo esc_url(admin_url('admin.php?page=wpvdb-automattic-connect')); ?>">
                         
                         <div class="wpvdb-form-group">
@@ -244,4 +246,4 @@ jQuery(document).ready(function($) {
         }
     }
 });
-</script> 
+</script>

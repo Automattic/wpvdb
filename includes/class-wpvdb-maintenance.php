@@ -166,7 +166,15 @@ class Maintenance {
      * @since 1.0.13
      */
     private static function cleanup_old_logs() {
+        if (!Logger::storage_enabled()) {
+            return;
+        }
+
         $logs = get_option('wpvdb_logs', []);
+        if (!is_array($logs)) {
+            return;
+        }
+
         $max_age = apply_filters('wpvdb_log_max_age_days', 30);
         $cutoff_date = strtotime("-{$max_age} days");
         
@@ -191,17 +199,16 @@ class Maintenance {
      */
     private static function cleanup_orphaned_embeddings() {
         global $wpdb;
-        
+
         $table_name = $wpdb->prefix . 'wpvdb_embeddings';
-        
-        // Find embeddings for posts that no longer exist
+
+        // Find embeddings whose doc_id no longer exists in wp_posts (any doc_type).
         $orphaned_query = "
             DELETE e FROM {$table_name} e
             LEFT JOIN {$wpdb->posts} p ON e.doc_id = p.ID
-            WHERE e.doc_type = 'post' 
-            AND p.ID IS NULL
+            WHERE p.ID IS NULL
         ";
-        
+
         $deleted_count = $wpdb->query($orphaned_query);
         
         if ($deleted_count > 0) {

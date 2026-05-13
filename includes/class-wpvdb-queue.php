@@ -242,18 +242,24 @@ class WPVDB_Queue {
         if (empty($items) || !is_array($items)) {
             return [];
         }
-        
+
         $results = [];
-        
+
         foreach ($items as $item) {
             $post_id = isset($item['post_id']) ? absint($item['post_id']) : 0;
             $success = self::process_item($item);
             $results[$post_id] = $success;
-            
-            // Schedule the next batch to run immediately after this one completes
-            self::maybe_process_next_batch();
         }
-        
+
+        // Do NOT drain the queue here. Action Scheduler is the scheduler of
+        // record: each batch action should be a self-contained unit of work
+        // so AS can track per-batch status (complete / failed) accurately.
+        // Inline recursion into the next batch inside process_batch() caused
+        // subsequent batches to be unscheduled (marked "canceled") and
+        // processed within the same request, defeating retries, timeouts,
+        // and accurate bookkeeping. Use the explicit run_queue_now async
+        // action if you need to kick the queue immediately.
+
         return $results;
     }
     
@@ -272,12 +278,11 @@ class WPVDB_Queue {
             
             if (!empty($actions)) {
                 $action = reset($actions);
-                $action_id = $action->get_id();
                 $args = $action->get_args();
-                
+
                 // Remove this action from the queue to avoid duplicate processing
                 as_unschedule_action(self::PROCESS_BATCH_ACTION, $args, 'wpvdb');
-                
+
                 // Process the batch
                 self::process_batch($args[0]);
             } else {
@@ -302,19 +307,18 @@ class WPVDB_Queue {
             
             if (!empty($actions)) {
                 $batch_items = [];
-                
+
                 foreach ($actions as $action) {
-                    $action_id = $action->get_id();
                     $args = $action->get_args();
-                    
+
                     // Add to our batch
                     if (!empty($args[0])) {
                         $batch_items[] = $args[0];
                     }
-                    
+
                     // Remove this action from the queue to avoid duplicate processing
                     as_unschedule_action(self::PROCESS_SINGLE_ACTION, $args, 'wpvdb');
-                    
+
                     // If we've reached our batch size, stop
                     if (count($batch_items) >= self::get_batch_size()) {
                         break;
@@ -363,7 +367,7 @@ class WPVDB_Queue {
         $existing_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_name WHERE doc_id = %d", $post->ID));
         
         if ($existing_count > 0) {
-            error_log("[WPVDB] Deleting {$existing_count} existing embeddings for post {$post->ID} before creating new ones.");
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log("[WPVDB] Deleting {$existing_count} existing embeddings for post {$post->ID} before creating new ones."); }
             $wpdb->delete($table_name, ['doc_id' => $post->ID], ['%d']);
             
             // Also delete the post meta about embeddings

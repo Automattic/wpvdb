@@ -61,13 +61,6 @@ $active_model = isset($settings['active_model']) ? $settings['active_model'] : '
 $pending_provider = $pending_details ? $pending_details['pending_provider'] : '';
 $pending_model = $pending_details ? $pending_details['pending_model'] : '';
 
-// Debug output for settings status
-error_log('WPVDB STATUS PAGE: Current settings: ' . print_r($settings, true));
-error_log('WPVDB STATUS PAGE: Has pending change: ' . ($has_pending_change ? 'YES' : 'NO'));
-if ($pending_details) {
-    error_log('WPVDB STATUS PAGE: Pending details: ' . print_r($pending_details, true));
-}
-
 // Get system information 
 $system_info = [];
 $system_info['php_version'] = phpversion();
@@ -610,7 +603,7 @@ if (!array_key_exists($current_section, $sections)) {
                         <label for="wpvdb-test-model"><?php _e('Model', 'wpvdb'); ?></label>
                         <select id="wpvdb-test-model" name="model">
                             <?php 
-                            $models = \WPVDB\Models::get_available_models();
+                            $models = \WPVDB\Models::get_selectable_models();
                             // Models are organized by provider, so we need to iterate through each provider's models
                             foreach ($models as $provider_id => $provider_models) {
                                 echo '<optgroup label="' . esc_attr(ucfirst($provider_id)) . '">';
@@ -1062,4 +1055,4 @@ optgroup {
     pointer-events: none;
     opacity: 0.8;
 }
-</style> 
+</style>

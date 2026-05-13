@@ -7,6 +7,7 @@
 
 namespace WPVDB\Tests\Integration;
 
+use WPVDB\Models;
 use WPVDB\Settings;
 
 /**
@@ -36,7 +37,7 @@ class SettingsIntegrationTest extends WPVDBIntegrationTestCase {
      * Test default settings values
      */
     public function test_default_settings() {
-        $defaults = Settings::DEFAULTS;
+        $defaults = Settings::get_defaults();
 
         // Test that defaults are properly structured
         $this->assertIsArray( $defaults, 'Defaults should be array' );
@@ -47,7 +48,7 @@ class SettingsIntegrationTest extends WPVDBIntegrationTestCase {
 
         // Test default values
         $this->assertEquals( 'openai', $defaults['active_provider'] );
-        $this->assertEquals( 'text-embedding-3-small', $defaults['default_model'] );
+        $this->assertEquals( Models::get_default_model_for_provider( 'openai' ), $defaults['default_model'] );
         $this->assertIsInt( $defaults['chunk_size'] );
         $this->assertGreaterThan( 0, $defaults['chunk_size'] );
     }
@@ -58,7 +59,7 @@ class SettingsIntegrationTest extends WPVDBIntegrationTestCase {
     public function test_settings_persistence() {
         $test_settings = [
             'active_provider' => 'automattic',
-            'default_model' => 'a8cai-embeddings-small-1',
+            'default_model' => Models::get_default_model_for_provider( 'automattic' ),
             'chunk_size' => 300,
             'batch_size' => 10,
             'require_auth' => 0
@@ -157,7 +158,7 @@ class SettingsIntegrationTest extends WPVDBIntegrationTestCase {
         update_option( 'wpvdb_settings', $test_settings );
 
         $custom_base = Settings::get_api_base();
-        $this->assertStringContains( 'custom.openai.endpoint', $custom_base );
+        $this->assertStringContainsString( 'custom.openai.endpoint', $custom_base );
 
         // Test provider-specific API base
         $openai_base = Settings::get_api_base_for_provider( 'openai' );
@@ -179,9 +180,9 @@ class SettingsIntegrationTest extends WPVDBIntegrationTestCase {
         // Test with custom model settings
         $test_settings = [
             'active_provider' => 'automattic',
-            'default_model' => 'a8cai-embeddings-large-1',
+            'default_model' => Models::get_default_model_for_provider( 'openai' ),
             'automattic' => [
-                'default_model' => 'a8cai-embeddings-small-1'
+                'default_model' => Models::get_default_model_for_provider( 'automattic' )
             ]
         ];
 
@@ -191,7 +192,7 @@ class SettingsIntegrationTest extends WPVDBIntegrationTestCase {
         $this->assertIsString( $active_model, 'Active model should be string' );
 
         $provider_model = Settings::get_model_for_provider( 'automattic' );
-        $this->assertEquals( 'a8cai-embeddings-small-1', $provider_model );
+        $this->assertEquals( Models::get_default_model_for_provider( 'automattic' ), $provider_model );
 
         // Clean up
         delete_option( 'wpvdb_settings' );
@@ -255,7 +256,7 @@ class SettingsIntegrationTest extends WPVDBIntegrationTestCase {
         // Test with pending changes
         $test_settings = [
             'pending_provider' => 'automattic',
-            'pending_model' => 'a8cai-embeddings-large-1'
+            'pending_model' => Models::get_default_model_for_provider( 'openai' )
         ];
 
         update_option( 'wpvdb_settings', $test_settings );

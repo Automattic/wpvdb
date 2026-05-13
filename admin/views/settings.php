@@ -3,9 +3,8 @@
 $settings = get_option('wpvdb_settings', []);
 $provider = isset($settings['active_provider']) ? $settings['active_provider'] : 'openai';
 
-// Get available providers and models from the registry classes
+// Get available providers from the registry class
 $available_providers = \WPVDB\Providers::get_available_providers();
-$available_models = \WPVDB\Models::get_available_models();
 
 // Check if there's a pending provider change
 $has_pending_change = \WPVDB\Settings::has_pending_provider_change();
@@ -31,7 +30,19 @@ $openai_organization = isset($settings['openai']['organization']) ? $settings['o
 $openai_api_version = isset($settings['openai']['api_version']) ? $settings['openai']['api_version'] : '';
 $automattic_api_key = isset($settings['automattic']['api_key']) ? $settings['automattic']['api_key'] : '';
 $automattic_endpoint = isset($settings['automattic']['api_base']) ? $settings['automattic']['api_base'] : \WPVDB\Providers::get_api_base('automattic');
-$embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_batch_size'] : 10;
+$embedding_batch_size = isset($settings['batch_size']) ? $settings['batch_size'] : \WPVDB\Settings::DEFAULTS['batch_size'];
+$provider_model = static function ($provider_id) use ($settings, $provider, $active_model) {
+    if ($provider === $provider_id && !empty($active_model)) {
+        return $active_model;
+    }
+    if (!empty($settings[$provider_id]['default_model'])) {
+        return $settings[$provider_id]['default_model'];
+    }
+    return \WPVDB\Models::get_default_model_for_provider($provider_id);
+};
+$openai_model = $provider_model('openai');
+$automattic_model = $provider_model('automattic');
+$specter_model = $provider_model('specter');
 ?>
 
 <div class="wrap wpvdb-settings">
@@ -172,17 +183,11 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <select name="wpvdb_settings[openai][default_model]" id="wpvdb_openai_model">
-                            <?php if (isset($available_models['openai']) && is_array($available_models['openai'])): ?>
-                                <?php foreach ($available_models['openai'] as $model_id => $model_data): ?>
-                                <option value="<?php echo esc_attr($model_id); ?>" <?php selected($active_model, $model_id); ?>>
+                            <?php foreach (\WPVDB\Models::get_selectable_provider_models('openai') as $model_id => $model_data): ?>
+                                <option value="<?php echo esc_attr($model_id); ?>" <?php selected($openai_model, $model_id); ?>>
                                     <?php echo esc_html($model_data['label']); ?>
                                 </option>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <option value="text-embedding-3-small" <?php selected($active_model, 'text-embedding-3-small'); ?>>text-embedding-3-small (1536 dimensions)</option>
-                                <option value="text-embedding-3-large" <?php selected($active_model, 'text-embedding-3-large'); ?>>text-embedding-3-large (3072 dimensions)</option>
-                                <option value="text-embedding-ada-002" <?php selected($active_model, 'text-embedding-ada-002'); ?>>text-embedding-ada-002 (1536 dimensions, Legacy)</option>
-                            <?php endif; ?>
+                            <?php endforeach; ?>
                         </select>
                         <p class="description">
                             <?php esc_html_e('Select the OpenAI model to use for generating embeddings.', 'wpvdb'); ?>
@@ -247,16 +252,11 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <select name="wpvdb_settings[automattic][default_model]" id="wpvdb_automattic_model">
-                            <?php if (isset($available_models['automattic']) && is_array($available_models['automattic'])): ?>
-                                <?php foreach ($available_models['automattic'] as $model_id => $model_data): ?>
-                                <option value="<?php echo esc_attr($model_id); ?>" <?php selected($active_model, $model_id); ?>>
+                            <?php foreach (\WPVDB\Models::get_selectable_provider_models('automattic') as $model_id => $model_data): ?>
+                                <option value="<?php echo esc_attr($model_id); ?>" <?php selected($automattic_model, $model_id); ?>>
                                     <?php echo esc_html($model_data['label']); ?>
                                 </option>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <option value="a8cai-embeddings-small-1" <?php selected($active_model, 'a8cai-embeddings-small-1'); ?>>a8cai-embeddings-small-1 (512 dimensions)</option>
-                                <option value="text-embedding-ada-002" <?php selected($active_model, 'text-embedding-ada-002'); ?>>text-embedding-ada-002 (1536 dimensions, Legacy)</option>
-                            <?php endif; ?>
+                            <?php endforeach; ?>
                         </select>
                         <p class="description">
                             <?php esc_html_e('Select the Automattic AI model to use for generating embeddings.', 'wpvdb'); ?>
@@ -298,15 +298,11 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                     </th>
                     <td>
                         <select name="wpvdb_settings[specter][default_model]" id="wpvdb_specter_model">
-                            <?php if (isset($available_models['specter']) && is_array($available_models['specter'])): ?>
-                                <?php foreach ($available_models['specter'] as $model_id => $model_data): ?>
-                                <option value="<?php echo esc_attr($model_id); ?>" <?php selected($active_model, $model_id); ?>>
+                            <?php foreach (\WPVDB\Models::get_selectable_provider_models('specter') as $model_id => $model_data): ?>
+                                <option value="<?php echo esc_attr($model_id); ?>" <?php selected($specter_model, $model_id); ?>>
                                     <?php echo esc_html($model_data['label']); ?>
                                 </option>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <option value="specter2" <?php selected($active_model, 'specter2'); ?>>SPECTER2 (768 dimensions)</option>
-                            <?php endif; ?>
+                            <?php endforeach; ?>
                         </select>
                         <p class="description">
                             <?php esc_html_e('Select the SPECTER model to use for generating embeddings.', 'wpvdb'); ?>
@@ -335,12 +331,12 @@ $embedding_batch_size = isset($settings['queue_batch_size']) ? $settings['queue_
                         <label for="wpvdb_embedding_batch_size"><?php esc_html_e('Embedding Batch Size', 'wpvdb'); ?></label>
                     </th>
                     <td>
-                        <input type="number" 
-                               name="wpvdb_settings[queue_batch_size]" 
-                               id="wpvdb_embedding_batch_size" 
-                               value="<?php echo esc_attr($embedding_batch_size); ?>" 
-                               min="1" 
-                               max="100"
+                        <input type="number"
+                               name="wpvdb_settings[batch_size]"
+                               id="wpvdb_embedding_batch_size"
+                               value="<?php echo esc_attr($embedding_batch_size); ?>"
+                               min="1"
+                               max="50"
                                class="small-text">
                         <p class="description">
                             <?php esc_html_e('Number of chunks to process in a single API request. Higher values may be more efficient but increase the risk of API timeouts.', 'wpvdb'); ?>
@@ -697,4 +693,4 @@ jQuery(document).ready(function($) {
     border-radius: 3px;
     font-weight: 500;
 }
-</style> 
+</style>
