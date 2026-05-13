@@ -1610,20 +1610,6 @@ class Admin {
             wp_send_json_error(['message' => __('Post not found', 'wpvdb')]);
         }
         
-        // Delete any existing embeddings for this post
-        global $wpdb;
-        $table_name = $wpdb->prefix . 'wpvdb_embeddings';
-        $deleted = $wpdb->delete($table_name, ['doc_id' => $post_id], ['%d']);
-        if ($deleted !== false && $deleted > 0) {
-            Cache::invalidate_query_cache();
-        }
-
-        // Delete post meta
-        delete_post_meta($post_id, '_wpvdb_embedded');
-        delete_post_meta($post_id, '_wpvdb_chunks_count');
-        delete_post_meta($post_id, '_wpvdb_embedded_date');
-        delete_post_meta($post_id, '_wpvdb_embedded_model');
-        
         // Get settings securely
         $settings = get_option('wpvdb_settings', []);
         if (!is_array($settings)) {

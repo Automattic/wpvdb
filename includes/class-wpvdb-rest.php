@@ -846,11 +846,11 @@ class REST {
      * }
      * 
      * Notes:
-     * - Deletes any existing embeddings for the post
-     * - Clears existing embedding metadata
-     * - Queues the post for re-embedding using Action Scheduler
-     * - Uses the currently active provider and model from settings
-     * - In debug mode, may process the queue immediately
+     * - Queues the post for re-embedding using Action Scheduler. Destructive
+     *   replacement (existing row delete + meta clear + cache bust) happens
+     *   inside WPVDB_Queue::process_post at processing time.
+     * - Uses the currently active provider and model from settings.
+     * - In debug mode, may process the queue immediately.
      */
     public static function handle_reembed(WP_REST_Request $request) {
         $post_id = absint($request->get_param('post_id'));
@@ -870,20 +870,6 @@ class REST {
                 'message' => __('Post not found', 'wpvdb')
             ]);
         }
-        
-        // Delete any existing embeddings for this post
-        global $wpdb;
-        $table_name = $wpdb->prefix . 'wpvdb_embeddings';
-        $deleted = $wpdb->delete($table_name, ['doc_id' => $post_id], ['%d']);
-        if ($deleted !== false && $deleted > 0) {
-            Cache::invalidate_query_cache();
-        }
-
-        // Delete post meta
-        delete_post_meta($post_id, '_wpvdb_embedded');
-        delete_post_meta($post_id, '_wpvdb_chunks_count');
-        delete_post_meta($post_id, '_wpvdb_embedded_date');
-        delete_post_meta($post_id, '_wpvdb_embedded_model');
         
         // Get settings securely
         $settings = get_option('wpvdb_settings', []);
