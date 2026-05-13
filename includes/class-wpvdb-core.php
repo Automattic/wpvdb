@@ -162,13 +162,25 @@ class Core {
         // Remove newlines (as recommended in many embedding docs).
         $text = str_replace(["\r\n", "\r", "\n"], " ", $text);
 
-        // Example using WP remote post:
-        $url = trailingslashit($api_base) . 'embeddings';
-        $body = [
-            'model' => $model,
-            'input' => $text,
-        ];
-        $body = self::merge_custom_options($body, $custom_options);
+        $request_format  = Models::get_request_format($model, $api_base);
+        $response_format = Models::get_response_format($model, $api_base);
+        $endpoint        = Models::get_endpoint($model, $api_base);
+        $query_args      = Models::get_request_query_args($model, $api_base);
+        $url             = trailingslashit($api_base) . ltrim($endpoint, '/');
+        if (!empty($query_args)) {
+            $url = add_query_arg($query_args, $url);
+        }
+
+        if ($request_format === 'a8c_nomic_native') {
+            // Bare list at body root; model routing is described by Models metadata.
+            $body = [$text];
+        } else {
+            $body = [
+                'model' => $model,
+                'input' => $text,
+            ];
+            $body = self::merge_custom_options($body, $custom_options);
+        }
 
         // Validate required parameters
         if (empty($api_key) || !is_string($api_key)) {
@@ -201,13 +213,18 @@ class Core {
             );
         }
         
+        $extra_headers = [];
+        if (Providers::is_automattic_ai_proxy_url($url)) {
+            $extra_headers['X-WPCOM-AI-Feature'] = apply_filters('wpvdb_a8c_ai_feature', 'wpcloud-vector-search', $model, $api_base);
+        }
+
         // Try AI Client transporter first for consistency with the WP AI stack.
         try {
             $transporter = HttpTransporterFactory::createTransporter();
             $request     = new Request(
                 HttpMethodEnum::POST(),
                 $url,
-                ['Content-Type' => 'application/json'],
+                array_merge(['Content-Type' => 'application/json'], $extra_headers),
                 wp_json_encode($body)
             );
 
@@ -220,10 +237,13 @@ class Core {
         } catch (\Throwable $e) {
             // Fallback to wp_remote_post if transporter or SDK pieces are unavailable.
             $args = [
-                'headers' => [
-                    'Content-Type'  => 'application/json',
-                    'Authorization' => 'Bearer ' . $api_key,
-                ],
+                'headers' => array_merge(
+                    [
+                        'Content-Type'  => 'application/json',
+                        'Authorization' => 'Bearer ' . $api_key,
+                    ],
+                    $extra_headers
+                ),
                 'body'    => wp_json_encode($body),
                 'timeout' => 30,
             ];
@@ -240,11 +260,23 @@ class Core {
             return new \WP_Error('embedding_error', 'Failed to get embedding: ' . $code . ' ' . (is_string($data) ? $data : wp_json_encode($data)));
         }
 
-        if (!isset($data['data'][0]['embedding']) || !is_array($data['data'][0]['embedding'])) {
-            return new \WP_Error('embedding_error', 'Invalid embedding response structure.');
+        if ($response_format === 'a8c_nomic_native') {
+            // Native Nomic. Treat any non-"ok" status (or missing status) as a soft
+            // signal but still try the embeddings array first since Ray Serve has
+            // returned successful payloads without a status field in the past.
+            if (isset($data['status']) && $data['status'] !== 'ok') {
+                return new \WP_Error('embedding_error', 'Nomic upstream returned status: ' . wp_json_encode($data['status']));
+            }
+            if (!isset($data['embeddings'][0]) || !is_array($data['embeddings'][0])) {
+                return new \WP_Error('embedding_error', 'Invalid native Nomic embedding response structure.');
+            }
+            $embedding = $data['embeddings'][0];
+        } else {
+            if (!isset($data['data'][0]['embedding']) || !is_array($data['data'][0]['embedding'])) {
+                return new \WP_Error('embedding_error', 'Invalid OpenAI embedding response structure.');
+            }
+            $embedding = $data['data'][0]['embedding'];
         }
-
-        $embedding = $data['data'][0]['embedding'];
 
         if (!self::is_valid_embedding($embedding)) {
             return new \WP_Error('embedding_error', 'Provider returned an empty or zero-magnitude embedding.');
@@ -379,11 +411,11 @@ class Core {
             return [];
         }
 
-        // Optionally add dimensions from constant if not provided and using OpenAI-compatible endpoints.
+        // Only send dimensions to models that explicitly support it.
         if (
             !isset($options['dimensions']) &&
             defined('WPVDB_DEFAULT_EMBED_DIM') &&
-            strpos($api_base, 'openai') !== false
+            Models::supports_dimensions($model, $api_base)
         ) {
             $options['dimensions'] = (int) WPVDB_DEFAULT_EMBED_DIM;
         }

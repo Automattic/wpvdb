@@ -72,7 +72,7 @@ class Query {
         // Make sure we have a valid model name
         $model = Settings::get_default_model();
         if (empty($model)) {
-            $model = 'text-embedding-3-small'; // Default fallback
+            $model = Models::get_default_model_for_provider('openai');
         }
         if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Using embedding model: ' . $model); }
         

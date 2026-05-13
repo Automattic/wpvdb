@@ -17,6 +17,44 @@ class Admin {
     public function __construct() {
         $this->database = new Database();
     }
+
+    /**
+     * Get the canonical default model for a provider.
+     */
+    private function get_default_model($provider) {
+        return Models::get_default_model_for_provider($provider);
+    }
+
+    /**
+     * Get the default stored settings for a provider.
+     */
+    private function get_provider_settings_defaults($provider) {
+        return [
+            'api_key' => '',
+            'default_model' => $this->get_default_model($provider),
+        ];
+    }
+
+    /**
+     * Get the default wpvdb settings payload.
+     */
+    private function get_default_settings() {
+        return [
+            'provider' => 'openai',
+            'openai' => $this->get_provider_settings_defaults('openai'),
+            'automattic' => $this->get_provider_settings_defaults('automattic'),
+            'chunk_size' => 1000,
+            'chunk_overlap' => 20,
+            'auto_embed' => false,
+            'post_types' => ['post', 'page'],
+            'active_provider' => '',
+            'active_model' => '',
+            'pending_provider' => '',
+            'pending_model' => '',
+            'require_auth' => 1, // Require authentication by default
+            'queue_batch_size' => 10, // Default batch size for queue processing
+        ];
+    }
     
     /**
      * Initialize admin hooks.
@@ -219,29 +257,7 @@ class Admin {
         
         // Initialize default settings if they don't exist
         if (false === get_option('wpvdb_settings')) {
-            $default_settings = [
-                'provider' => 'openai',
-                'openai' => [
-                    'api_key' => '',
-                    'default_model' => 'text-embedding-3-small',
-                ],
-                'automattic' => [
-                    'api_key' => '',
-                    'default_model' => 'a8cai-embeddings-small-1',
-                ],
-                'chunk_size' => 1000,
-                'chunk_overlap' => 20,
-                'auto_embed' => false,
-                'post_types' => ['post', 'page'],
-                'active_provider' => '',
-                'active_model' => '',
-                'pending_provider' => '',
-                'pending_model' => '',
-                'require_auth' => 1, // Require authentication by default
-                'queue_batch_size' => 10, // Default batch size for queue processing
-            ];
-            
-            add_option('wpvdb_settings', $default_settings);
+            add_option('wpvdb_settings', $this->get_default_settings());
         }
         
         // Migrate existing settings to new structure if needed
@@ -265,7 +281,7 @@ class Admin {
             // If this is a new connection, set Automattic as the active provider
             if (empty($current_settings['automattic']['api_key'])) {
                 $input['active_provider'] = 'automattic';
-                $input['active_model'] = $input['automattic']['default_model'] ?? 'a8cai-embeddings-small-1';
+                $input['active_model'] = $input['automattic']['default_model'] ?? $this->get_default_model('automattic');
                 $input['provider'] = 'automattic';
             }
             
@@ -348,16 +364,16 @@ class Admin {
             $input['openai']['api_key'] = '';
         }
         if (!isset($input['openai']['default_model'])) {
-            $input['openai']['default_model'] = 'text-embedding-3-small';
+            $input['openai']['default_model'] = $this->get_default_model('openai');
         }
         if (!isset($input['automattic']['api_key'])) {
             $input['automattic']['api_key'] = '';
         }
         if (!isset($input['automattic']['default_model'])) {
-            $input['automattic']['default_model'] = 'a8cai-embeddings-small-1';
+            $input['automattic']['default_model'] = $this->get_default_model('automattic');
         }
         if (!isset($input['specter']['default_model'])) {
-            $input['specter']['default_model'] = 'specter2';
+            $input['specter']['default_model'] = $this->get_default_model('specter');
         }
         
         // Make sure post_types is always an array
@@ -462,11 +478,11 @@ class Admin {
             $input['provider'] = $current_provider;
             
             if ($current_provider === 'openai') {
-                $input['active_model'] = isset($input['openai']['default_model']) ? $input['openai']['default_model'] : 'text-embedding-3-small';
+                $input['active_model'] = isset($input['openai']['default_model']) ? $input['openai']['default_model'] : $this->get_default_model('openai');
             } else if ($current_provider === 'automattic') {
-                $input['active_model'] = isset($input['automattic']['default_model']) ? $input['automattic']['default_model'] : 'a8cai-embeddings-small-1';
+                $input['active_model'] = isset($input['automattic']['default_model']) ? $input['automattic']['default_model'] : $this->get_default_model('automattic');
             } else if ($current_provider === 'specter') {
-                $input['active_model'] = isset($input['specter']['default_model']) ? $input['specter']['default_model'] : 'specter2';
+                $input['active_model'] = isset($input['specter']['default_model']) ? $input['specter']['default_model'] : $this->get_default_model('specter');
             }
             
             // Clear pending values
@@ -481,11 +497,11 @@ class Admin {
             $new_model = '';
             
             if ($new_provider === 'openai') {
-                $new_model = isset($input['openai']['default_model']) ? $input['openai']['default_model'] : (isset($current_settings['openai']['default_model']) ? $current_settings['openai']['default_model'] : 'text-embedding-3-small');
+                $new_model = isset($input['openai']['default_model']) ? $input['openai']['default_model'] : (isset($current_settings['openai']['default_model']) ? $current_settings['openai']['default_model'] : $this->get_default_model('openai'));
             } else if ($new_provider === 'automattic') {
-                $new_model = isset($input['automattic']['default_model']) ? $input['automattic']['default_model'] : (isset($current_settings['automattic']['default_model']) ? $current_settings['automattic']['default_model'] : 'a8cai-embeddings-small-1');
+                $new_model = isset($input['automattic']['default_model']) ? $input['automattic']['default_model'] : (isset($current_settings['automattic']['default_model']) ? $current_settings['automattic']['default_model'] : $this->get_default_model('automattic'));
             } else if ($new_provider === 'specter') {
-                $new_model = isset($input['specter']['default_model']) ? $input['specter']['default_model'] : 'specter2';
+                $new_model = isset($input['specter']['default_model']) ? $input['specter']['default_model'] : $this->get_default_model('specter');
             }
             
             // If provider or model changed, set pending values
@@ -661,19 +677,16 @@ class Admin {
                 'provider' => 'openai',
                 'openai' => [
                     'api_key' => isset($settings['api_key']) ? $settings['api_key'] : '',
-                    'default_model' => isset($settings['default_model']) ? $settings['default_model'] : 'text-embedding-3-small',
+                    'default_model' => isset($settings['default_model']) ? $settings['default_model'] : $this->get_default_model('openai'),
                 ],
-                'automattic' => [
-                    'api_key' => '',
-                    'default_model' => 'a8cai-embeddings-small-1',
-                ],
+                'automattic' => $this->get_provider_settings_defaults('automattic'),
                 'chunk_size' => isset($settings['chunk_size']) ? $settings['chunk_size'] : 1000,
                 'chunk_overlap' => isset($settings['chunk_overlap']) ? $settings['chunk_overlap'] : 200,
                 'auto_embed' => isset($settings['auto_embed']) ? $settings['auto_embed'] : false,
                 'post_types' => isset($settings['post_types']) ? $settings['post_types'] : ['post', 'page'],
                 // Set active provider to match the old settings
                 'active_provider' => 'openai',
-                'active_model' => isset($settings['default_model']) ? $settings['default_model'] : 'text-embedding-3-small',
+                'active_model' => isset($settings['default_model']) ? $settings['default_model'] : $this->get_default_model('openai'),
                 'pending_provider' => '',
                 'pending_model' => '',
             ];
@@ -687,16 +700,10 @@ class Admin {
             
             // Ensure provider arrays exist
             if (!isset($settings['openai']) || !is_array($settings['openai'])) {
-                $settings['openai'] = [
-                    'api_key' => '',
-                    'default_model' => 'text-embedding-3-small'
-                ];
+                $settings['openai'] = $this->get_provider_settings_defaults('openai');
             }
             if (!isset($settings['automattic']) || !is_array($settings['automattic'])) {
-                $settings['automattic'] = [
-                    'api_key' => '',
-                    'default_model' => 'a8cai-embeddings-small-1'
-                ];
+                $settings['automattic'] = $this->get_provider_settings_defaults('automattic');
             }
             // Add any other providers
             $available_providers = Providers::get_available_providers();
@@ -712,9 +719,9 @@ class Admin {
             
             // Add active provider fields if they don't exist yet
             $settings['active_provider'] = $settings['provider'];
-            $settings['active_model'] = $settings['provider'] === 'openai' 
-                ? (isset($settings['openai']['default_model']) ? $settings['openai']['default_model'] : 'text-embedding-3-small') 
-                : (isset($settings['automattic']['default_model']) ? $settings['automattic']['default_model'] : 'a8cai-embeddings-small-1');
+            $settings['active_model'] = $settings['provider'] === 'openai'
+                ? (isset($settings['openai']['default_model']) ? $settings['openai']['default_model'] : $this->get_default_model('openai'))
+                : (isset($settings['automattic']['default_model']) ? $settings['automattic']['default_model'] : $this->get_default_model('automattic'));
             $settings['pending_provider'] = '';
             $settings['pending_model'] = '';
             
@@ -801,8 +808,7 @@ class Admin {
      */
     private function get_current_tab() {
         $page = isset($_GET['page']) ? sanitize_text_field($_GET['page']) : 'wpvdb-dashboard';
-        // Use str_starts_with safely by ensuring $page is a string
-        $tab = (is_string($page) && str_starts_with($page, 'wpvdb-')) ? substr($page, 6) : 'dashboard';
+        $tab = (is_string($page) && strpos($page, 'wpvdb-') === 0) ? substr($page, 6) : 'dashboard';
         
         return $tab;
     }
@@ -994,16 +1000,10 @@ class Admin {
         
         // Ensure provider arrays exist
         if (!isset($settings['openai']) || !is_array($settings['openai'])) {
-            $settings['openai'] = [
-                'api_key' => '', 
-                'default_model' => 'text-embedding-3-small'
-            ];
+            $settings['openai'] = $this->get_provider_settings_defaults('openai');
         }
         if (!isset($settings['automattic']) || !is_array($settings['automattic'])) {
-            $settings['automattic'] = [
-                'api_key' => '',
-                'default_model' => 'a8cai-embeddings-small-1'
-            ];
+            $settings['automattic'] = $this->get_provider_settings_defaults('automattic');
         }
         
         // Ensure active/pending provider fields exist
@@ -1161,10 +1161,10 @@ class Admin {
         
         // Ensure provider arrays exist
         if (!isset($settings['openai']) || !is_array($settings['openai'])) {
-            $settings['openai'] = ['default_model' => 'text-embedding-3-small', 'api_key' => ''];
+            $settings['openai'] = $this->get_provider_settings_defaults('openai');
         }
         if (!isset($settings['automattic']) || !is_array($settings['automattic'])) {
-            $settings['automattic'] = ['default_model' => 'a8cai-embeddings-small-1', 'api_key' => ''];
+            $settings['automattic'] = $this->get_provider_settings_defaults('automattic');
         }
         
         // Ensure active/pending provider fields exist
@@ -1202,13 +1202,13 @@ class Admin {
                         $settings['active_model'] : 
                         (!empty($settings['automattic']['default_model']) ? 
                             $settings['automattic']['default_model'] : 
-                            'a8cai-embeddings-small-1');
+                            $this->get_default_model('automattic'));
                 } else {
                     $model = !empty($settings['active_model']) ? 
                         $settings['active_model'] : 
                         (!empty($settings['openai']['default_model']) ? 
                             $settings['openai']['default_model'] : 
-                            'text-embedding-3-small');
+                            $this->get_default_model('openai'));
                 }
             }
         }
@@ -1339,7 +1339,7 @@ class Admin {
             $settings = get_option('wpvdb_settings');
             $settings['provider'] = 'automattic';
             $settings['automattic']['api_key'] = $mock_api_key;
-            $settings['automattic']['default_model'] = 'a8cai-embeddings-small-1';
+            $settings['automattic']['default_model'] = $this->get_default_model('automattic');
             update_option('wpvdb_settings', $settings);
             
             wp_send_json_success([
@@ -1626,9 +1626,9 @@ class Admin {
         
         $model = '';
         if ($provider === 'openai') {
-            $model = isset($settings['active_model']) && !empty($settings['active_model']) ? $settings['active_model'] : 'text-embedding-3-small';
+            $model = isset($settings['active_model']) && !empty($settings['active_model']) ? $settings['active_model'] : $this->get_default_model('openai');
         } elseif ($provider === 'automattic') {
-            $model = isset($settings['active_model']) && !empty($settings['active_model']) ? $settings['active_model'] : 'a8cai-embeddings-small-1';
+            $model = isset($settings['active_model']) && !empty($settings['active_model']) ? $settings['active_model'] : $this->get_default_model('automattic');
         }
         
         // Queue for re-embedding
@@ -2017,13 +2017,13 @@ class Admin {
                      $settings['active_model'] : 
                      (!empty($settings['openai']['default_model']) ? 
                       $settings['openai']['default_model'] : 
-                      'text-embedding-3-small');
+                      $this->get_default_model('openai'));
         } else if ($provider === 'automattic') {
             $model = !empty($settings['active_model']) ? 
                      $settings['active_model'] : 
                      (!empty($settings['automattic']['default_model']) ? 
                       $settings['automattic']['default_model'] : 
-                      'a8cai-embeddings-small-1');
+                      $this->get_default_model('automattic'));
         }
         
         // Prepare items for batch processing

@@ -897,7 +897,7 @@ class REST {
         
         // Get active provider/model
         $provider = !empty($settings['active_provider']) ? $settings['active_provider'] : 'openai';
-        $model = !empty($settings['active_model']) ? $settings['active_model'] : 'text-embedding-3-small';
+        $model = !empty($settings['active_model']) ? $settings['active_model'] : Models::get_default_model_for_provider($provider);
         
         // Prepare item for processing
         $item = [

@@ -6,11 +6,14 @@ defined('ABSPATH') || exit;
 class Settings {
     
     /**
-     * Default settings values
+     * Static default settings values.
+     *
+     * Use get_defaults() when a complete defaults array is needed; model
+     * defaults are derived from the Models registry.
      */
     const DEFAULTS = [
         'active_provider' => 'openai',
-        'default_model' => 'text-embedding-3-small',
+        'default_model' => '',
         'chunk_size' => 200,
         'batch_size' => 5,
         'require_auth' => 1,
@@ -18,13 +21,29 @@ class Settings {
         'auto_embed_post_types' => ['post', 'page'],
         'openai' => [
             'api_key' => '',
-            'api_base' => 'https://api.openai.com/v1',
+            'api_base' => '',
         ],
         'automattic' => [
             'api_key' => '',
-            'api_base' => 'https://public-api.wordpress.com/wpcom/v2/text-completion',
+            'api_base' => '',
         ],
     ];
+
+    /**
+     * Get default settings values that depend on registries.
+     *
+     * Model defaults live in Models metadata and cannot be expressed in a PHP
+     * class constant without duplicating the model ID here.
+     *
+     * @return array Default settings values
+     */
+    public static function get_defaults() {
+        $defaults = self::DEFAULTS;
+        $defaults['default_model'] = Models::get_default_model_for_provider($defaults['active_provider']);
+        $defaults['openai']['api_base'] = Providers::get_api_base('openai');
+        $defaults['automattic']['api_base'] = Providers::get_api_base('automattic');
+        return $defaults;
+    }
     
     /**
      * Initialize settings
@@ -46,7 +65,7 @@ class Settings {
             [
                 'type' => 'array',
                 'sanitize_callback' => [__CLASS__, 'validate_settings'],
-                'default' => self::DEFAULTS,
+                'default' => self::get_defaults(),
             ]
         );
     }
@@ -60,14 +79,15 @@ class Settings {
      */
     public static function validate_settings($input) {
         if (!is_array($input)) {
-            return self::DEFAULTS;
+            return self::get_defaults();
         }
         
-        $validated = self::DEFAULTS;
+        $validated = self::get_defaults();
         
         // Validate active provider
         if (isset($input['active_provider']) && in_array($input['active_provider'], ['openai', 'automattic'], true)) {
             $validated['active_provider'] = $input['active_provider'];
+            $validated['default_model'] = Models::get_default_model_for_provider($validated['active_provider']);
         }
         
         // Validate model name
@@ -271,7 +291,7 @@ class Settings {
             return false;
         }
         
-        $result = update_option('wpvdb_settings', self::DEFAULTS);
+        $result = update_option('wpvdb_settings', self::get_defaults());
         
         if ($result) {
             Logger::notice('Settings reset to defaults');
@@ -451,13 +471,11 @@ class Settings {
         
         // If not found in registry, check settings
         if (empty($api_base)) {
-            // For Automattic, check the specific endpoint setting
+            // Fallback for filtered or unknown providers.
             if ($provider === 'automattic') {
-                return get_option('wpvdb_automattic_endpoint', 'https://ai-api.wp.com/embeddings');
+                return get_option('wpvdb_automattic_endpoint', Providers::get_api_base('automattic'));
             }
-            
-            // For other providers, use the general api_base setting or default to OpenAI
-            return isset($settings['api_base']) ? $settings['api_base'] : 'https://api.openai.com/v1/';
+            return isset($settings['api_base']) ? $settings['api_base'] : Providers::get_api_base('openai');
         }
         
         return $api_base;
@@ -478,18 +496,35 @@ class Settings {
         
         // Check in the provider-specific settings
         if (isset($settings[$provider]['api_base']) && !empty($settings[$provider]['api_base'])) {
-            return $settings[$provider]['api_base'];
+            return self::normalize_api_base_for_provider($provider, $settings[$provider]['api_base']);
         }
         
-        // Check if we have default API bases
-        switch ($provider) {
-            case 'openai':
-                return 'https://api.openai.com/v1/';
-            case 'automattic':
-                return 'https://api.automattic.com/ai/v1/';
-            default:
-                return '';
+        return Providers::get_api_base($provider);
+    }
+
+    /**
+     * Normalize a provider API base to the root URL where paths are appended.
+     *
+     * @param string $provider Provider name
+     * @param string $url API base URL
+     * @return string Normalized API base URL
+     */
+    public static function normalize_api_base_for_provider($provider, $url) {
+        if (!is_string($url) || $url === '') {
+            return $url;
         }
+
+        $normalized = trailingslashit($url);
+        foreach (['embeddings/text', 'embeddings'] as $suffix) {
+            $suffix_path = '/' . $suffix . '/';
+            if (substr($normalized, -strlen($suffix_path)) === $suffix_path) {
+                $normalized = substr($normalized, 0, -strlen($suffix_path));
+                $normalized = trailingslashit($normalized);
+                break;
+            }
+        }
+
+        return $normalized;
     }
     
     /**
@@ -500,14 +535,17 @@ class Settings {
      */
     public static function get_default_model() {
         $settings = self::get_validated_settings();
-        
-        // Check if the validated settings have a default model
-        if (!empty($settings['default_model'])) {
-            return $settings['default_model'];
+        $provider = !empty($settings['active_provider']) ? $settings['active_provider'] : 'openai';
+
+        if (!empty($settings['active_model'])) {
+            return $settings['active_model'];
         }
         
-        // Otherwise get default from Models registry
-        return Models::get_default_model_for_provider($settings['active_provider']);
+        if (!empty($settings[$provider]['default_model'])) {
+            return $settings[$provider]['default_model'];
+        }
+        
+        return Models::get_default_model_for_provider($provider);
     }
     
     /**
@@ -539,7 +577,7 @@ class Settings {
      * @return string Active model name
      */
     public static function get_active_model() {
-        $settings = get_option('wpvdb_settings', []);
+        $settings = self::get_validated_settings();
         
         if (isset($settings['active_model']) && !empty($settings['active_model'])) {
             return $settings['active_model'];

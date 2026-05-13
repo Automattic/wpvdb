@@ -610,7 +610,7 @@ if (!array_key_exists($current_section, $sections)) {
                         <label for="wpvdb-test-model"><?php _e('Model', 'wpvdb'); ?></label>
                         <select id="wpvdb-test-model" name="model">
                             <?php 
-                            $models = \WPVDB\Models::get_available_models();
+                            $models = \WPVDB\Models::get_selectable_models();
                             // Models are organized by provider, so we need to iterate through each provider's models
                             foreach ($models as $provider_id => $provider_models) {
                                 echo '<optgroup label="' . esc_attr(ucfirst($provider_id)) . '">';
@@ -1062,4 +1062,4 @@ optgroup {
     pointer-events: none;
     opacity: 0.8;
 }
-</style> 
+</style>

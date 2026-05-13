@@ -8,6 +8,7 @@
 namespace WPVDB\Tests\Unit;
 
 use WPVDB\Models;
+use WPVDB\Providers;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -23,58 +24,40 @@ class ModelsTest extends TestCase {
 
         $this->assertIsArray( $models );
         $this->assertNotEmpty( $models );
-
-        // Check that expected providers are present
         $this->assertArrayHasKey( 'openai', $models );
         $this->assertArrayHasKey( 'automattic', $models );
         $this->assertArrayHasKey( 'specter', $models );
-
-        // Check OpenAI models structure
-        $openai_models = $models['openai'];
-        $this->assertIsArray( $openai_models );
-        $this->assertArrayHasKey( 'text-embedding-3-small', $openai_models );
-
-        $small_model = $openai_models['text-embedding-3-small'];
-        $this->assertArrayHasKey( 'name', $small_model );
-        $this->assertArrayHasKey( 'label', $small_model );
-        $this->assertArrayHasKey( 'dimensions', $small_model );
-        $this->assertArrayHasKey( 'provider', $small_model );
     }
 
     /**
-     * Test getting models for a specific provider.
+     * Test getting expected models for each provider.
      */
-    public function test_get_provider_models_openai() {
-        $openai_models = Models::get_provider_models( 'openai' );
+    public function test_get_provider_models() {
+        $expected = [
+            'openai' => [
+                'text-embedding-3-small',
+                'text-embedding-3-large',
+                'text-embedding-ada-002',
+            ],
+            'automattic' => [
+                'nomic-embed-text-v2-moe',
+                'nomic-embed-text-formatted',
+                'text-embedding-3-small',
+            ],
+            'specter' => [
+                'specter2',
+            ],
+        ];
 
-        $this->assertIsArray( $openai_models );
-        $this->assertNotEmpty( $openai_models );
-        $this->assertArrayHasKey( 'text-embedding-3-small', $openai_models );
-        $this->assertArrayHasKey( 'text-embedding-3-large', $openai_models );
-        $this->assertArrayHasKey( 'text-embedding-ada-002', $openai_models );
-    }
+        foreach ( $expected as $provider => $model_names ) {
+            $models = Models::get_provider_models( $provider );
 
-    /**
-     * Test getting models for Automattic provider.
-     */
-    public function test_get_provider_models_automattic() {
-        $automattic_models = Models::get_provider_models( 'automattic' );
-
-        $this->assertIsArray( $automattic_models );
-        $this->assertNotEmpty( $automattic_models );
-        $this->assertArrayHasKey( 'a8cai-embeddings-small-1', $automattic_models );
-        $this->assertArrayHasKey( 'a8cai-embeddings-large-1', $automattic_models );
-    }
-
-    /**
-     * Test getting models for SPECTER provider.
-     */
-    public function test_get_provider_models_specter() {
-        $specter_models = Models::get_provider_models( 'specter' );
-
-        $this->assertIsArray( $specter_models );
-        $this->assertNotEmpty( $specter_models );
-        $this->assertArrayHasKey( 'specter2', $specter_models );
+            $this->assertIsArray( $models );
+            $this->assertNotEmpty( $models );
+            foreach ( $model_names as $model_name ) {
+                $this->assertArrayHasKey( $model_name, $models );
+            }
+        }
     }
 
     /**
@@ -112,27 +95,18 @@ class ModelsTest extends TestCase {
     }
 
     /**
-     * Test getting default model for OpenAI.
+     * Test getting default model for each provider.
      */
-    public function test_get_default_model_for_provider_openai() {
-        $default_model = Models::get_default_model_for_provider( 'openai' );
-        $this->assertEquals( 'text-embedding-3-small', $default_model );
-    }
+    public function test_get_default_model_for_provider() {
+        $expected = [
+            'openai' => 'text-embedding-3-small',
+            'automattic' => 'nomic-embed-text-v2-moe',
+            'specter' => 'specter2',
+        ];
 
-    /**
-     * Test getting default model for Automattic.
-     */
-    public function test_get_default_model_for_provider_automattic() {
-        $default_model = Models::get_default_model_for_provider( 'automattic' );
-        $this->assertEquals( 'a8cai-embeddings-small-1', $default_model );
-    }
-
-    /**
-     * Test getting default model for SPECTER.
-     */
-    public function test_get_default_model_for_provider_specter() {
-        $default_model = Models::get_default_model_for_provider( 'specter' );
-        $this->assertEquals( 'specter2', $default_model );
+        foreach ( $expected as $provider => $default_model ) {
+            $this->assertEquals( $default_model, Models::get_default_model_for_provider( $provider ) );
+        }
     }
 
     /**
@@ -147,20 +121,26 @@ class ModelsTest extends TestCase {
      * Test model dimensions are correct.
      */
     public function test_model_dimensions() {
-        $small_model = Models::get_model( 'openai', 'text-embedding-3-small' );
-        $this->assertEquals( 1536, $small_model['dimensions'] );
+        $expected = [
+            'openai' => [
+                'text-embedding-3-small' => 1536,
+                'text-embedding-3-large' => 3072,
+            ],
+            'automattic' => [
+                'nomic-embed-text-v2-moe' => 768,
+                'text-embedding-3-small' => 1536,
+            ],
+            'specter' => [
+                'specter2' => 768,
+            ],
+        ];
 
-        $large_model = Models::get_model( 'openai', 'text-embedding-3-large' );
-        $this->assertEquals( 3072, $large_model['dimensions'] );
-
-        $automattic_small = Models::get_model( 'automattic', 'a8cai-embeddings-small-1' );
-        $this->assertEquals( 512, $automattic_small['dimensions'] );
-
-        $automattic_large = Models::get_model( 'automattic', 'a8cai-embeddings-large-1' );
-        $this->assertEquals( 1024, $automattic_large['dimensions'] );
-
-        $specter_model = Models::get_model( 'specter', 'specter2' );
-        $this->assertEquals( 768, $specter_model['dimensions'] );
+        foreach ( $expected as $provider => $models ) {
+            foreach ( $models as $model_name => $dimensions ) {
+                $model = Models::get_model( $provider, $model_name );
+                $this->assertEquals( $dimensions, $model['dimensions'] );
+            }
+        }
     }
 
     /**
@@ -171,22 +151,21 @@ class ModelsTest extends TestCase {
 
         foreach ( $all_models as $provider => $models ) {
             foreach ( $models as $model_name => $model ) {
-                // Each model should have these required fields
                 $this->assertArrayHasKey( 'name', $model, "Model $provider.$model_name missing 'name' field" );
                 $this->assertArrayHasKey( 'label', $model, "Model $provider.$model_name missing 'label' field" );
                 $this->assertArrayHasKey( 'dimensions', $model, "Model $provider.$model_name missing 'dimensions' field" );
                 $this->assertArrayHasKey( 'provider', $model, "Model $provider.$model_name missing 'provider' field" );
+                $this->assertArrayHasKey( 'request_format', $model, "Model $provider.$model_name missing 'request_format' field" );
+                $this->assertArrayHasKey( 'response_format', $model, "Model $provider.$model_name missing 'response_format' field" );
 
-                // Validate field types
                 $this->assertIsString( $model['name'], "Model $provider.$model_name 'name' should be string" );
                 $this->assertIsString( $model['label'], "Model $provider.$model_name 'label' should be string" );
                 $this->assertIsInt( $model['dimensions'], "Model $provider.$model_name 'dimensions' should be integer" );
                 $this->assertIsString( $model['provider'], "Model $provider.$model_name 'provider' should be string" );
+                $this->assertIsString( $model['request_format'], "Model $provider.$model_name 'request_format' should be string" );
+                $this->assertIsString( $model['response_format'], "Model $provider.$model_name 'response_format' should be string" );
 
-                // Validate dimensions are positive
                 $this->assertGreaterThan( 0, $model['dimensions'], "Model $provider.$model_name dimensions should be positive" );
-
-                // Validate provider matches
                 $this->assertEquals( $provider, $model['provider'], "Model $provider.$model_name provider mismatch" );
             }
         }
@@ -200,7 +179,6 @@ class ModelsTest extends TestCase {
 
         foreach ( $all_models as $provider => $models ) {
             foreach ( $models as $model_key => $model ) {
-                // Model key should match the model's name field
                 $this->assertEquals(
                     $model_key,
                     $model['name'],
@@ -208,5 +186,70 @@ class ModelsTest extends TestCase {
                 );
             }
         }
+    }
+
+    /**
+     * Test selectable model filtering.
+     */
+    public function test_get_selectable_provider_models() {
+        $openai_models = Models::get_selectable_provider_models( 'openai' );
+        $automattic_models = Models::get_selectable_provider_models( 'automattic' );
+
+        $this->assertArrayHasKey( 'text-embedding-3-small', $openai_models );
+        $this->assertArrayHasKey( 'text-embedding-3-large', $openai_models );
+        $this->assertArrayNotHasKey( 'text-embedding-ada-002', $openai_models );
+
+        $this->assertArrayHasKey( 'nomic-embed-text-v2-moe', $automattic_models );
+        $this->assertArrayHasKey( 'text-embedding-3-small', $automattic_models );
+        $this->assertArrayNotHasKey( 'nomic-embed-text-formatted', $automattic_models );
+    }
+
+    /**
+     * Test storage compatibility policy.
+     */
+    public function test_storage_compatibility() {
+        $openai_base = 'https://api.openai.com/v1/';
+        $proxy_base = 'https://public-api.wordpress.com/wpcom/v2/ai-api-proxy/v1/';
+
+        $this->assertTrue( Models::is_storage_compatible( 'text-embedding-3-small', $openai_base, 768 ) );
+        $this->assertTrue( Models::is_storage_compatible( 'text-embedding-3-large', $openai_base, 768 ) );
+        $this->assertFalse( Models::is_storage_compatible( 'text-embedding-ada-002', $openai_base, 768 ) );
+        $this->assertTrue( Models::is_storage_compatible( 'nomic-embed-text-v2-moe', $proxy_base, 768 ) );
+        $this->assertFalse( Models::is_storage_compatible( 'nomic-embed-text-formatted', $proxy_base, 768 ) );
+    }
+
+    /**
+     * Test request metadata helpers.
+     */
+    public function test_request_metadata_helpers() {
+        $proxy_base = 'https://public-api.wordpress.com/wpcom/v2/ai-api-proxy/v1/';
+
+        $this->assertEquals( 'a8c_nomic_native', Models::get_request_format( 'nomic-embed-text-v2-moe', $proxy_base ) );
+        $this->assertEquals( 'embeddings/text', Models::get_endpoint( 'nomic-embed-text-v2-moe', $proxy_base ) );
+        $this->assertEquals( [ 'model' => 'nomic-embed-text-v2-moe' ], Models::get_request_query_args( 'nomic-embed-text-v2-moe', $proxy_base ) );
+
+        $this->assertEquals( 'openai', Models::get_request_format( 'nomic-embed-text-formatted', $proxy_base ) );
+        $this->assertEquals( [ 'format' => 'openai' ], Models::get_request_query_args( 'nomic-embed-text-formatted', $proxy_base ) );
+
+        $this->assertTrue( Models::supports_dimensions( 'text-embedding-3-small', $proxy_base ) );
+        $this->assertFalse( Models::supports_dimensions( 'nomic-embed-text-v2-moe', $proxy_base ) );
+    }
+
+    /**
+     * Test known provider bases do not fall through to another provider's metadata.
+     */
+    public function test_model_request_metadata_does_not_cross_known_providers() {
+        $this->assertNull( Models::get_model_for_request( 'nomic-embed-text-v2-moe', 'https://api.openai.com/v1/' ) );
+        $this->assertEquals( 'openai', Models::get_request_format( 'nomic-embed-text-v2-moe', 'https://api.openai.com/v1/' ) );
+    }
+
+    /**
+     * Test Automattic AI proxy URL detection.
+     */
+    public function test_automattic_ai_proxy_url_detection() {
+        $this->assertTrue( Providers::is_automattic_ai_proxy_url( 'https://public-api.wordpress.com/wpcom/v2/ai-api-proxy/v1' ) );
+        $this->assertTrue( Providers::is_automattic_ai_proxy_url( 'https://public-api.wordpress.com/wpcom/v2/ai-api-proxy/v1/embeddings' ) );
+        $this->assertFalse( Providers::is_automattic_ai_proxy_url( 'http://public-api.wordpress.com/wpcom/v2/ai-api-proxy/v1/embeddings' ) );
+        $this->assertFalse( Providers::is_automattic_ai_proxy_url( 'https://api.openai.com/v1/embeddings' ) );
     }
 }

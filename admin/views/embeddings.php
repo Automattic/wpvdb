@@ -468,7 +468,7 @@ $api_key = \WPVDB\Settings::get_api_key();
                         // Get models for the first provider
                         $first_provider = reset($providers);
                         $first_provider_id = key($providers);
-                        $provider_models = \WPVDB\Models::get_provider_models($first_provider_id);
+                        $provider_models = \WPVDB\Models::get_selectable_provider_models($first_provider_id);
                         
                         foreach ($provider_models as $model_id => $model) {
                             echo '<option value="' . esc_attr($model_id) . '">' . esc_html($model['label']) . '</option>';
@@ -479,7 +479,7 @@ $api_key = \WPVDB\Settings::get_api_key();
                 
                 <script type="text/javascript">
                 // Store all models data for dynamic switching
-                var wpvdbBulkModels = <?php echo json_encode(\WPVDB\Models::get_available_models()); ?>;
+                var wpvdbBulkModels = <?php echo wp_json_encode(\WPVDB\Models::get_selectable_models(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
                 
                 jQuery(document).ready(function($) {
                     // Update models when provider changes
