@@ -83,6 +83,7 @@ class Admin {
         // CRITICAL FIX: Add direct admin-post handlers for form submissions
         add_action('admin_post_wpvdb_apply_provider_change', [$this, 'handle_apply_provider_change']);
         add_action('admin_post_wpvdb_cancel_provider_change', [$this, 'handle_cancel_provider_change']);
+        add_action('admin_post_wpvdb_cancel_reindex_job', [$this, 'handle_cancel_reindex_job']);
         
         // Admin notices
         add_action('admin_notices', [$this, 'admin_notices']);
@@ -784,7 +785,7 @@ class Admin {
                         'nonce' => wp_create_nonce('wpvdb-admin'),
                         'version' => WPVDB_VERSION,
                         'i18n' => array(
-                            'confirm_provider_change' => __('This will delete all existing embeddings and activate the new provider. Are you sure you want to continue?', 'wpvdb'),
+                            'confirm_provider_change' => __('This will activate the new provider and start a background re-embed job for posts on the old model. Existing rows for the old model stay in place until each post is re-processed. Continue?', 'wpvdb'),
                             'confirm_cancel_change' => __('This will cancel the pending provider change. Are you sure?', 'wpvdb'),
                         )
                     ));
@@ -884,7 +885,7 @@ class Admin {
                 'confirm_recreate_table' => __('This will delete and recreate the embeddings table. All existing embeddings will be lost. Are you sure you want to continue?', 'wpvdb'),
                 'error_message' => __('An error occurred. Please try again.', 'wpvdb'),
                 'success_message' => __('Operation completed successfully.', 'wpvdb'),
-                'confirm_provider_change' => __('This will delete all existing embeddings and activate the new provider. Are you sure you want to continue?', 'wpvdb'),
+                'confirm_provider_change' => __('This will activate the new provider and start a background re-embed job for posts on the old model. Existing rows for the old model stay in place until each post is re-processed. Continue?', 'wpvdb'),
                 'confirm_cancel_change' => __('This will cancel the pending provider change. Are you sure?', 'wpvdb'),
                 'no_posts_selected' => __('Please select at least one post to process.', 'wpvdb'),
                 'processing_complete' => __('Processing complete.', 'wpvdb'),
@@ -1048,70 +1049,83 @@ class Admin {
                 ]
             ]);
         } else {
-            // User confirms the provider change
-            global $wpdb;
-            $table_name = $wpdb->prefix . 'wpvdb_embeddings';
-            
-            // Get embedding count before deletion
-            $embedding_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_name}");
-            
-            // Delete all existing embeddings
-            $result = $wpdb->query("TRUNCATE TABLE {$table_name}");
-
-            if ($result === false) {
-                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: Error truncating embeddings table: ' . $wpdb->last_error); }
-                wp_send_json_error([
-                    'message' => __('Error deleting embeddings: ', 'wpvdb') . $wpdb->last_error,
-                ]);
-                return;
-            }
-
-            // Embeddings table was truncated. Invalidate query cache so prior
-            // result sets do not survive into post-change requests.
-            Cache::invalidate_query_cache();
-
-            // Activate the pending provider/model
-            if (!empty($settings['pending_provider']) && !empty($settings['pending_model'])) {
-                // Log the change
-                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: Applying provider change'); }
-                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: From ' . $settings['active_provider'] . '/' . $settings['active_model'] . ' to ' . $settings['pending_provider'] . '/' . $settings['pending_model']); }
-                
-                $settings['active_provider'] = $settings['pending_provider'];
-                $settings['active_model'] = $settings['pending_model'];
-                $settings['provider'] = $settings['pending_provider']; // Also update the main provider setting
-                
-                // Update the provider-specific model setting
-                if ($settings['active_provider'] === 'openai') {
-                    $settings['openai']['default_model'] = $settings['active_model'];
-                } else if ($settings['active_provider'] === 'automattic') {
-                    $settings['automattic']['default_model'] = $settings['active_model'];
-                } else if ($settings['active_provider'] === 'specter') {
-                    // For specter, we don't need to update a provider-specific model setting
-                    // as it's handled differently
-                }
-                
-                $settings['pending_provider'] = '';
-                $settings['pending_model'] = '';
-                
-                update_option('wpvdb_settings', Settings::normalize_settings_for_storage($settings));
-                
-                // Log the updated settings
-                    wp_send_json_success([
-                        'message' => sprintf(
-                            __('Provider changed successfully. %d embeddings have been deleted. Please re-index your content.', 'wpvdb'),
-                            $embedding_count
-                        ),
-                        'debug' => [
-                            'action' => 'apply',
-                            'embedding_count_deleted' => $embedding_count,
-                        ]
-                    ]);
-            } else {
+            // Mirror of handle_apply_provider_change for the AJAX path.
+            if (empty($settings['pending_provider']) || empty($settings['pending_model'])) {
                 if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB: No pending provider change found'); }
                 wp_send_json_error([
                     'message' => __('No pending provider change found.', 'wpvdb'),
                 ]);
+                return;
             }
+
+            $new_provider = (string) $settings['pending_provider'];
+            $new_model    = (string) $settings['pending_model'];
+
+            $blocking_job = $this->get_blocking_model_migration_job($new_provider, $new_model);
+            if ($blocking_job) {
+                wp_send_json_error([
+                    'message' => $this->get_model_migration_blocked_message($blocking_job),
+                    'debug' => [
+                        'blocking_job_id' => (int) $blocking_job['job_id'],
+                    ],
+                ]);
+                return;
+            }
+
+            $job = Embedding_Enqueuer::start_job(
+                ['only_mismatched_model' => true],
+                ['provider' => $new_provider, 'model' => $new_model]
+            );
+
+            if (is_wp_error($job)) {
+                wp_send_json_error([
+                    'message' => sprintf(
+                        /* translators: %s: error message from the enqueuer */
+                        __('Could not start the re-embed job: %s. The pending change has not been applied.', 'wpvdb'),
+                        $job->get_error_message()
+                    ),
+                ]);
+                return;
+            }
+
+            $job_id = isset($job['job_id']) ? (int) $job['job_id'] : 0;
+
+            $settings['active_provider'] = $new_provider;
+            $settings['active_model']    = $new_model;
+            $settings['provider']        = $new_provider;
+
+            if ($new_provider === 'openai' && isset($settings['openai'])) {
+                $settings['openai']['default_model'] = $new_model;
+            } else if ($new_provider === 'automattic' && isset($settings['automattic'])) {
+                $settings['automattic']['default_model'] = $new_model;
+            }
+
+            $settings['pending_provider'] = '';
+            $settings['pending_model']    = '';
+
+            update_option('wpvdb_settings', Settings::normalize_settings_for_storage($settings));
+            Cache::invalidate_query_cache();
+
+            $message = !empty($job['dedup'])
+                ? sprintf(
+                    /* translators: %d: job id */
+                    __('Provider activated. A re-embed job is already running (job #%d).', 'wpvdb'),
+                    $job_id
+                )
+                : sprintf(
+                    /* translators: %d: job id */
+                    __('Provider activated. Background re-embed job #%d started.', 'wpvdb'),
+                    $job_id
+                );
+
+            wp_send_json_success([
+                'message' => $message,
+                'debug' => [
+                    'action' => 'apply',
+                    'job_id' => $job_id,
+                    'dedup'  => !empty($job['dedup']),
+                ],
+            ]);
         }
     }
     
@@ -2180,98 +2194,236 @@ class Admin {
             ]);
         }
     }
-    
+
     /**
-     * CRITICAL FIX: Handle direct form submission to apply provider change
+     * Return an active migration job that would overlap a new provider change.
+     *
+     * @param string $new_provider Pending provider target.
+     * @param string $new_model Pending model target.
+     * @return array|null
+     */
+    private function get_blocking_model_migration_job($new_provider, $new_model) {
+        foreach (Embedding_Enqueuer::list_active_model_migration_jobs() as $job) {
+            if ((string) $job['provider'] === (string) $new_provider && (string) $job['model'] === (string) $new_model) {
+                continue;
+            }
+
+            return $job;
+        }
+
+        return null;
+    }
+
+    /**
+     * Build the notice used when another model migration is still active.
+     *
+     * @param array $job Active job row.
+     * @return string
+     */
+    private function get_model_migration_blocked_message($job) {
+        return sprintf(
+            /* translators: 1: job id, 2: provider, 3: model */
+            __('Cannot apply this provider change while re-embed job #%1$d for %2$s / %3$s is still active. Wait for it to finish or cancel it before applying another provider change.', 'wpvdb'),
+            (int) $job['job_id'],
+            (string) $job['provider'],
+            (string) $job['model']
+        );
+    }
+
+    /**
+     * Apply a pending provider/model change: flip settings and start a re-embed job.
      */
     public function handle_apply_provider_change() {
-        // Verify nonce
         check_admin_referer('wpvdb-admin');
-        
-        // Verify permissions
+
         if (!current_user_can('manage_options')) {
             wp_die('Permission denied.');
         }
-        
-        // Get current settings
+
         $settings = get_option('wpvdb_settings', []);
-        
-        if (!isset($settings['pending_provider']) || !isset($settings['pending_model'])) {
+
+        if (empty($settings['pending_provider']) || empty($settings['pending_model'])) {
             wp_die('No pending provider change found.');
         }
-        
-        // Get database instance
-        global $wpdb;
-        $table_name = $wpdb->prefix . 'wpvdb_embeddings';
-        
-        // Delete all existing embeddings
-        $embedding_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_name}");
-        $truncate_result = $wpdb->query("TRUNCATE TABLE {$table_name}");
-        if ($truncate_result === false) {
-            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB CRITICAL: Error truncating embeddings table: ' . $wpdb->last_error); }
-        } else {
-            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB CRITICAL: Deleted ' . $embedding_count . ' embeddings'); }
-            Cache::invalidate_query_cache();
+
+        $new_provider = (string) $settings['pending_provider'];
+        $new_model    = (string) $settings['pending_model'];
+
+        $blocking_job = $this->get_blocking_model_migration_job($new_provider, $new_model);
+        if ($blocking_job) {
+            add_settings_error(
+                'wpvdb_settings',
+                'provider_change_reindex_active',
+                $this->get_model_migration_blocked_message($blocking_job),
+                'error'
+            );
+            set_transient('settings_errors', get_settings_errors(), 30);
+            wp_redirect(add_query_arg([
+                'page' => 'wpvdb-status',
+                'settings-updated' => '1',
+                'cache-bust' => time(),
+            ], admin_url('admin.php')));
+            exit;
         }
-        
-        // Apply the pending change - store the original values for debug logs
-        $original_active_provider = isset($settings['active_provider']) ? $settings['active_provider'] : 'none';
-        $original_active_model = isset($settings['active_model']) ? $settings['active_model'] : 'none';
-        $original_provider = isset($settings['provider']) ? $settings['provider'] : 'none';
-        
-        // Set the new values
-        $pending_provider = $settings['pending_provider'];
-        $pending_model = $settings['pending_model'];
-        
-        $settings['active_provider'] = $pending_provider;
-        $settings['active_model'] = $pending_model;
-        $settings['provider'] = $pending_provider;
-        
-        // Update provider-specific model settings
-        if ($settings['active_provider'] === 'openai') {
-            $settings['openai']['default_model'] = $settings['active_model'];
-        } else if ($settings['active_provider'] === 'automattic') {
-            $settings['automattic']['default_model'] = $settings['active_model'];
-        } else if ($settings['active_provider'] === 'specter') {
-            // For specter we don't need to update any specific model setting
-        }
-        
-        // Clear pending provider/model
-        $settings['pending_provider'] = '';
-        $settings['pending_model'] = '';
-        
-        // Save settings - FORCE autoload to true to ensure the option is loaded on every page
-        $update_result = update_option('wpvdb_settings', Settings::normalize_settings_for_storage($settings), true);
-        
-        // Delete any transients that might be caching the settings
-        delete_transient('wpvdb_settings');
-        
-        // Clear WordPress object cache for this option
-        wp_cache_delete('wpvdb_settings', 'options');
-        
-        // Set success message
-        add_settings_error(
-            'wpvdb_settings',
-            'provider_change_applied',
-            sprintf(
-                __('Provider changed successfully. %d embeddings have been deleted. Please re-index your content.', 'wpvdb'),
-                $embedding_count
-            ),
-            'success'
+
+        // Start the job first so settings stay pending on failure.
+        $job = Embedding_Enqueuer::start_job(
+            ['only_mismatched_model' => true],
+            ['provider' => $new_provider, 'model' => $new_model]
         );
+
+        if (is_wp_error($job)) {
+            add_settings_error(
+                'wpvdb_settings',
+                'provider_change_enqueue_failed',
+                sprintf(
+                    /* translators: %s: error message from the enqueuer */
+                    __('Could not start the re-embed job: %s. The pending change has not been applied; please resolve the error and try again.', 'wpvdb'),
+                    $job->get_error_message()
+                ),
+                'error'
+            );
+            set_transient('settings_errors', get_settings_errors(), 30);
+            wp_redirect(add_query_arg([
+                'page' => 'wpvdb-status',
+                'settings-updated' => '1',
+                'cache-bust' => time(),
+            ], admin_url('admin.php')));
+            exit;
+        }
+
+        $job_id = isset($job['job_id']) ? (int) $job['job_id'] : 0;
+
+        $settings['active_provider'] = $new_provider;
+        $settings['active_model']    = $new_model;
+        $settings['provider']        = $new_provider;
+
+        if ($new_provider === 'openai' && isset($settings['openai'])) {
+            $settings['openai']['default_model'] = $new_model;
+        } else if ($new_provider === 'automattic' && isset($settings['automattic'])) {
+            $settings['automattic']['default_model'] = $new_model;
+        }
+
+        $settings['pending_provider'] = '';
+        $settings['pending_model']    = '';
+
+        update_option('wpvdb_settings', Settings::normalize_settings_for_storage($settings), true);
+        delete_transient('wpvdb_settings');
+        wp_cache_delete('wpvdb_settings', 'options');
+
+        // Active model changed; prior cached results are keyed on the old model.
+        Cache::invalidate_query_cache();
+
+        $notice = !empty($job['dedup'])
+            ? sprintf(
+                /* translators: %d: job id */
+                __('Provider activated. A re-embed job is already running (job #%d); progress is visible on this page.', 'wpvdb'),
+                $job_id
+            )
+            : sprintf(
+                /* translators: %d: job id */
+                __('Provider activated. Background re-embed job #%d started; progress is visible on this page.', 'wpvdb'),
+                $job_id
+            );
+
+        add_settings_error('wpvdb_settings', 'provider_change_applied', $notice, 'success');
         set_transient('settings_errors', get_settings_errors(), 30);
-        
-        // CRITICAL FIX: Force flush of all relevant caches
-        wp_cache_flush();
-        
-        // Redirect back to status page with forceful cache-busting parameters
-        $redirect_url = add_query_arg([
+
+        wp_redirect(add_query_arg([
             'page' => 'wpvdb-status',
             'settings-updated' => '1',
-            'cache-bust' => time() // Add a timestamp to bust any caching
-        ], admin_url('admin.php'));
-        
-        wp_redirect($redirect_url);
+            'cache-bust' => time(),
+        ], admin_url('admin.php')));
+        exit;
+    }
+
+    /**
+     * Cancel an in-flight model-migration reindex job.
+     *
+     * Why: does NOT revert active provider/model. process_post may have already
+     * deleted old-model rows for processed posts; a revert would leave the
+     * active index partially missing.
+     */
+    public function handle_cancel_reindex_job() {
+        check_admin_referer('wpvdb-admin');
+
+        if (!current_user_can('manage_options')) {
+            wp_die('Permission denied.');
+        }
+
+        $job_id = isset($_POST['job_id']) ? (int) $_POST['job_id'] : 0;
+        if ($job_id <= 0) {
+            wp_die('Missing job id.');
+        }
+
+        // Mirror the widget filter: must be active, only_mismatched_model, and target the active provider+model.
+        $existing = Embedding_Enqueuer::get_job($job_id);
+        $scope = $existing && isset($existing['scope_args'])
+            ? json_decode($existing['scope_args'], true)
+            : null;
+        $is_model_migration_job = is_array($scope) && !empty($scope['only_mismatched_model']);
+        $settings_for_match = get_option('wpvdb_settings', []);
+        $active_provider_for_match = isset($settings_for_match['active_provider']) ? (string) $settings_for_match['active_provider'] : '';
+        $active_model_for_match    = isset($settings_for_match['active_model']) ? (string) $settings_for_match['active_model'] : '';
+        $job_targets_active = $existing
+            && (string) $existing['provider'] === $active_provider_for_match
+            && (string) $existing['model'] === $active_model_for_match;
+        if (!$existing
+            || !in_array($existing['status'], ['pending', 'running', 'paused'], true)
+            || !$is_model_migration_job
+            || !$job_targets_active
+        ) {
+            add_settings_error(
+                'wpvdb_settings',
+                'reindex_job_cancel_failed',
+                sprintf(
+                    /* translators: %d: job id */
+                    __('Re-embed job #%d is not an active model-migration job; nothing to cancel from this page.', 'wpvdb'),
+                    $job_id
+                ),
+                'warning'
+            );
+            set_transient('settings_errors', get_settings_errors(), 30);
+            wp_redirect(add_query_arg([
+                'page' => 'wpvdb-status',
+                'settings-updated' => '1',
+                'cache-bust' => time(),
+            ], admin_url('admin.php')));
+            exit;
+        }
+
+        $ok = Embedding_Enqueuer::cancel_job($job_id);
+
+        if ($ok) {
+            add_settings_error(
+                'wpvdb_settings',
+                'reindex_job_cancelled',
+                sprintf(
+                    /* translators: %d: job id */
+                    __('Re-embed job #%d cancelled. The active provider and model are unchanged; posts already re-embedded keep their new-model rows.', 'wpvdb'),
+                    $job_id
+                ),
+                'success'
+            );
+        } else {
+            add_settings_error(
+                'wpvdb_settings',
+                'reindex_job_cancel_failed',
+                sprintf(
+                    /* translators: %d: job id */
+                    __('Could not cancel re-embed job #%d. It may have already completed.', 'wpvdb'),
+                    $job_id
+                ),
+                'warning'
+            );
+        }
+        set_transient('settings_errors', get_settings_errors(), 30);
+
+        wp_redirect(add_query_arg([
+            'page' => 'wpvdb-status',
+            'settings-updated' => '1',
+            'cache-bust' => time(),
+        ], admin_url('admin.php')));
         exit;
     }
     
@@ -2318,19 +2470,16 @@ class Admin {
             'success'
         );
         set_transient('settings_errors', get_settings_errors(), 30);
-        
-        // CRITICAL FIX: Force flush of all relevant caches
-        wp_cache_flush();
-        
+
         // Redirect back to status page with forceful cache-busting parameters
         $redirect_url = add_query_arg([
             'page' => 'wpvdb-status',
             'settings-updated' => '1',
             'cache-bust' => time() // Add a timestamp to bust any caching
         ], admin_url('admin.php'));
-        
+
         if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB CRITICAL: Redirecting to: ' . $redirect_url); }
         wp_redirect($redirect_url);
         exit;
     }
-} 
+}

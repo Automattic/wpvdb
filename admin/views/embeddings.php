@@ -128,14 +128,16 @@ $api_key = \WPVDB\Settings::get_api_key();
                         }
                         error_log('[WPVDB DEBUG] Using distance function: ' . $distance_function);
                         
-                        // Optimized query that will use the vector index
-                        // The ORDER BY + LIMIT pattern is what triggers the vector index usage
+                        // Optimized query that will use the vector index.
+                        // The ORDER BY + LIMIT pattern is what triggers the vector index usage.
                         $sql = $wpdb->prepare(
-                            "SELECT e.*, 
+                            "SELECT e.*,
                             $distance_function as distance
                             FROM $table_name e
+                            WHERE e.model = %s
                             ORDER BY distance
                             LIMIT %d",
+                            $model,
                             20 // Show top 20 matches
                         );
                         
@@ -167,7 +169,10 @@ $api_key = \WPVDB\Settings::get_api_key();
                                     
                                     // Fall back to PHP-based distance calculation
                                     error_log('[WPVDB DEBUG] Falling back to PHP-based distance calculation');
-                                    $all_rows = $wpdb->get_results("SELECT * FROM $table_name", ARRAY_A);
+                                    $all_rows = $wpdb->get_results(
+                                        $wpdb->prepare("SELECT * FROM $table_name WHERE model = %s", $model),
+                                        ARRAY_A
+                                    );
                                     $distances = [];
                                     
                                     foreach ($all_rows as $r) {
@@ -201,7 +206,10 @@ $api_key = \WPVDB\Settings::get_api_key();
                     } else {
                         // Fallback: do in PHP
                         error_log('[WPVDB DEBUG] Using PHP fallback search');
-                        $all_rows = $wpdb->get_results("SELECT * FROM $table_name", ARRAY_A);
+                        $all_rows = $wpdb->get_results(
+                            $wpdb->prepare("SELECT * FROM $table_name WHERE model = %s", $model),
+                            ARRAY_A
+                        );
                         $total_vectors_searched = count($all_rows);
                         error_log('[WPVDB DEBUG] Total vectors searched: ' . $total_vectors_searched);
                         

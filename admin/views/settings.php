@@ -60,7 +60,7 @@ $specter_model = $provider_model('specter');
             <strong><?php esc_html_e('Provider Change Pending', 'wpvdb'); ?></strong>
         </p>
         <p>
-            <?php esc_html_e('You have requested to change the embedding provider or model. This change requires re-indexing all content before it takes effect.', 'wpvdb'); ?>
+            <?php esc_html_e('You have requested to change the embedding provider or model. Applying the change activates the new provider and queues a background re-embed for posts on the old model. Existing rows are not truncated.', 'wpvdb'); ?>
         </p>
         <p>
             <a href="<?php echo esc_url(admin_url('admin.php?page=wpvdb-status')); ?>" class="button button-primary">

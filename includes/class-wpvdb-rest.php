@@ -469,15 +469,20 @@ class REST {
                         'db_type' => $db_type
                     ]);
                     
-                    // Build the query safely
-                    $sql = "SELECT id, doc_id, chunk_id, chunk_content, summary, 
-                               {$distance_function} as distance
-                           FROM {$table_name}
-                           ORDER BY distance
-                           LIMIT " . intval($limit);
-                    
+                    // Filter by the query model so a partial migration cannot leak rows of a different model.
+                    $sql = $wpdb->prepare(
+                        "SELECT id, doc_id, chunk_id, chunk_content, summary,
+                            {$distance_function} as distance
+                         FROM {$table_name}
+                         WHERE model = %s
+                         ORDER BY distance
+                         LIMIT %d",
+                        $model,
+                        $limit
+                    );
+
                     Logger::debug('Executing vector query', ['limit' => $limit]);
-                    
+
                     $results = $wpdb->get_results($sql, ARRAY_A);
                     
                     if ($wpdb->last_error) {
@@ -504,9 +509,11 @@ class REST {
                 while (true) {
                     // Get a batch of rows with LIMIT and OFFSET
                     $batch_query = $wpdb->prepare(
-                        "SELECT id, doc_id, chunk_id, chunk_content, summary, embedding 
-                         FROM {$table_name} 
+                        "SELECT id, doc_id, chunk_id, chunk_content, summary, embedding
+                         FROM {$table_name}
+                         WHERE model = %s
                          LIMIT %d OFFSET %d",
+                        $model,
                         $page_size,
                         $offset
                     );

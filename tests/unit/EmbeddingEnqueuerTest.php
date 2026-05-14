@@ -17,6 +17,22 @@ use WPVDB\Embedding_Enqueuer;
 
 class EmbeddingEnqueuerTest extends TestCase {
 
+	private $original_wpdb;
+
+	protected function setUp(): void {
+		parent::setUp();
+		$this->original_wpdb = isset( $GLOBALS['wpdb'] ) ? $GLOBALS['wpdb'] : null;
+	}
+
+	protected function tearDown(): void {
+		if ( $this->original_wpdb ) {
+			$GLOBALS['wpdb'] = $this->original_wpdb;
+		} else {
+			unset( $GLOBALS['wpdb'] );
+		}
+		parent::tearDown();
+	}
+
 	public function test_normalize_args_returns_defaults_for_empty_input() {
 		$normalized = Embedding_Enqueuer::normalize_args( [] );
 
@@ -195,5 +211,98 @@ class EmbeddingEnqueuerTest extends TestCase {
 		$f2 = Embedding_Enqueuer::compute_fingerprint( $args_b, 'openai', 'text-embedding-3-small' );
 
 		$this->assertEquals( $f1, $f2 );
+	}
+
+	public function test_find_active_model_migration_job_returns_matching_target() {
+		$this->use_jobs_wpdb(
+			[
+				$this->job_row( 9, Embedding_Enqueuer::STATUS_RUNNING, 'openai', 'text-embedding-3-small', [ 'only_mismatched_model' => true ] ),
+				$this->job_row( 8, Embedding_Enqueuer::STATUS_RUNNING, 'automattic', 'nomic-embed-text-v2-moe', [ 'only_missing' => true ] ),
+				$this->job_row( 7, Embedding_Enqueuer::STATUS_COMPLETED, 'automattic', 'nomic-embed-text-v2-moe', [ 'only_mismatched_model' => true ] ),
+				$this->job_row( 6, Embedding_Enqueuer::STATUS_PENDING, 'automattic', 'nomic-embed-text-v2-moe', [ 'only_mismatched_model' => true ] ),
+			]
+		);
+
+		$job = Embedding_Enqueuer::find_active_model_migration_job( 'automattic', 'nomic-embed-text-v2-moe' );
+
+		$this->assertIsArray( $job );
+		$this->assertSame( 6, $job['job_id'] );
+	}
+
+	public function test_list_active_model_migration_jobs_returns_all_matching_targets() {
+		$this->use_jobs_wpdb(
+			[
+				$this->job_row( 13, Embedding_Enqueuer::STATUS_RUNNING, 'automattic', 'nomic-embed-text-v2-moe', [ 'only_mismatched_model' => true ] ),
+				$this->job_row( 12, Embedding_Enqueuer::STATUS_PAUSED, 'automattic', 'nomic-embed-text-v2-moe', [ 'only_mismatched_model' => true ] ),
+				$this->job_row( 11, Embedding_Enqueuer::STATUS_PENDING, 'automattic', 'nomic-embed-text-v2-moe', [ 'only_missing' => true ] ),
+			]
+		);
+
+		$jobs = Embedding_Enqueuer::list_active_model_migration_jobs( 'automattic', 'nomic-embed-text-v2-moe' );
+
+		$this->assertCount( 2, $jobs );
+		$this->assertSame( [ 13, 12 ], array_column( $jobs, 'job_id' ) );
+	}
+
+	public function test_find_active_model_migration_job_can_find_any_target() {
+		$this->use_jobs_wpdb(
+			[
+				$this->job_row( 11, Embedding_Enqueuer::STATUS_PAUSED, 'openai', 'text-embedding-3-small', [ 'only_mismatched_model' => true ] ),
+				$this->job_row( 10, Embedding_Enqueuer::STATUS_RUNNING, 'automattic', 'nomic-embed-text-v2-moe', [ 'only_mismatched_model' => true ] ),
+			]
+		);
+
+		$job = Embedding_Enqueuer::find_active_model_migration_job();
+
+		$this->assertIsArray( $job );
+		$this->assertSame( 11, $job['job_id'] );
+	}
+
+	public function test_find_active_model_migration_job_returns_null_without_matching_scope() {
+		$this->use_jobs_wpdb(
+			[
+				$this->job_row( 12, Embedding_Enqueuer::STATUS_RUNNING, 'automattic', 'nomic-embed-text-v2-moe', [ 'only_missing' => true ] ),
+				$this->job_row( 11, Embedding_Enqueuer::STATUS_COMPLETED, 'automattic', 'nomic-embed-text-v2-moe', [ 'only_mismatched_model' => true ] ),
+			]
+		);
+
+		$this->assertNull( Embedding_Enqueuer::find_active_model_migration_job( 'automattic', 'nomic-embed-text-v2-moe' ) );
+	}
+
+	private function use_jobs_wpdb( $rows ) {
+		$GLOBALS['wpdb'] = new class( $rows ) {
+			public $prefix = 'wp_';
+			public $last_query = '';
+			public $last_args = [];
+			private $rows;
+
+			public function __construct( $rows ) {
+				$this->rows = $rows;
+			}
+
+			public function prepare( $query, ...$args ) {
+				if ( count( $args ) === 1 && is_array( $args[0] ) ) {
+					$args = $args[0];
+				}
+				$this->last_query = $query;
+				$this->last_args = $args;
+				return $query;
+			}
+
+			public function get_results( $query = null, $output = OBJECT ) {
+				$this->last_query = $query;
+				return $this->rows;
+			}
+		};
+	}
+
+	private function job_row( $job_id, $status, $provider, $model, $scope_args ) {
+		return [
+			'job_id' => $job_id,
+			'status' => $status,
+			'provider' => $provider,
+			'model' => $model,
+			'scope_args' => wp_json_encode( $scope_args ),
+		];
 	}
 }

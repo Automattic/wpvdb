@@ -707,6 +707,73 @@ class Embedding_Enqueuer {
     }
 
     /**
+     * List active model migration jobs, optionally scoped to a target.
+     *
+     * @param string $provider Optional provider target.
+     * @param string $model Optional model target.
+     * @return array Job rows, newest first.
+     */
+    public static function list_active_model_migration_jobs($provider = '', $model = '') {
+        global $wpdb;
+
+        $provider = is_string($provider) ? $provider : '';
+        $model    = is_string($model) ? $model : '';
+        $active   = [self::STATUS_PENDING, self::STATUS_RUNNING, self::STATUS_PAUSED];
+
+        $where = ['status IN (%s, %s, %s)'];
+        $params = $active;
+
+        if ($provider !== '') {
+            $where[] = 'provider = %s';
+            $params[] = $provider;
+        }
+        if ($model !== '') {
+            $where[] = 'model = %s';
+            $params[] = $model;
+        }
+
+        $sql = $wpdb->prepare(
+            "SELECT * FROM " . self::table_name() . "
+             WHERE " . implode(' AND ', $where) . "
+             ORDER BY job_id DESC",
+            $params
+        );
+
+        $rows = $wpdb->get_results($sql, ARRAY_A);
+        $jobs = [];
+        foreach ((array) $rows as $row) {
+            if (!in_array(isset($row['status']) ? $row['status'] : '', $active, true)) {
+                continue;
+            }
+            if ($provider !== '' && (string) (isset($row['provider']) ? $row['provider'] : '') !== $provider) {
+                continue;
+            }
+            if ($model !== '' && (string) (isset($row['model']) ? $row['model'] : '') !== $model) {
+                continue;
+            }
+
+            $scope = isset($row['scope_args']) ? json_decode($row['scope_args'], true) : null;
+            if (is_array($scope) && !empty($scope['only_mismatched_model'])) {
+                $jobs[] = $row;
+            }
+        }
+
+        return $jobs;
+    }
+
+    /**
+     * Find the newest active model migration job, optionally scoped to a target.
+     *
+     * @param string $provider Optional provider target.
+     * @param string $model Optional model target.
+     * @return array|null Job row, or null when none matches.
+     */
+    public static function find_active_model_migration_job($provider = '', $model = '') {
+        $jobs = self::list_active_model_migration_jobs($provider, $model);
+        return empty($jobs) ? null : $jobs[0];
+    }
+
+    /**
      * Mark a job canceled. Already-scheduled AS pages will exit early because
      * the lock acquisition checks status. Also clears the lock token and
      * expiry so an in-flight worker cannot match its release_lock guard and

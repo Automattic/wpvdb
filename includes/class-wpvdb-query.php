@@ -118,17 +118,19 @@ class Query {
                     // Lower values (0.2-0.3) are more strict but faster, higher values (0.4-0.6) give more results
                     $similarity_threshold = apply_filters('wpvdb_similarity_threshold', 0.35);
                     
-                    // Optimized query that uses the vector index with a distance threshold
-                    // The threshold + ORDER BY + LIMIT pattern is what maximizes vector index usage
+                    // Optimized query that uses the vector index with a distance threshold.
+                    // The threshold + ORDER BY + LIMIT pattern is what maximizes vector index usage.
                     $sql = $wpdb->prepare("
                         SELECT doc_id,
                             $distance_function AS distance
                         FROM $table_name
                         WHERE $distance_function < %f
+                          AND model = %s
                         ORDER BY distance
                         LIMIT %d
-                    ", 
+                    ",
                     $similarity_threshold,
+                    $model,
                     $limit * 3 // fetch more candidates than needed
                     );
                     
@@ -154,8 +156,11 @@ class Query {
                 }
             } else {
                 if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] No vector support, using PHP fallback search'); }
-                // Fallback: do in PHP
-                $all_rows = $wpdb->get_results("SELECT doc_id, embedding FROM $table_name", ARRAY_A);
+                // Fallback: do in PHP.
+                $all_rows = $wpdb->get_results(
+                    $wpdb->prepare("SELECT doc_id, embedding FROM $table_name WHERE model = %s", $model),
+                    ARRAY_A
+                );
                 $distances = [];
                 foreach ($all_rows as $r) {
                     $stored_emb = json_decode($r['embedding'], true);
