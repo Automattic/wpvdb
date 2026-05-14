@@ -506,6 +506,13 @@ class Database {
                 Cache::invalidate_query_cache();
             }
 
+            // wp_trash_post does not auto-clear post meta (unlike delete_post),
+            // so trashed-then-restored posts would otherwise show stale meta.
+            delete_post_meta($post_id, '_wpvdb_embedded');
+            delete_post_meta($post_id, '_wpvdb_chunks_count');
+            delete_post_meta($post_id, '_wpvdb_embedded_date');
+            delete_post_meta($post_id, '_wpvdb_embedded_model');
+
             // Log the deletion
             if (defined('WP_DEBUG') && WP_DEBUG) { error_log("[WPVDB] Deleted embeddings for post ID: $post_id"); }
         }

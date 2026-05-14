@@ -625,20 +625,6 @@ class Core {
             return;
         }
         
-        // If this is an update and post is already embedded, clear existing embeddings
-        if ($update && get_post_meta($post_id, '_wpvdb_embedded', true)) {
-            // Delete any existing embeddings for this post
-            global $wpdb;
-            $table_name = $wpdb->prefix . 'wpvdb_embeddings';
-            $wpdb->delete($table_name, ['doc_id' => $post_id], ['%d']);
-            
-            // Delete post meta
-            delete_post_meta($post_id, '_wpvdb_embedded');
-            delete_post_meta($post_id, '_wpvdb_chunks_count');
-            delete_post_meta($post_id, '_wpvdb_embedded_date');
-            delete_post_meta($post_id, '_wpvdb_embedded_model');
-        }
-        
         // Queue for background processing with validation
         $queue = new WPVDB_Queue();
         $queue->push_to_queue([

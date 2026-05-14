@@ -210,8 +210,9 @@ class Maintenance {
         ";
 
         $deleted_count = $wpdb->query($orphaned_query);
-        
+
         if ($deleted_count > 0) {
+            Cache::invalidate_query_cache();
             Logger::info('Cleaned up orphaned embeddings', ['count' => $deleted_count]);
         }
     }
