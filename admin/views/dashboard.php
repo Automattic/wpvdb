@@ -128,5 +128,6 @@
 
 .wpvdb-action-buttons .button .dashicons {
     margin-right: 5px;
+    line-height: 1;
 }
 </style> 
