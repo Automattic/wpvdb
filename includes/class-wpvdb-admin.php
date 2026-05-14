@@ -1222,13 +1222,9 @@ class Admin {
         
         // Queue posts for background processing
         $queue = new WPVDB_Queue();
-        
+
         foreach ($post_ids as $post_id) {
-            $queue->push_to_queue([
-                'post_id' => $post_id,
-                'model' => $model,
-                'provider' => $provider,
-            ]);
+            $queue->push_to_queue(WPVDB_Queue::build_item($post_id, ['provider' => $provider, 'model' => $model]));
         }
         
         $queue->save()->dispatch();
@@ -1610,30 +1606,9 @@ class Admin {
             wp_send_json_error(['message' => __('Post not found', 'wpvdb')]);
         }
         
-        // Get settings securely
-        $settings = get_option('wpvdb_settings', []);
-        if (!is_array($settings)) {
-            $settings = [];
-        }
-        
-        // Ensure we have provider and model data
-        $provider = isset($settings['active_provider']) && !empty($settings['active_provider']) ? 
-                    $settings['active_provider'] : 'openai';
-        
-        $model = '';
-        if ($provider === 'openai') {
-            $model = isset($settings['active_model']) && !empty($settings['active_model']) ? $settings['active_model'] : $this->get_default_model('openai');
-        } elseif ($provider === 'automattic') {
-            $model = isset($settings['active_model']) && !empty($settings['active_model']) ? $settings['active_model'] : $this->get_default_model('automattic');
-        }
-        
         // Queue for re-embedding
         $queue = new WPVDB_Queue();
-        $queue->push_to_queue([
-            'post_id' => $post_id,
-            'model' => $model,
-            'provider' => $provider,
-        ]);
+        $queue->push_to_queue(WPVDB_Queue::build_item($post_id));
         $queue->save()->dispatch();
         
         wp_send_json_success([
@@ -2026,13 +2001,9 @@ class Admin {
         // Prepare items for batch processing
         $batch_items = [];
         foreach ($post_ids as $post_id) {
-            $batch_items[] = [
-                'post_id' => $post_id,
-                'model' => $model,
-                'provider' => $provider,
-            ];
+            $batch_items[] = WPVDB_Queue::build_item($post_id, ['provider' => $provider, 'model' => $model]);
         }
-        
+
         // Queue posts for batch processing
         $queue = new WPVDB_Queue();
         $queue->push_batch_to_queue($batch_items);

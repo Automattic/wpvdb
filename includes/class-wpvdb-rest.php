@@ -871,35 +871,18 @@ class REST {
             ]);
         }
         
-        // Get settings securely
-        $settings = get_option('wpvdb_settings', []);
-        if (!is_array($settings)) {
-            $settings = [];
-        }
-        
-        // Get active provider/model
-        $provider = !empty($settings['active_provider']) ? $settings['active_provider'] : 'openai';
-        $model = !empty($settings['active_model']) ? $settings['active_model'] : Models::get_default_model_for_provider($provider);
-        
-        // Prepare item for processing
-        $item = [
-            'post_id' => $post_id,
-            'model' => $model,
-            'provider' => $provider,
-        ];
-        
         // Queue for processing
+        $item  = \WPVDB\WPVDB_Queue::build_item($post_id);
         $queue = new \WPVDB\WPVDB_Queue();
         $queue->push_to_queue($item);
-        
+
         // Force Action Scheduler to run the task immediately
         if (function_exists('as_enqueue_async_action')) {
             as_enqueue_async_action('wpvdb_run_queue_now', [], 'wpvdb');
         }
-        
+
         // For development environments, process the queue immediately
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            // Process the item directly
             \WPVDB\WPVDB_Queue::process_item($item);
         }
         

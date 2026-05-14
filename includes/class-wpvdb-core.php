@@ -627,11 +627,7 @@ class Core {
         
         // Queue for background processing with validation
         $queue = new WPVDB_Queue();
-        $queue->push_to_queue([
-            'post_id' => $post_id,
-            'model' => Settings::get_default_model(),
-            'provider' => self::get_active_provider(),
-        ]);
+        $queue->push_to_queue(WPVDB_Queue::build_item($post_id));
         
         // Try to run the queue immediately if we're in the admin
         if (is_admin() && function_exists('as_enqueue_async_action')) {

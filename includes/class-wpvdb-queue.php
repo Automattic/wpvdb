@@ -344,7 +344,45 @@ class WPVDB_Queue {
     public static function get_batch_size() {
         return Settings::get_batch_size();
     }
-    
+
+    /**
+     * Build a queue item for a single post.
+     *
+     * @param int|string $post_id Post ID to embed, cast to int.
+     * @param array $opts {
+     *     @type string $provider Override the active provider.
+     *     @type string $model    Override the resolved model.
+     * }
+     * @return array { post_id, model, provider } for push_to_queue.
+     */
+    public static function build_item($post_id, $opts = []) {
+        $provider_override = isset($opts['provider']) && is_string($opts['provider']) && $opts['provider'] !== ''
+            ? $opts['provider']
+            : '';
+        $model_override = isset($opts['model']) && is_string($opts['model']) && $opts['model'] !== ''
+            ? $opts['model']
+            : '';
+
+        $provider = $provider_override !== '' ? $provider_override : Settings::get_active_provider();
+        if (empty($provider)) {
+            $provider = 'openai';
+        }
+
+        if ($model_override !== '') {
+            $model = $model_override;
+        } elseif ($provider_override !== '') {
+            $model = Models::get_default_model_for_provider($provider);
+        } else {
+            $model = Settings::get_default_model();
+        }
+
+        return [
+            'post_id'  => (int) $post_id,
+            'model'    => (string) $model,
+            'provider' => (string) $provider,
+        ];
+    }
+
     /**
      * Process a post - extract content, chunk, and generate embeddings
      *
