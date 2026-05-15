@@ -236,6 +236,13 @@ class Embedding_Enqueuer {
      *   - paused:   bool. If true, create row but do not schedule first page.
      */
     public static function start_job($args, $opts = []) {
+        if (\wpvdb_is_playground_runtime()) {
+            return new \WP_Error(
+                'wpvdb_enqueuer_playground_runtime',
+                'Re-embed jobs are disabled in the Playground runtime.'
+            );
+        }
+
         global $wpdb;
 
         $normalized = self::normalize_args($args);

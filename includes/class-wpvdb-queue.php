@@ -37,6 +37,10 @@ class WPVDB_Queue {
      * @return $this
      */
     public function push_to_queue($data, $batch = false) {
+        if (\wpvdb_is_playground_runtime()) {
+            return $this;
+        }
+
         // Use Action Scheduler if available
         if (function_exists('wpvdb_has_action_scheduler') && wpvdb_has_action_scheduler()) {
             // Note: we use the global function, not namespaced
@@ -62,6 +66,10 @@ class WPVDB_Queue {
      */
     public function push_batch_to_queue($items) {
         if (empty($items) || !is_array($items)) {
+            return $this;
+        }
+
+        if (\wpvdb_is_playground_runtime()) {
             return $this;
         }
         
@@ -98,6 +106,10 @@ class WPVDB_Queue {
      * @return void
      */
     private function add_to_fallback_queue($data) {
+        if (\wpvdb_is_playground_runtime()) {
+            return;
+        }
+
         $queue = get_option(self::FALLBACK_QUEUE_OPTION, []);
         $queue[] = $data;
         update_option(self::FALLBACK_QUEUE_OPTION, $queue);
@@ -115,6 +127,10 @@ class WPVDB_Queue {
      * @return void
      */
     public function process_fallback_queue($limit = 5) {
+        if (\wpvdb_is_playground_runtime()) {
+            return;
+        }
+
         $queue = get_option(self::FALLBACK_QUEUE_OPTION, []);
         
         // Nothing to do
@@ -161,6 +177,10 @@ class WPVDB_Queue {
      * @return $this
      */
     public function dispatch() {
+        if (\wpvdb_is_playground_runtime()) {
+            return $this;
+        }
+
         // For development environments, force run the scheduler immediately
         if (function_exists('as_has_scheduled_action') && 
             (as_has_scheduled_action(self::PROCESS_SINGLE_ACTION, null, 'wpvdb') || 
@@ -182,6 +202,10 @@ class WPVDB_Queue {
      * @return bool Success status
      */
     public static function process_item($item) {
+        if (\wpvdb_is_playground_runtime()) {
+            return false;
+        }
+
         // Extract data from item
         $post_id = isset($item['post_id']) ? absint($item['post_id']) : 0;
         $model = isset($item['model']) ? sanitize_text_field($item['model']) : Settings::get_default_model();

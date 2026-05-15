@@ -87,6 +87,10 @@ class Maintenance {
      * @since 1.0.13
      */
     public static function daily_maintenance() {
+        if (\wpvdb_is_playground_runtime()) {
+            return;
+        }
+
         Logger::info('Starting daily maintenance');
         $start_time = Logger::start_timer('daily_maintenance');
         
@@ -114,6 +118,10 @@ class Maintenance {
      * @since 1.0.13
      */
     public static function weekly_maintenance() {
+        if (\wpvdb_is_playground_runtime()) {
+            return;
+        }
+
         Logger::info('Starting weekly maintenance');
         $start_time = Logger::start_timer('weekly_maintenance');
         
@@ -141,6 +149,10 @@ class Maintenance {
      * @since 1.0.13
      */
     public static function monthly_maintenance() {
+        if (\wpvdb_is_playground_runtime()) {
+            return;
+        }
+
         Logger::info('Starting monthly maintenance');
         $start_time = Logger::start_timer('monthly_maintenance');
         
@@ -200,6 +212,10 @@ class Maintenance {
     private static function cleanup_orphaned_embeddings() {
         global $wpdb;
 
+        if (\wpvdb_is_sqlite()) {
+            return;
+        }
+
         $table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
         // Find embeddings whose doc_id no longer exists in wp_posts (any doc_type).
@@ -224,6 +240,10 @@ class Maintenance {
      */
     private static function update_database_statistics() {
         global $wpdb;
+
+        if (\wpvdb_is_sqlite()) {
+            return;
+        }
         
         $table_name = $wpdb->prefix . 'wpvdb_embeddings';
         
@@ -255,6 +275,10 @@ class Maintenance {
      */
     private static function optimize_database_tables() {
         global $wpdb;
+
+        if (\wpvdb_is_sqlite()) {
+            return;
+        }
         
         $table_name = $wpdb->prefix . 'wpvdb_embeddings';
         
@@ -276,6 +300,10 @@ class Maintenance {
      */
     private static function analyze_database_tables() {
         global $wpdb;
+
+        if (\wpvdb_is_sqlite()) {
+            return;
+        }
         
         $table_name = $wpdb->prefix . 'wpvdb_embeddings';
         $wpdb->query("ANALYZE TABLE {$table_name}");
@@ -316,6 +344,10 @@ class Maintenance {
      */
     private static function check_required_indexes() {
         global $wpdb;
+
+        if (\wpvdb_is_sqlite()) {
+            return;
+        }
         
         $table_name = $wpdb->prefix . 'wpvdb_embeddings';
         
@@ -344,6 +376,10 @@ class Maintenance {
      */
     private static function deep_optimize_database() {
         global $wpdb;
+
+        if (\wpvdb_is_sqlite()) {
+            return;
+        }
         
         $table_name = $wpdb->prefix . 'wpvdb_embeddings';
         
@@ -481,6 +517,10 @@ class Maintenance {
      * @return bool Success status
      */
     public static function run_maintenance_manually($type = 'daily') {
+        if (\wpvdb_is_playground_runtime()) {
+            return false;
+        }
+
         if (!current_user_can('manage_options')) {
             return false;
         }

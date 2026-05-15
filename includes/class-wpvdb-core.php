@@ -195,22 +195,26 @@ class Core {
             return new \WP_Error('embedding_error', __('API base URL is required for embedding.', 'wpvdb'));
         }
 
+        $skip_sdk = \wpvdb_is_playground_runtime();
+
         // Prefer PHP AI Client embeddings when using the default OpenAI endpoint.
-        $ai_client_embedding = self::maybe_get_embedding_via_ai_client($text, $model, $api_base, $api_key, $custom_options);
-        if (is_array($ai_client_embedding)) {
-            if (!self::is_valid_embedding($ai_client_embedding)) {
-                return new \WP_Error('embedding_error', 'AI Client returned an invalid embedding.');
+        if (!$skip_sdk) {
+            $ai_client_embedding = self::maybe_get_embedding_via_ai_client($text, $model, $api_base, $api_key, $custom_options);
+            if (is_array($ai_client_embedding)) {
+                if (!self::is_valid_embedding($ai_client_embedding)) {
+                    return new \WP_Error('embedding_error', 'AI Client returned an invalid embedding.');
+                }
+                Cache::set_embedding($text, $model, $ai_client_embedding);
+                return $ai_client_embedding;
+            } elseif (is_wp_error($ai_client_embedding)) {
+                Logger::debug(
+                    'AI Client embedding failed, falling back to HTTP request.',
+                    [
+                        'error' => $ai_client_embedding->get_error_message(),
+                        'model' => $model,
+                    ]
+                );
             }
-            Cache::set_embedding($text, $model, $ai_client_embedding);
-            return $ai_client_embedding;
-        } elseif (is_wp_error($ai_client_embedding)) {
-            Logger::debug(
-                'AI Client embedding failed, falling back to HTTP request.',
-                [
-                    'error' => $ai_client_embedding->get_error_message(),
-                    'model' => $model,
-                ]
-            );
         }
         
         $extra_headers = [];
@@ -220,6 +224,10 @@ class Core {
 
         // Try AI Client transporter first for consistency with the WP AI stack.
         try {
+            if ($skip_sdk) {
+                throw new \RuntimeException('wpvdb Playground runtime uses wp_remote_post for embedding requests.');
+            }
+
             $transporter = HttpTransporterFactory::createTransporter();
             $request     = new Request(
                 HttpMethodEnum::POST(),

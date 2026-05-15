@@ -28,50 +28,7 @@
                 </div>
             </div>
             
-            <!-- Quick Search Widget -->
-            <div class="postbox">
-                <div class="postbox-header">
-                    <h2 class="hndle"><?php esc_html_e('Semantic Search', 'wpvdb'); ?></h2>
-                </div>
-                <div class="inside">
-                    <p><?php esc_html_e('Search your content using AI-powered semantic search:', 'wpvdb'); ?></p>
-                    <form method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>">
-                        <input type="hidden" name="page" value="wpvdb-embeddings">
-                        <div class="wpvdb-search-form">
-                            <input type="search" 
-                                   name="s" 
-                                   placeholder="<?php esc_attr_e('Enter your search query...', 'wpvdb'); ?>"
-                                   class="regular-text">
-                            <button type="submit" class="button button-primary"><?php esc_html_e('Search', 'wpvdb'); ?></button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            
-            <!-- Quick Actions Widget -->
-            <div class="postbox">
-                <div class="postbox-header">
-                    <h2 class="hndle"><?php esc_html_e('Quick Actions', 'wpvdb'); ?></h2>
-                </div>
-                <div class="inside">
-                    <div class="wpvdb-action-buttons">
-                        <a href="<?php echo esc_url(admin_url('admin.php?page=wpvdb-embeddings')); ?>" class="button">
-                            <span class="dashicons dashicons-database-view"></span>
-                            <?php esc_html_e('Manage Embeddings', 'wpvdb'); ?>
-                        </a>
-                        
-                        <a href="<?php echo esc_url(admin_url('admin.php?page=wpvdb-settings')); ?>" class="button">
-                            <span class="dashicons dashicons-admin-settings"></span>
-                            <?php esc_html_e('Configure Settings', 'wpvdb'); ?>
-                        </a>
-                        
-                        <a href="<?php echo esc_url(admin_url('admin.php?page=wpvdb-embeddings#bulk-embed')); ?>" class="button">
-                            <span class="dashicons dashicons-update"></span>
-                            <?php esc_html_e('Bulk Embed Content', 'wpvdb'); ?>
-                        </a>
-                    </div>
-                </div>
-            </div>
+            <?php do_action('wpvdb_dashboard_widgets', $admin); ?>
         </div>
     </div>
 </div>
@@ -130,4 +87,4 @@
     margin-right: 5px;
     line-height: 1;
 }
-</style> 
+</style>

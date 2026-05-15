@@ -58,6 +58,12 @@ class Database {
     public function get_db_type() {
         try {
             if (null === $this->db_type) {
+                if (\wpvdb_is_sqlite()) {
+                    $this->db_type = 'sqlite';
+                    Logger::info('Database type determined', ['type' => $this->db_type]);
+                    return $this->db_type;
+                }
+
                 global $wpdb;
                 $version = $wpdb->get_var('SELECT VERSION()');
                 Logger::debug('Database version detected', ['version' => $version]);
@@ -69,6 +75,27 @@ class Database {
         } catch (\Exception $e) {
             Logger::log_exception($e, 'Failed to detect database type');
             return 'unknown';
+        }
+    }
+
+    /**
+     * Get a displayable database version string.
+     *
+     * @return string
+     */
+    public function get_db_version() {
+        global $wpdb;
+
+        try {
+            if (\wpvdb_is_sqlite()) {
+                $sqlite_version = (string) $wpdb->get_var('SELECT sqlite_version()');
+                return $sqlite_version !== '' ? sprintf('SQLite %s', $sqlite_version) : 'SQLite';
+            }
+
+            return (string) $wpdb->get_var('SELECT VERSION()');
+        } catch (\Exception $e) {
+            Logger::log_exception($e, 'Failed to detect database version');
+            return '';
         }
     }
 
@@ -98,6 +125,11 @@ class Database {
         global $wpdb;
 
         try {
+            if (\wpvdb_is_sqlite()) {
+                $this->has_vector_support = false;
+                return false;
+            }
+
             // If we've already determined vector support, return cached result
             if (isset($this->has_vector_support)) {
                 return $this->has_vector_support;
@@ -390,6 +422,24 @@ class Database {
      */
     public function run_diagnostics() {
         global $wpdb;
+
+        if (\wpvdb_is_sqlite()) {
+            $sqlite_version = '';
+            try {
+                $sqlite_version = (string) $wpdb->get_var('SELECT sqlite_version()');
+            } catch (\Exception $e) {
+                $sqlite_version = '';
+            }
+
+            return [
+                'db_type'            => 'sqlite',
+                'db_version'         => $sqlite_version !== '' ? sprintf('SQLite %s', $sqlite_version) : 'SQLite',
+                'has_vector_support' => false,
+                'fallbacks_enabled'  => $this->are_fallbacks_enabled(),
+                'playground'         => \wpvdb_is_playground_runtime(),
+                'note'               => __('Running on SQLite. Native VECTOR is unavailable; embeddings use the LONGTEXT JSON fallback.', 'wpvdb'),
+            ];
+        }
         
         $diagnostics = [];
         

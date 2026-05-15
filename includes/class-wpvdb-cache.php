@@ -54,27 +54,29 @@ class Cache {
     /**
      * Get cached query result
      *
-     * @param string $query_text Query text
-     * @param string $model Model used
-     * @param int $limit Result limit
+     * @param string      $query_text        Query text.
+     * @param string      $model             Model used.
+     * @param int         $limit             Result limit.
+     * @param string|null $key_seed_override Optional non-text cache seed.
      * @return array|false Query results or false if not cached
      */
-    public static function get_query_result($query_text, $model, $limit) {
-        $cache_key = self::get_query_cache_key($query_text, $model, $limit);
+    public static function get_query_result($query_text, $model, $limit, $key_seed_override = null) {
+        $cache_key = self::get_query_cache_key($query_text, $model, $limit, $key_seed_override);
         return wp_cache_get($cache_key, self::CACHE_GROUP);
     }
     
     /**
      * Cache a query result
      *
-     * @param string $query_text Query text
-     * @param string $model Model used
-     * @param int $limit Result limit
-     * @param array $results Query results
+     * @param string      $query_text        Query text.
+     * @param string      $model             Model used.
+     * @param int         $limit             Result limit.
+     * @param array       $results           Query results.
+     * @param string|null $key_seed_override Optional non-text cache seed.
      * @return bool Success
      */
-    public static function set_query_result($query_text, $model, $limit, $results) {
-        $cache_key = self::get_query_cache_key($query_text, $model, $limit);
+    public static function set_query_result($query_text, $model, $limit, $results, $key_seed_override = null) {
+        $cache_key = self::get_query_cache_key($query_text, $model, $limit, $key_seed_override);
         $expiration = self::EXPIRATION_TIMES['query_result'];
         
         return wp_cache_set($cache_key, $results, self::CACHE_GROUP, $expiration);
@@ -137,6 +139,7 @@ class Cache {
         }
         update_option('wpvdb_query_cache_version', $v, false);
         wp_cache_set('wpvdb_query_cache_version', $v, self::CACHE_GROUP);
+        wp_cache_delete('db_stats', self::CACHE_GROUP);
     }
 
     /**
@@ -179,9 +182,16 @@ class Cache {
      * @param int $limit Result limit
      * @return string Cache key
      */
-    private static function get_query_cache_key($query_text, $model, $limit) {
-        // Use hash to avoid very long cache keys
-        $query_hash = hash('sha256', $query_text);
+    private static function get_query_cache_key($query_text, $model, $limit, $key_seed_override = null) {
+        if ($key_seed_override !== null && $key_seed_override !== '') {
+            $query_hash = (string) $key_seed_override;
+            if (strlen($query_hash) > 128) {
+                $query_hash = hash('sha256', $query_hash);
+            }
+        } else {
+            // Use hash to avoid very long cache keys
+            $query_hash = hash('sha256', (string) $query_text);
+        }
         // Prefix with the current cache version so invalidate_query_cache()
         // orphans prior entries without needing to enumerate keys.
         $v = self::get_query_cache_version();
@@ -210,6 +220,8 @@ class Cache {
         // WordPress doesn't have wp_cache_flush_group, so we'll use invalidation timestamps
         $timestamp = time();
         wp_cache_set('cache_invalidation_timestamp', $timestamp, self::CACHE_GROUP, DAY_IN_SECONDS);
+        self::invalidate_query_cache();
+        wp_cache_delete('db_stats', self::CACHE_GROUP);
         
         if (defined('WP_DEBUG') && WP_DEBUG) {
             if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB CACHE] Flushed all caches'); }

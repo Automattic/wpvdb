@@ -109,11 +109,13 @@ class REST {
             return true;
         }
         
+        $required_capability = self::get_required_capability();
+
         // Check user capabilities
-        if (!current_user_can(apply_filters('wpvdb_required_capability', 'edit_posts'))) {
+        if (!current_user_can($required_capability)) {
             Logger::warning('Access denied - insufficient permissions', [
                 'user_id' => get_current_user_id(),
-                'required_capability' => 'edit_posts'
+                'required_capability' => $required_capability
             ]);
             
             if (function_exists('wp_is_application_passwords_available') && wp_is_application_passwords_available()) {
@@ -133,6 +135,15 @@ class REST {
         
         Logger::debug('Access granted', ['user_id' => get_current_user_id()]);
         return true;
+    }
+
+    /**
+     * Required capability for protected REST endpoints.
+     *
+     * @return string
+     */
+    private static function get_required_capability() {
+        return (string) apply_filters('wpvdb_required_capability', 'edit_posts');
     }
 
     /**
@@ -363,16 +374,28 @@ class REST {
         
         self::init_database();
         
-        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] handle_query called'); }
+        if (\wpvdb_should_log_to_error_log('debug', 'handle_query called')) {
+            error_log('[WPVDB DEBUG] handle_query called');
+        }
         $data = $request->get_json_params();
+        if (!is_array($data)) {
+            $data = [];
+        }
         
         // Security logging
         Security::log_security_event('query_request', [
             'query_length' => isset($data['query']) ? strlen($data['query']) : 0,
             'limit' => isset($data['limit']) ? $data['limit'] : 10
         ]);
+
+        $has_vector_payload = isset($data['vector']) && is_array($data['vector']);
+        $has_provided_vector = $has_vector_payload && apply_filters('wpvdb_query_accept_vector_field', false, $request);
+
+        if ($has_provided_vector && !current_user_can(self::get_required_capability())) {
+            return new \WP_Error('rest_forbidden_vector_query', __('You do not have permission to query with a provided vector.', 'wpvdb'), ['status' => 403]);
+        }
         
-        if (empty($data['query'])) {
+        if (!$has_provided_vector && empty($data['query'])) {
             return new \WP_Error('missing_query', __('Query text is required', 'wpvdb'), ['status' => 400]);
         }
         
@@ -384,13 +407,38 @@ class REST {
             10
         );
         
-        $text = sanitize_textarea_field($data['query']);
+        $text = isset($data['query']) ? sanitize_textarea_field($data['query']) : '';
         $model = isset($data['model']) ? sanitize_text_field($data['model']) : Settings::get_default_model();
+        $provider = isset($data['provider']) ? sanitize_text_field($data['provider']) : Settings::get_active_provider();
+        $api_base = $has_provided_vector ? '' : Settings::get_api_base_for_provider($provider);
+        $cache_key_override = null;
+        $normalized_vector = null;
+
+        if ($has_provided_vector) {
+            $normalized_vector = self::validate_provided_query_vector($data['vector']);
+            if (is_wp_error($normalized_vector)) {
+                return $normalized_vector;
+            }
+
+            $vector_json = wp_json_encode($normalized_vector);
+            $cache_key_override = 'vec:' . hash('sha256', $vector_json !== false ? $vector_json : '');
+        } else {
+            $text_cache_seed = wp_json_encode([
+                'query' => $text,
+                'provider' => $provider,
+                'api_base' => $api_base,
+            ]);
+            $cache_key_override = 'text:' . hash('sha256', $text_cache_seed !== false ? $text_cache_seed : $text);
+        }
 
         // Check cache first for expensive queries
-        $cached_result = Cache::get_query_result($text, $model, $limit);
+        $cached_result = Cache::get_query_result($text, $model, $limit, $cache_key_override);
         if ($cached_result !== false) {
-            Logger::debug('Using cached query result', ['query_length' => strlen($text), 'limit' => $limit]);
+            Logger::debug('Using cached query result', [
+                'query_length' => strlen($text),
+                'limit' => $limit,
+                'mode' => $has_provided_vector ? 'vector' : 'text',
+            ]);
             return rest_ensure_response($cached_result);
         }
         
@@ -401,33 +449,36 @@ class REST {
             global $wpdb;
             $table_name = $wpdb->prefix . 'wpvdb_embeddings';
             
-            Logger::debug('Processing query request', ['query_length' => strlen($text), 'limit' => $limit]);
-            
-            // Determine which model to use (from settings or provided in request) 
-            $provider = isset($data['provider']) ? sanitize_text_field($data['provider']) : Settings::get_active_provider();
-            
-            Logger::debug('Using configuration', ['model' => $model, 'provider' => $provider]);
-            
-            // Get API key from settings based on provider
-            $api_key = Settings::get_api_key_for_provider($provider);
-            if (empty($api_key)) {
-                Logger::error('API key not configured', ['provider' => $provider]);
-                return new \WP_Error('missing_api_key', __('API key not configured for the selected provider', 'wpvdb'), ['status' => 400]);
-            }
-            
-            // Get API base URL
-            $api_base = Settings::get_api_base_for_provider($provider);
-            if (empty($api_base)) {
-                Logger::error('API base URL not configured', ['provider' => $provider]);
-                return new \WP_Error('missing_api_base', __('API base URL not configured for the selected provider', 'wpvdb'), ['status' => 400]);
-            }
-            
-            Logger::debug('Generating embedding', ['model' => $model, 'text_length' => strlen($text)]);
-            
-            $embedding = Core::get_embedding($text, $model, $api_base, $api_key);
-            if (is_wp_error($embedding)) {
-                Logger::error('Failed to generate embedding', ['error' => $embedding->get_error_message(), 'model' => $model]);
-                return $embedding;
+            Logger::debug('Processing query request', [
+                'query_length' => strlen($text),
+                'limit' => $limit,
+                'mode' => $has_provided_vector ? 'vector' : 'text',
+            ]);
+
+            if ($has_provided_vector) {
+                $embedding = $normalized_vector;
+            } else {
+                Logger::debug('Using configuration', ['model' => $model, 'provider' => $provider]);
+
+                // Get API key from settings based on provider
+                $api_key = Settings::get_api_key_for_provider($provider);
+                if (empty($api_key)) {
+                    Logger::error('API key not configured', ['provider' => $provider]);
+                    return new \WP_Error('missing_api_key', __('API key not configured for the selected provider', 'wpvdb'), ['status' => 400]);
+                }
+
+                if (empty($api_base)) {
+                    Logger::error('API base URL not configured', ['provider' => $provider]);
+                    return new \WP_Error('missing_api_base', __('API base URL not configured for the selected provider', 'wpvdb'), ['status' => 400]);
+                }
+
+                Logger::debug('Generating embedding', ['model' => $model, 'text_length' => strlen($text)]);
+
+                $embedding = Core::get_embedding($text, $model, $api_base, $api_key);
+                if (is_wp_error($embedding)) {
+                    Logger::error('Failed to generate embedding', ['error' => $embedding->get_error_message(), 'model' => $model]);
+                    return $embedding;
+                }
             }
             
             Logger::debug('Embedding generated successfully', ['dimensions' => count($embedding)]);
@@ -598,11 +649,11 @@ class REST {
             $response_data = [
                 'results' => $results,
                 'count' => count($results),
-                'query' => $text
+                'query' => $has_provided_vector ? '' : $text
             ];
             
             // Cache the result for future requests
-            Cache::set_query_result($text, $model, $limit, $response_data);
+            Cache::set_query_result($text, $model, $limit, $response_data, $cache_key_override);
             
             // Log overall performance
             Logger::end_timer('query_processing', $start_time, [
@@ -634,7 +685,7 @@ class REST {
         $has_vector = self::$database->has_native_vector_support();
         
         // Get database version
-        $db_version = $wpdb->get_var("SELECT VERSION()");
+        $db_version = self::$database->get_db_version();
         
         // Get table stats if it exists
         $total_embeddings = 0;
@@ -688,7 +739,7 @@ class REST {
 
         if (!Core::is_valid_embedding($embedding)) {
             if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] insert_embedding_row rejected invalid embedding for doc_id=' . $doc_id . ' chunk_index=' . $chunk_index); }
-            return new \WP_Error('embedding_invalid', 'Refused to store an embedding that is empty, non-finite, or zero-magnitude.', ['doc_id' => $doc_id, 'chunk_index' => $chunk_index]);
+            return new \WP_Error('embedding_invalid', 'Refused to store an embedding that is empty, non-finite, or zero-magnitude.', ['doc_id' => $doc_id, 'chunk_index' => $chunk_index, 'status' => 400]);
         }
 
         self::init_database();
@@ -785,6 +836,48 @@ class REST {
     }
 
     /**
+     * Validate and normalize a caller supplied query vector.
+     *
+     * @param array $vector Raw vector payload.
+     * @return array|\WP_Error Normalized float vector or error.
+     */
+    private static function validate_provided_query_vector($vector) {
+        if (!is_array($vector)) {
+            return new \WP_Error('invalid_vector', __('Provided vector must be an array.', 'wpvdb'), ['status' => 400]);
+        }
+
+        if (count($vector) !== WPVDB_DEFAULT_EMBED_DIM) {
+            return new \WP_Error('invalid_vector', sprintf(
+                /* translators: %d is the required embedding dimension */
+                __('Provided vector must have exactly %d dimensions.', 'wpvdb'),
+                (int) WPVDB_DEFAULT_EMBED_DIM
+            ), ['status' => 400]);
+        }
+
+        $normalized = [];
+        $sum_sq = 0.0;
+        foreach ($vector as $value) {
+            if (!is_numeric($value)) {
+                return new \WP_Error('invalid_vector', __('Provided vector contains non-numeric values.', 'wpvdb'), ['status' => 400]);
+            }
+
+            $float = (float) $value;
+            if (!is_finite($float)) {
+                return new \WP_Error('invalid_vector', __('Provided vector contains non-finite values.', 'wpvdb'), ['status' => 400]);
+            }
+
+            $normalized[] = $float;
+            $sum_sq += $float * $float;
+        }
+
+        if ($sum_sq <= 1e-30) {
+            return new \WP_Error('invalid_vector', __('Provided vector must have non-zero magnitude.', 'wpvdb'), ['status' => 400]);
+        }
+
+        return $normalized;
+    }
+
+    /**
      * Helper for cosine distance calculation in PHP (used as fallback).
      */
     public static function cosine_distance($vec1, $vec2) {
@@ -860,6 +953,14 @@ class REST {
      * - In debug mode, may process the queue immediately.
      */
     public static function handle_reembed(WP_REST_Request $request) {
+        if (\wpvdb_is_playground_runtime()) {
+            return rest_ensure_response([
+                'success' => false,
+                'message' => __('Re-embedding is disabled in the Playground runtime. Existing embeddings were not touched.', 'wpvdb'),
+                'playground_runtime' => true,
+            ]);
+        }
+
         $post_id = absint($request->get_param('post_id'));
         
         if (!$post_id) {

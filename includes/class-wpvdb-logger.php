@@ -157,8 +157,8 @@ class Logger {
             'user_agent' => isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field($_SERVER['HTTP_USER_AGENT']) : '',
         ];
         
-        // Log to WordPress error log if debug is enabled
-        if (defined('WP_DEBUG') && WP_DEBUG) {
+        // Log to WordPress error log if debug is enabled.
+        if (\wpvdb_should_log_to_error_log($level, $message, $context)) {
             $formatted_message = sprintf(
                 '[WPVDB %s] %s %s',
                 strtoupper($level),

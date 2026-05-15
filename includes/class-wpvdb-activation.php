@@ -187,8 +187,14 @@ class Activation {
     public static function upgrade_schema() {
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         self::init_database();
+
+        if (!self::$database->has_native_vector_support() && !self::$database->are_fallbacks_enabled()) {
+            return false;
+        }
+
         dbDelta(self::get_schema_sql());
         self::add_vector_index_to_existing_table();
+        return true;
     }
     
     /**
@@ -196,6 +202,10 @@ class Activation {
      */
     public static function add_vector_index_to_existing_table() {
         global $wpdb;
+
+        if (\wpvdb_is_sqlite()) {
+            return false;
+        }
         
         try {
             self::init_database();

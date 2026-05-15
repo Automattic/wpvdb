@@ -698,12 +698,16 @@ class Settings {
         $settings = get_option('wpvdb_settings', []);
         
         if (!is_array($settings)) {
-            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB CRITICAL: Invalid settings format - not an array'); }
+            if (\wpvdb_should_log_to_error_log('debug', 'invalid_settings_format')) {
+                error_log('WPVDB CRITICAL: Invalid settings format - not an array');
+            }
             return false;
         }
         
         $has_pending = (!empty($settings['pending_provider']) || !empty($settings['pending_model']));
-        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('WPVDB CRITICAL: Has pending provider change: ' . ($has_pending ? 'YES' : 'NO')); }
+        if (\wpvdb_should_log_to_error_log('debug', 'has_pending_provider_change')) {
+            error_log('WPVDB CRITICAL: Has pending provider change: ' . ($has_pending ? 'YES' : 'NO'));
+        }
         
         return $has_pending;
     }

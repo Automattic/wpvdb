@@ -11,6 +11,11 @@ if (defined('WPVDB_DEBUG')) {
 
 $active_provider = \WPVDB\Settings::get_active_provider();
 $api_key = \WPVDB\Settings::get_api_key();
+$search_query = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
+$search_enabled = apply_filters('wpvdb_embeddings_search_enabled', true, $search_query);
+if (!$search_enabled) {
+    $search_query = '';
+}
     
     if ($show_debug) {
         // Get and display settings information
@@ -43,6 +48,7 @@ $api_key = \WPVDB\Settings::get_api_key();
     ?>
     
     <div class="tablenav top">
+        <?php if ($search_enabled) : ?>
         <div class="alignleft actions">
             <form method="get" class="search-form">
                 <input type="hidden" name="page" value="wpvdb-embeddings">
@@ -50,25 +56,25 @@ $api_key = \WPVDB\Settings::get_api_key();
                 <input type="search" 
                        id="wpvdb-semantic-search"
                        name="s" 
-                       value="<?php echo isset($_GET['s']) ? esc_attr($_GET['s']) : ''; ?>" 
+                       value="<?php echo esc_attr($search_query); ?>"
                        placeholder="<?php esc_attr_e('Search embeddings...', 'wpvdb'); ?>"
                        class="regular-text">
                 <input type="submit" class="button" value="<?php esc_attr_e('Semantic Search', 'wpvdb'); ?>">
             </form>
         </div>
+        <?php endif; ?>
         
+        <?php if (apply_filters('wpvdb_render_bulk_embed_ui', true, 'embeddings')) : ?>
         <div class="alignright">
             <button id="wpvdb-bulk-embed-button" class="button button-primary">
                 <?php esc_html_e('Bulk Generate Embeddings', 'wpvdb'); ?>
             </button>
         </div>
+        <?php endif; ?>
         <br class="clear">
     </div>
     
     <?php 
-    // Check if we have a search query
-    $search_query = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
-    
     // If we have a search query, use the semantic search
     $search_results = [];
     if (!empty($search_query)) {
@@ -433,6 +439,7 @@ $api_key = \WPVDB\Settings::get_api_key();
         </div>
     </div>
     
+    <?php if (apply_filters('wpvdb_render_bulk_embed_ui', true, 'embeddings')) : ?>
     <div id="wpvdb-bulk-embed-modal" class="wpvdb-modal" style="display:none;">
         <div class="wpvdb-modal-content">
             <span class="wpvdb-modal-close">&times;</span>
@@ -525,6 +532,7 @@ $api_key = \WPVDB\Settings::get_api_key();
             </div>
         </div>
     </div>
+    <?php endif; ?>
 </div>
 
 <style>
