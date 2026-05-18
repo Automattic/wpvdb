@@ -10,7 +10,9 @@
         "wordpress/wp-ai-client": "^0.2.1"
     },
     "require-dev": {
+        "dealerdirect/phpcodesniffer-composer-installer": "*",
         "php-stubs/wordpress-stubs": "^6.7",
+        "phpcompatibility/phpcompatibility-wp": "*",
         "phpunit/phpunit": "^9.5",
         "wp-phpunit/wp-phpunit": "^6.0",
         "yoast/phpunit-polyfills": "^1.0",
@@ -43,7 +45,8 @@
     },
     "config": {
         "allow-plugins": {
-            "dealerdirect/phpcodesniffer-composer-installer": true
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "php-http/discovery": true
         }
     }
 }
