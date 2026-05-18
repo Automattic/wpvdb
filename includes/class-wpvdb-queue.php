@@ -36,7 +36,7 @@ class WPVDB_Queue {
 	 * @param bool  $batch Whether to use batch processing.
 	 * @return $this
 	 */
-	public function push_to_queue( $data, $batch = false ) {
+	public function push_to_queue( $data, $batch = false ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		if ( \wpvdb_is_playground_runtime() ) {
 			return $this;
 		}

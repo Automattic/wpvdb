@@ -448,23 +448,21 @@ class Admin {
 						$input['pending_provider'] = '';
 						$input['pending_model']    = '';
 					}
-				} else {
+				} elseif ( $current_settings['active_provider'] === 'automattic' ) {
 					// Disconnection - if active provider is automattic, switch to OpenAI if available.
-					if ( $current_settings['active_provider'] === 'automattic' ) {
-						// Check if OpenAI is configured.
-						if ( ! empty( $current_settings['openai']['api_key'] ) ) {
-							$input['provider']         = 'openai';
-							$input['active_provider']  = 'openai';
-							$input['active_model']     = $current_settings['openai']['default_model'];
-							$input['pending_provider'] = '';
-							$input['pending_model']    = '';
-						} else {
-							// Neither provider is configured, clear active.
-							$input['active_provider']  = '';
-							$input['active_model']     = '';
-							$input['pending_provider'] = '';
-							$input['pending_model']    = '';
-						}
+					// Check if OpenAI is configured.
+					if ( ! empty( $current_settings['openai']['api_key'] ) ) {
+						$input['provider']         = 'openai';
+						$input['active_provider']  = 'openai';
+						$input['active_model']     = $current_settings['openai']['default_model'];
+						$input['pending_provider'] = '';
+						$input['pending_model']    = '';
+					} else {
+						// Neither provider is configured, clear active.
+						$input['active_provider']  = '';
+						$input['active_model']     = '';
+						$input['pending_provider'] = '';
+						$input['pending_model']    = '';
 					}
 				}
 
@@ -1106,9 +1104,6 @@ class Admin {
 				$settings['openai']['default_model'] = $settings['active_model'];
 			} elseif ( $settings['active_provider'] === 'automattic' ) {
 				$settings['automattic']['default_model'] = $settings['active_model'];
-			} elseif ( $settings['active_provider'] === 'specter' ) {
-				// For specter, we don't need to update a provider-specific model setting
-				// as it's handled differently.
 			}
 
 			// Clear pending provider/model.
@@ -1426,9 +1421,8 @@ class Admin {
 				<p><strong><?php esc_html_e( 'Success!', 'wpvdb' ); ?></strong> <?php esc_html_e( 'Your Automattic AI account has been connected successfully.', 'wpvdb' ); ?></p>
 			</div>
 			<?php
-		}
-		// Also keep the original check for backward compatibility.
-		elseif ( isset( $_GET['page'] ) && $_GET['page'] === 'wpvdb-settings' && isset( $_GET['automattic_connected'] ) ) {
+		} elseif ( isset( $_GET['page'] ) && $_GET['page'] === 'wpvdb-settings' && isset( $_GET['automattic_connected'] ) ) {
+			// Also keep the original check for backward compatibility.
 			?>
 			<div class="notice notice-success is-dismissible">
 				<p><strong><?php esc_html_e( 'Success!', 'wpvdb' ); ?></strong> <?php esc_html_e( 'Your Automattic AI account has been connected successfully.', 'wpvdb' ); ?></p>

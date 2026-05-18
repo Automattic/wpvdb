@@ -36,10 +36,12 @@ $wpdb->show_errors = false;
 // Get statistics only if table exists.
 if ( $table_exists ) {
 	try {
-		$total_embeddings = $wpdb->get_var( "SELECT COUNT(*) FROM {$table_name}" ) ?: 0;
-		$total_docs       = $wpdb->get_var( "SELECT COUNT(DISTINCT doc_id) FROM {$table_name}" ) ?: 0;
+		$total_embeddings = $wpdb->get_var( "SELECT COUNT(*) FROM {$table_name}" );
+		$total_embeddings = $total_embeddings ? $total_embeddings : 0;
+		$total_docs       = $wpdb->get_var( "SELECT COUNT(DISTINCT doc_id) FROM {$table_name}" );
+		$total_docs       = $total_docs ? $total_docs : 0;
 		$storage_used     = $wpdb->get_var( "SELECT SUM(LENGTH(embedding)) FROM {$table_name}" );
-		$storage_used     = size_format( $storage_used ?: 0 );
+		$storage_used     = size_format( $storage_used ? $storage_used : 0 );
 	} catch ( \Exception $e ) {
 		// Handle exception.
 		$total_embeddings = 0;
@@ -79,9 +81,11 @@ switch ( $tab ) {
 						$per_page,
 						$offset
 					)
-				) ?: array();
+				);
+				$embeddings = $embeddings ? $embeddings : array();
 
-				$total_embeddings = $wpdb->get_var( "SELECT COUNT(*) FROM {$table_name}" ) ?: 0;
+				$total_embeddings = $wpdb->get_var( "SELECT COUNT(*) FROM {$table_name}" );
+				$total_embeddings = $total_embeddings ? $total_embeddings : 0;
 				$total_pages      = ceil( $total_embeddings / $per_page );
 			} catch ( \Exception $e ) {
 				// Handle exception.
@@ -122,19 +126,26 @@ switch ( $tab ) {
 		if ( $table_exists ) {
 			try {
 				// Update db_info with actual values.
-				$db_info['total_embeddings'] = $wpdb->get_var( "SELECT COUNT(*) FROM {$table_name}" ) ?: 0;
-				$db_info['total_documents']  = $wpdb->get_var( "SELECT COUNT(DISTINCT doc_id) FROM {$table_name}" ) ?: 0;
-				$db_info['storage_used']     = size_format( $wpdb->get_var( "SELECT SUM(LENGTH(embedding)) FROM {$table_name}" ) ?: 0 );
+				$db_info['total_embeddings'] = $wpdb->get_var( "SELECT COUNT(*) FROM {$table_name}" );
+				$db_info['total_embeddings'] = $db_info['total_embeddings'] ? $db_info['total_embeddings'] : 0;
+				$db_info['total_documents']  = $wpdb->get_var( "SELECT COUNT(DISTINCT doc_id) FROM {$table_name}" );
+				$db_info['total_documents']  = $db_info['total_documents'] ? $db_info['total_documents'] : 0;
+				$storage_used                = $wpdb->get_var( "SELECT SUM(LENGTH(embedding)) FROM {$table_name}" );
+				$db_info['storage_used']     = size_format( $storage_used ? $storage_used : 0 );
 
 				// Update db_stats with actual values.
 				$db_stats['total_embeddings']       = $db_info['total_embeddings'];
 				$db_stats['total_docs']             = $db_info['total_documents'];
 				$db_stats['storage_used']           = $db_info['storage_used'];
-				$db_stats['avg_embedding_size']     = size_format( $wpdb->get_var( "SELECT AVG(LENGTH(embedding)) FROM {$table_name}" ) ?: 0 );
-				$db_stats['largest_embedding']      = size_format( $wpdb->get_var( "SELECT MAX(LENGTH(embedding)) FROM {$table_name}" ) ?: 0 );
-				$db_stats['avg_chunk_content_size'] = size_format( $wpdb->get_var( "SELECT AVG(LENGTH(chunk_content)) FROM {$table_name}" ) ?: 0 );
+				$avg_embedding_size                 = $wpdb->get_var( "SELECT AVG(LENGTH(embedding)) FROM {$table_name}" );
+				$db_stats['avg_embedding_size']     = size_format( $avg_embedding_size ? $avg_embedding_size : 0 );
+				$largest_embedding                  = $wpdb->get_var( "SELECT MAX(LENGTH(embedding)) FROM {$table_name}" );
+				$db_stats['largest_embedding']      = size_format( $largest_embedding ? $largest_embedding : 0 );
+				$avg_chunk_content_size             = $wpdb->get_var( "SELECT AVG(LENGTH(chunk_content)) FROM {$table_name}" );
+				$db_stats['avg_chunk_content_size'] = size_format( $avg_chunk_content_size ? $avg_chunk_content_size : 0 );
 			} catch ( \Exception $e ) {
 				// In case of error, we already have default values.
+				unset( $e );
 			}
 		}
 
@@ -142,7 +153,8 @@ switch ( $tab ) {
 		$table_structure = array();
 		if ( $table_exists ) {
 			try {
-				$table_structure = $wpdb->get_results( "DESCRIBE {$table_name}" ) ?: array();
+				$table_structure = $wpdb->get_results( "DESCRIBE {$table_name}" );
+				$table_structure = $table_structure ? $table_structure : array();
 			} catch ( \Exception $e ) {
 				$table_structure = array();
 			}

@@ -38,9 +38,9 @@
 		echo '<ul>';
 		echo '<li><strong>Active Provider:</strong> ' . esc_html( $active_provider ) . '</li>';
 		echo '<li><strong>API Key Set:</strong> ' . ( empty( $api_key ) ? 'No' : 'Yes' ) . '</li>';
-		echo '<li><strong>Default Model:</strong> ' . esc_html( $model ?: 'Not set' ) . '</li>';
-		echo '<li><strong>API Base URL:</strong> ' . esc_html( $api_base ?: 'Not set' ) . '</li>';
-		echo '<li><strong>Database Type:</strong> ' . esc_html( $db_type ?: 'Unknown' ) . '</li>';
+		echo '<li><strong>Default Model:</strong> ' . esc_html( $model ? $model : 'Not set' ) . '</li>';
+		echo '<li><strong>API Base URL:</strong> ' . esc_html( $api_base ? $api_base : 'Not set' ) . '</li>';
+		echo '<li><strong>Database Type:</strong> ' . esc_html( $db_type ? $db_type : 'Unknown' ) . '</li>';
 		echo '<li><strong>Native Vector Support:</strong> ' . esc_html( $has_vector_support ) . '</li>';
 		echo '</ul>';
 		echo '</div>';
@@ -78,7 +78,6 @@
 	// If we have a search query, use the semantic search.
 	$search_results = array();
 	if ( ! empty( $search_query ) ) {
-		global $wpdb;
 		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
 		// Initialize timing for search performance tracking.
@@ -354,11 +353,11 @@
 						<td class="column-document">
 							<?php if ( $post_edit_link ) : ?>
 								<a href="<?php echo esc_url( $post_edit_link ); ?>" target="_blank">
-									<?php echo esc_html( $post_title ?: __( '(No title)', 'wpvdb' ) ); ?>
+									<?php echo esc_html( $post_title ? $post_title : __( '(No title)', 'wpvdb' ) ); ?>
 									<span class="dashicons dashicons-external"></span>
 								</a>
 							<?php else : ?>
-								<?php echo esc_html( $post_title ?: __( '(No title)', 'wpvdb' ) ); ?>
+								<?php echo esc_html( $post_title ? $post_title : __( '(No title)', 'wpvdb' ) ); ?>
 							<?php endif; ?>
 							<div class="row-actions">
 								<span class="id"><?php printf( __( 'Post ID: %d', 'wpvdb' ), $embedding->doc_id ); ?></span>

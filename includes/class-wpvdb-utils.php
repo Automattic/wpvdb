@@ -17,17 +17,17 @@ class Utils {
 	 * Validate and sanitize a positive integer
 	 *
 	 * @since 1.0.13
-	 * @param mixed $value Value to validate.
-	 * @param int   $min   Minimum allowed value.
-	 * @param int   $max   Maximum allowed value.
-	 * @param int   $default Default value if validation fails.
+	 * @param mixed $value         Value to validate.
+	 * @param int   $min           Minimum allowed value.
+	 * @param int   $max           Maximum allowed value.
+	 * @param int   $default_value Default value if validation fails.
 	 * @return int Validated integer
 	 */
-	public static function validate_positive_int( $value, $min = 1, $max = PHP_INT_MAX, $default = 1 ) {
+	public static function validate_positive_int( $value, $min = 1, $max = PHP_INT_MAX, $default_value = 1 ) {
 		$int_value = absint( $value );
 
 		if ( $int_value < $min ) {
-			return $default;
+			return $default_value;
 		}
 
 		if ( $int_value > $max ) {
@@ -41,25 +41,25 @@ class Utils {
 	 * Validate and sanitize a floating point number
 	 *
 	 * @since 1.0.13
-	 * @param mixed $value Value to validate.
-	 * @param float $min   Minimum allowed value.
-	 * @param float $max   Maximum allowed value.
-	 * @param float $default Default value if validation fails.
+	 * @param mixed $value         Value to validate.
+	 * @param float $min           Minimum allowed value.
+	 * @param float $max           Maximum allowed value.
+	 * @param float $default_value Default value if validation fails.
 	 * @return float Validated float
 	 */
-	public static function validate_float( $value, $min = -PHP_FLOAT_MAX, $max = PHP_FLOAT_MAX, $default = 0.0 ) {
+	public static function validate_float( $value, $min = -PHP_FLOAT_MAX, $max = PHP_FLOAT_MAX, $default_value = 0.0 ) {
 		if ( ! is_numeric( $value ) ) {
-			return $default;
+			return $default_value;
 		}
 
 		$float_value = floatval( $value );
 
 		if ( ! is_finite( $float_value ) ) {
-			return $default;
+			return $default_value;
 		}
 
 		if ( $float_value < $min ) {
-			return $default;
+			return $default_value;
 		}
 
 		if ( $float_value > $max ) {

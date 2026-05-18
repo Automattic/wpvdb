@@ -338,11 +338,15 @@ class REST {
 		}
 
 		$doc_id        = absint( $request->get_param( 'doc_id' ) );
-		$chunk_id      = sanitize_text_field( $request->get_param( 'chunk_id' ) ) ?: 'chunk-0';
-		$chunk_content = sanitize_textarea_field( $request->get_param( 'chunk_content' ) ) ?: '';
+		$chunk_id      = sanitize_text_field( $request->get_param( 'chunk_id' ) );
+		$chunk_id      = $chunk_id ? $chunk_id : 'chunk-0';
+		$chunk_content = sanitize_textarea_field( $request->get_param( 'chunk_content' ) );
+		$chunk_content = $chunk_content ? $chunk_content : '';
 		$embedding     = $request->get_param( 'embedding' );
-		$summary       = sanitize_textarea_field( $request->get_param( 'summary' ) ) ?: '';
-		$model         = sanitize_text_field( $request->get_param( 'model' ) ) ?: Settings::get_default_model();
+		$summary       = sanitize_textarea_field( $request->get_param( 'summary' ) );
+		$summary       = $summary ? $summary : '';
+		$model         = sanitize_text_field( $request->get_param( 'model' ) );
+		$model         = $model ? $model : Settings::get_default_model();
 		$chunk_index   = absint( $request->get_param( 'chunk_index' ) );
 
 		if ( ! $doc_id || ! $embedding || ! is_array( $embedding ) ) {
@@ -834,7 +838,7 @@ class REST {
 	 * Return metadata about the vector database.
 	 * This provides information that might be useful to clients.
 	 */
-	public static function handle_metadata( \WP_REST_Request $request ) {
+	public static function handle_metadata( \WP_REST_Request $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 		// Initialize database if needed.
 		self::init_database();
 
@@ -853,8 +857,10 @@ class REST {
 		$total_docs       = 0;
 
 		if ( $table_exists ) {
-			$total_embeddings = $wpdb->get_var( "SELECT COUNT(*) FROM $table_name" ) ?: 0;
-			$total_docs       = $wpdb->get_var( "SELECT COUNT(DISTINCT doc_id) FROM $table_name" ) ?: 0;
+			$total_embeddings = $wpdb->get_var( "SELECT COUNT(*) FROM $table_name" );
+			$total_embeddings = $total_embeddings ? $total_embeddings : 0;
+			$total_docs       = $wpdb->get_var( "SELECT COUNT(DISTINCT doc_id) FROM $table_name" );
+			$total_docs       = $total_docs ? $total_docs : 0;
 		}
 
 		// Return metadata.
@@ -1215,7 +1221,7 @@ class REST {
 	 * @param \WP_REST_Request $request Request object.
 	 * @return \WP_REST_Response Response object
 	 */
-	public static function get_system_info( $request ) {
+	public static function get_system_info( $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 		// Initialize database if needed.
 		self::init_database();
 
@@ -1235,7 +1241,7 @@ class REST {
 	 * @param \WP_REST_Request $request Request object.
 	 * @return \WP_REST_Response Response object
 	 */
-	public static function add_vector_index( $request ) {
+	public static function add_vector_index( $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 		// Initialize database if needed.
 		self::init_database();
 

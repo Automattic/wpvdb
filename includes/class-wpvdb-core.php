@@ -548,9 +548,8 @@ class Core {
 				$chunks[]      = $current_chunk;
 				$current_chunk = $paragraph;
 				$current_words = $paragraph_words;
-			}
-			// If this single paragraph exceeds chunk size, we need to split it.
-			elseif ( $paragraph_words > $chunk_size ) {
+			} elseif ( $paragraph_words > $chunk_size ) {
+				// If this single paragraph exceeds chunk size, we need to split it.
 				// If we have a current chunk, save it first.
 				if ( $current_words > 0 ) {
 					$chunks[]      = $current_chunk;
@@ -586,9 +585,8 @@ class Core {
 				if ( ! empty( $sentence_chunk ) ) {
 					$chunks[] = $sentence_chunk;
 				}
-			}
-			// Otherwise, add to current chunk.
-			else {
+			} else {
+				// Otherwise, add to current chunk.
 				if ( ! empty( $current_chunk ) ) {
 					$current_chunk .= "\n\n";
 				}
@@ -612,7 +610,7 @@ class Core {
 	 * @param object $post    Post object.
 	 * @param bool   $update  Whether the post is being updated.
 	 */
-	public static function auto_embed_post( $post_id, $post, $update ) {
+	public static function auto_embed_post( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		// Validate inputs.
 		if ( empty( $post_id ) || ! is_numeric( $post_id ) || ! is_object( $post ) ) {
 			return;

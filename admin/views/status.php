@@ -69,8 +69,10 @@ if ( class_exists( '\\WPVDB\\Embedding_Enqueuer' ) ) {
 
 $active_reindex_job_updated_at = '';
 if ( $active_reindex_job && ! empty( $active_reindex_job['updated_at'] ) ) {
-	$date_format                   = get_option( 'date_format' ) ?: 'Y-m-d';
-	$time_format                   = get_option( 'time_format' ) ?: 'H:i:s';
+	$date_format                   = get_option( 'date_format' );
+	$date_format                   = $date_format ? $date_format : 'Y-m-d';
+	$time_format                   = get_option( 'time_format' );
+	$time_format                   = $time_format ? $time_format : 'H:i:s';
 	$date_time_format              = trim( $date_format . ' ' . $time_format );
 	$active_reindex_job_updated_at = function_exists( 'mysql2date' )
 		? mysql2date( $date_time_format, $active_reindex_job['updated_at'] )
@@ -85,7 +87,6 @@ $system_info['wp_memory_limit'] = WP_MEMORY_LIMIT;
 $system_info['wp_debug_mode']   = defined( 'WP_DEBUG' ) && WP_DEBUG ? 'Yes' : 'No';
 
 // Database info.
-global $wpdb;
 $system_info['mysql_version'] = $database->get_db_version();
 
 // Plugin info.

@@ -103,7 +103,8 @@ class Query {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( '[WPVDB DEBUG] Vector support detected: ' . ( $has_vector ? 'Yes' : 'No' ) ); }
 
-			$limit = $query->get( 'posts_per_page' ) ?: 10;
+			$limit = $query->get( 'posts_per_page' );
+			$limit = $limit ? $limit : 10;
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( '[WPVDB DEBUG] Posts per page limit: ' . $limit ); }
 
