@@ -1,4 +1,10 @@
 <?php
+/**
+ * Queue handling for WPVDB embedding jobs.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 defined( 'ABSPATH' ) || exit;

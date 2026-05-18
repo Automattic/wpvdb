@@ -1,10 +1,19 @@
 <?php
+/**
+ * Activation routines for WPVDB.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 use wpdb;
 
 defined( 'ABSPATH' ) || exit;
 
+/**
+ * Handles plugin activation and schema upgrades.
+ */
 class Activation {
 	/**
 	 * Database handler

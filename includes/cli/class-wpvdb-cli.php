@@ -1,4 +1,10 @@
 <?php
+/**
+ * WP CLI embedding and re-embed job commands for WPVDB.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB\CLI;
 
 use WPVDB\Embedding_Enqueuer;

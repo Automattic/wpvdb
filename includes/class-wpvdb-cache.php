@@ -1,4 +1,10 @@
 <?php
+/**
+ * Cache helpers for WPVDB.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 defined( 'ABSPATH' ) || exit;

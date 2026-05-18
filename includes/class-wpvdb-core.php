@@ -1,4 +1,10 @@
 <?php
+/**
+ * Core embedding and content processing routines.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 use WordPress\AiClient\AiClient;
@@ -10,6 +16,9 @@ use WordPress\AiClient\Providers\Http\HttpTransporterFactory;
 
 defined( 'ABSPATH' ) || exit;
 
+/**
+ * Handles core hooks, embedding requests, and default text processing.
+ */
 class Core {
 
 	/**

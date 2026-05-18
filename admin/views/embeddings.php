@@ -1,4 +1,11 @@
-<div class="wrap wpvdb-embeddings">
+<?php
+/**
+ * Embeddings admin view.
+ *
+ * @package WPVDB
+ */
+
+?><div class="wrap wpvdb-embeddings">
 
 	<?php
 	// Display debug information if needed.

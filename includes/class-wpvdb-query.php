@@ -1,8 +1,17 @@
 <?php
+/**
+ * Query integration for WPVDB.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 defined( 'ABSPATH' ) || exit;
 
+/**
+ * Hooks vector search into WordPress queries.
+ */
 class Query {
 	/**
 	 * Database handler

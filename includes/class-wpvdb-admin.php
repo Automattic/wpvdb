@@ -1,8 +1,17 @@
 <?php
+/**
+ * Admin UI and settings screens for WPVDB.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 defined( 'ABSPATH' ) || exit;
 
+/**
+ * Registers and renders WPVDB admin interfaces.
+ */
 class Admin {
 	/**
 	 * Database handler

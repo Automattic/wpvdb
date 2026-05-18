@@ -1,8 +1,19 @@
 <?php
+/**
+ * WPVDB bootstrap class.
+ *
+ * @package WPVDB
+ */
 
 namespace WPVDB;
 
+/**
+ * Registers plugin hooks.
+ */
 class WPVDB {
+	/**
+	 * Initialize legacy plugin hooks.
+	 */
 	public function init() {
 		// All includes are handled in plugin.php, so we don't need the includes method.
 

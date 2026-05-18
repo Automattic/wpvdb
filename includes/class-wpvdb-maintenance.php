@@ -1,4 +1,10 @@
 <?php
+/**
+ * Maintenance routines for WPVDB tables.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 defined( 'ABSPATH' ) || exit;

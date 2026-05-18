@@ -1,4 +1,10 @@
 <?php
+/**
+ * Settings admin view.
+ *
+ * @package WPVDB
+ */
+
 // Get current settings.
 $settings = get_option( 'wpvdb_settings', array() );
 $provider = isset( $settings['active_provider'] ) ? $settings['active_provider'] : 'openai';

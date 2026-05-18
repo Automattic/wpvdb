@@ -1,8 +1,17 @@
 <?php
+/**
+ * Settings helpers for WPVDB.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 defined( 'ABSPATH' ) || exit;
 
+/**
+ * Provides typed access to plugin settings.
+ */
 class Settings {
 
 	/**

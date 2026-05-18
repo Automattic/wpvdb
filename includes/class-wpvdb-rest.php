@@ -1,4 +1,10 @@
 <?php
+/**
+ * REST API handlers for WPVDB.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 use WP_Error;

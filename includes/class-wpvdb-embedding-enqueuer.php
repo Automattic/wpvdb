@@ -1,4 +1,10 @@
 <?php
+/**
+ * Re-embedding job orchestration for WPVDB.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 defined( 'ABSPATH' ) || exit;
