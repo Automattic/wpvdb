@@ -425,6 +425,9 @@ class Settings {
 	/**
 	 * Encrypt API key for secure storage
 	 * Uses wp_salt() for encryption key and openssl for secure encryption
+	 *
+	 * @param string $api_key Plain API key.
+	 * @return string Encrypted API key.
 	 */
 	public static function encrypt_api_key( $api_key ) {
 		if ( empty( $api_key ) ) {
@@ -454,6 +457,9 @@ class Settings {
 
 	/**
 	 * Decrypt API key for use
+	 *
+	 * @param string $encrypted_key Encrypted API key.
+	 * @return string Plain API key.
 	 */
 	public static function decrypt_api_key( $encrypted_key ) {
 		if ( empty( $encrypted_key ) ) {

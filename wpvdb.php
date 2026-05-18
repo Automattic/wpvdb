@@ -76,17 +76,17 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	require_once WPVDB_PLUGIN_DIR . 'includes/cli/class-wpvdb-cli.php';
 }
 
-/**
- * Global helper: whether Action Scheduler is available for scheduling.
- *
- * Must live in the global namespace (not WPVDB\) because WPVDB_Queue checks it
- * via the unqualified function_exists('wpvdb_has_action_scheduler'). If this
- * function is missing or namespaced, push_batch_to_queue falls through to the
- * wp_options fallback queue silently.
- *
- * @return bool
- */
 if ( ! function_exists( 'wpvdb_has_action_scheduler' ) ) {
+	/**
+	 * Global helper: whether Action Scheduler is available for scheduling.
+	 *
+	 * Must live in the global namespace (not WPVDB\) because WPVDB_Queue checks it
+	 * via the unqualified function_exists('wpvdb_has_action_scheduler'). If this
+	 * function is missing or namespaced, push_batch_to_queue falls through to the
+	 * wp_options fallback queue silently.
+	 *
+	 * @return bool
+	 */
 	function wpvdb_has_action_scheduler() {
 		return class_exists( 'ActionScheduler' ) && function_exists( 'as_schedule_single_action' );
 	}

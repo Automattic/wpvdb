@@ -426,9 +426,9 @@ class WPVDB_Queue {
 	/**
 	 * Process a post - extract content, chunk, and generate embeddings
 	 *
-	 * @param \WP_Post $post
-	 * @param string   $model
-	 * @param string   $provider
+	 * @param \WP_Post $post     Post to process.
+	 * @param string   $model    Embedding model.
+	 * @param string   $provider Embedding provider.
 	 * @return bool Success status
 	 */
 	private static function process_post( $post, $model, $provider = '' ) {

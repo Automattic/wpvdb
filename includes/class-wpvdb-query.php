@@ -44,6 +44,9 @@ class Query {
 	 * $query = new WP_Query(['vdb_vector_query' => 'some text', 'posts_per_page' => 10]);
 	 *
 	 * We'll find the top matching doc_ids from pivot table, then limit WP_Query to those posts.
+	 *
+	 * @param \WP_Query $query Query object.
+	 * @return void
 	 */
 	public static function maybe_vector_search( $query ) {
 		// Initialize database.
@@ -229,8 +232,8 @@ class Query {
 	/**
 	 * Modify SQL query to include vector search
 	 *
-	 * @param string   $sql  SQL query string.
-	 * @param WP_Query $query Query instance.
+	 * @param string    $sql   SQL query string.
+	 * @param \WP_Query $query Query instance.
 	 * @return string Modified SQL query
 	 */
 	public function posts_request( $sql, $query ) {

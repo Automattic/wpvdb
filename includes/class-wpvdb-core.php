@@ -136,10 +136,10 @@ class Core {
 	 * Returns array of floats, or WP_Error on failure.
 	 *
 	 * @since 1.0.0
-	 * @param string $text The text to embed.
-	 * @param string $model The embedding model name (e.g. 'text-embedding-3-small').
+	 * @param string $text     The text to embed.
+	 * @param string $model    The embedding model name (e.g. 'text-embedding-3-small').
 	 * @param string $api_base OpenAI-compatible endpoint base URL.
-	 * @param string $api_key Your embedding provider API key.
+	 * @param string $api_key  Your embedding provider API key.
 	 * @return array|WP_Error Array of float values representing the embedding, or WP_Error on failure.
 	 */
 	public static function get_embedding( $text, $model, $api_base, $api_key ) {
@@ -349,8 +349,8 @@ class Core {
 	/**
 	 * Get embedding using registered model and provider details
 	 *
-	 * @param string $text The text to embed.
-	 * @param string $model_name The model name.
+	 * @param string $text          The text to embed.
+	 * @param string $model_name    The model name.
 	 * @param string $provider_name The provider name.
 	 * @return array|WP_Error Embedding vector or error
 	 */
@@ -379,10 +379,11 @@ class Core {
 	 * Uses the OpenAI provider when the API base matches the default OpenAI endpoint.
 	 * Falls back to null when the SDK is unavailable or when a non-default base is configured.
 	 *
-	 * @param string $text The text to embed.
-	 * @param string $model The model identifier.
-	 * @param string $api_base The API base URL.
-	 * @param string $api_key The API key.
+	 * @param string $text           The text to embed.
+	 * @param string $model          The model identifier.
+	 * @param string $api_base       The API base URL.
+	 * @param string $api_key        The API key.
+	 * @param array  $custom_options Custom request options.
 	 * @return array|\WP_Error|null Embedding vector, error, or null to continue with fallback.
 	 */
 	private static function maybe_get_embedding_via_ai_client( $text, $model, $api_base, $api_key, $custom_options = array() ) {
@@ -424,7 +425,7 @@ class Core {
 	/**
 	 * Normalize and validate custom embedding options.
 	 *
-	 * @param string $model The model identifier.
+	 * @param string $model    The model identifier.
 	 * @param string $api_base The API base URL.
 	 * @return array<string, mixed>
 	 */
@@ -454,7 +455,7 @@ class Core {
 	/**
 	 * Merge custom options into the request body without overwriting required keys.
 	 *
-	 * @param array $body Base request payload.
+	 * @param array $body           Base request payload.
 	 * @param array $custom_options Custom options from filters.
 	 * @return array
 	 */
@@ -497,7 +498,13 @@ class Core {
 		return new \WP_Error( 'embedding_error', $message );
 	}
 
-	// Add a logging function (deprecated - use Logger class directly).
+	/**
+	 * Log an error through the Logger class.
+	 *
+	 * @param string $message Error message.
+	 * @param array  $context Additional context.
+	 * @return void
+	 */
 	public static function log_error( $message, $context = array() ) {
 		Logger::error( $message, $context );
 	}
@@ -505,8 +512,8 @@ class Core {
 	/**
 	 * Enhanced chunking that respects semantic boundaries
 	 *
-	 * @param array  $chunks Existing chunks.
-	 * @param string $text Text to chunk.
+	 * @param array  $chunks     Existing chunks.
+	 * @param string $text       Text to chunk.
 	 * @param int    $chunk_size Optional chunk size override.
 	 * @return array
 	 */

@@ -67,6 +67,10 @@ class Embeddings_Command extends \WP_CLI_Command {
 	 *
 	 *     wp wpvdb embeddings enqueue --post-type=post --only-mismatched-model
 	 *     wp wpvdb embeddings enqueue --dry-run --since=2026-05-01
+	 *
+	 * @param array $args       Positional arguments.
+	 * @param array $assoc_args Associative arguments.
+	 * @return void
 	 */
 	public function enqueue( $args, $assoc_args ) {
 		$scope = self::scope_args_from_assoc( $assoc_args );
@@ -107,6 +111,9 @@ class Embeddings_Command extends \WP_CLI_Command {
 
 	/**
 	 * Build the scope args array from CLI flags.
+	 *
+	 * @param array $assoc_args Associative arguments.
+	 * @return array Scope args.
 	 */
 	private static function scope_args_from_assoc( $assoc_args ) {
 		$scope = array();
@@ -158,6 +165,10 @@ class Jobs_Command extends \WP_CLI_Command {
 	 *   - json
 	 *   - yaml
 	 * ---
+	 *
+	 * @param array $args       Positional arguments.
+	 * @param array $assoc_args Associative arguments.
+	 * @return void
 	 */
 	public function list( $args, $assoc_args ) {
 		$limit  = isset( $assoc_args['limit'] ) ? (int) $assoc_args['limit'] : 20;
@@ -178,6 +189,10 @@ class Jobs_Command extends \WP_CLI_Command {
 	 *
 	 * <job_id>
 	 * : The job ID.
+	 *
+	 * @param array $args       Positional arguments.
+	 * @param array $assoc_args Associative arguments.
+	 * @return void
 	 */
 	public function status( $args, $assoc_args ) {
 		$job_id = isset( $args[0] ) ? (int) $args[0] : 0;
@@ -204,6 +219,10 @@ class Jobs_Command extends \WP_CLI_Command {
 	 *
 	 * <job_id>
 	 * : The job ID.
+	 *
+	 * @param array $args       Positional arguments.
+	 * @param array $assoc_args Associative arguments.
+	 * @return void
 	 */
 	public function cancel( $args, $assoc_args ) {
 		$job_id = isset( $args[0] ) ? (int) $args[0] : 0;
@@ -224,6 +243,10 @@ class Jobs_Command extends \WP_CLI_Command {
 	 *
 	 * <job_id>
 	 * : The job ID.
+	 *
+	 * @param array $args       Positional arguments.
+	 * @param array $assoc_args Associative arguments.
+	 * @return void
 	 */
 	public function resume( $args, $assoc_args ) {
 		$job_id = isset( $args[0] ) ? (int) $args[0] : 0;

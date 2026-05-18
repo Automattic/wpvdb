@@ -12,7 +12,7 @@ namespace WPVDB;
  */
 class WPVDB {
 	/**
-	 * Initialize legacy plugin hooks.
+	 * Initialize plugin hooks.
 	 */
 	public function init() {
 		// All includes are handled in plugin.php, so we don't need the includes method.

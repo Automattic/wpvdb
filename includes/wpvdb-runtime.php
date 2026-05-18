@@ -9,44 +9,44 @@
 
 defined( 'ABSPATH' ) || exit;
 
-/**
- * Whether the active database connection is SQLite.
- *
- * The sqlite-database-integration drop in defines these constants from
- * wp-content/db.php before normal plugins load.
- *
- * @return bool
- */
 if ( ! function_exists( 'wpvdb_is_sqlite' ) ) {
+	/**
+	 * Whether the active database connection is SQLite.
+	 *
+	 * The sqlite-database-integration drop in defines these constants from
+	 * wp-content/db.php before normal plugins load.
+	 *
+	 * @return bool
+	 */
 	function wpvdb_is_sqlite() {
 		return ( defined( 'DB_ENGINE' ) && DB_ENGINE === 'sqlite' )
 			|| ( defined( 'DATABASE_TYPE' ) && DATABASE_TYPE === 'sqlite' );
 	}
 }
 
-/**
- * Whether wpvdb is running inside a Playground style PHP-WASM runtime.
- *
- * This is intentionally separate from SQLite storage detection. A server side
- * SQLite install may still have cron, loopback HTTP, and normal transports.
- *
- * @return bool
- */
 if ( ! function_exists( 'wpvdb_is_playground_runtime' ) ) {
+	/**
+	 * Whether wpvdb is running inside a Playground style PHP-WASM runtime.
+	 *
+	 * This is intentionally separate from SQLite storage detection. A server side
+	 * SQLite install may still have cron, loopback HTTP, and normal transports.
+	 *
+	 * @return bool
+	 */
 	function wpvdb_is_playground_runtime() {
 		return defined( 'WPVDB_PLAYGROUND_RUNTIME' ) && WPVDB_PLAYGROUND_RUNTIME;
 	}
 }
 
-/**
- * Whether direct error_log() output is enabled for wpvdb.
- *
- * @param string $level Log level.
- * @param string $message Log message.
- * @param array  $context Additional context.
- * @return bool
- */
 if ( ! function_exists( 'wpvdb_should_log_to_error_log' ) ) {
+	/**
+	 * Whether direct error_log() output is enabled for wpvdb.
+	 *
+	 * @param string $level   Log level.
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
+	 * @return bool
+	 */
 	function wpvdb_should_log_to_error_log( $level = 'debug', $message = '', $context = array() ) {
 		return defined( 'WP_DEBUG' ) && WP_DEBUG
 			&& (bool) apply_filters( 'wpvdb_log_to_error_log', true, $level, $message, $context );

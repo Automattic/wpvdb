@@ -33,7 +33,7 @@ class Cache {
 	/**
 	 * Get cached embedding by hash
 	 *
-	 * @param string $text Text that was embedded.
+	 * @param string $text  Text that was embedded.
 	 * @param string $model Model used for embedding.
 	 * @return array|false Embedding array or false if not cached
 	 */
@@ -45,8 +45,8 @@ class Cache {
 	/**
 	 * Cache an embedding
 	 *
-	 * @param string $text Text that was embedded.
-	 * @param string $model Model used for embedding.
+	 * @param string $text      Text that was embedded.
+	 * @param string $model     Model used for embedding.
 	 * @param array  $embedding Embedding vector.
 	 * @return bool Success
 	 */
@@ -171,7 +171,7 @@ class Cache {
 	/**
 	 * Generate cache key for embedding
 	 *
-	 * @param string $text Text content.
+	 * @param string $text  Text content.
 	 * @param string $model Model name.
 	 * @return string Cache key
 	 */
@@ -184,9 +184,10 @@ class Cache {
 	/**
 	 * Generate cache key for query result
 	 *
-	 * @param string $query_text Query text.
-	 * @param string $model Model name.
-	 * @param int    $limit Result limit.
+	 * @param string      $query_text        Query text.
+	 * @param string      $model             Model name.
+	 * @param int         $limit             Result limit.
+	 * @param string|null $key_seed_override Optional cache key seed override.
 	 * @return string Cache key
 	 */
 	private static function get_query_cache_key( $query_text, $model, $limit, $key_seed_override = null ) {
@@ -239,7 +240,7 @@ class Cache {
 	/**
 	 * Check if cache is still valid based on invalidation timestamp
 	 *
-	 * @param string $cache_key Cache key to check.
+	 * @param string $cache_key   Cache key to check.
 	 * @param int    $cached_time When the item was cached.
 	 * @return bool Whether cache is still valid
 	 */

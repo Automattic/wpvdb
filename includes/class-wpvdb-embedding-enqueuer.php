@@ -52,8 +52,8 @@ class Embedding_Enqueuer {
 	 * Normalize and validate raw scope args into the canonical shape stored
 	 * with the job. Returned array is suitable for fingerprinting.
 	 *
-	 * @param array $args
-	 * @return array|\WP_Error
+	 * @param array $args Raw scope args.
+	 * @return array|\WP_Error Canonical args or validation error.
 	 */
 	public static function normalize_args( $args ) {
 		if ( ! is_array( $args ) ) {
@@ -123,6 +123,12 @@ class Embedding_Enqueuer {
 		return array( 'post' );
 	}
 
+	/**
+	 * Normalize a scalar or array into a unique string list.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return array<int, string> Normalized strings.
+	 */
 	private static function ensure_string_list( $value ) {
 		if ( is_string( $value ) ) {
 			$value = array_map( 'trim', explode( ',', $value ) );
@@ -139,12 +145,23 @@ class Embedding_Enqueuer {
 		return array_values( array_unique( $value ) );
 	}
 
+	/**
+	 * Whether a value looks like an accepted date string.
+	 *
+	 * @param string $value Date value.
+	 * @return bool
+	 */
 	private static function looks_like_date( $value ) {
 		return (bool) preg_match( '/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?$/', $value );
 	}
 
 	/**
 	 * Compute deterministic fingerprint from canonical args + provider + model.
+	 *
+	 * @param array  $args     Canonical scope args.
+	 * @param string $provider Provider name.
+	 * @param string $model    Model name.
+	 * @return string Fingerprint hash.
 	 */
 	public static function compute_fingerprint( $args, $provider, $model ) {
 		$payload = array(
@@ -161,6 +178,10 @@ class Embedding_Enqueuer {
 	 * When only --provider is given, the model defaults to that provider's
 	 * registry default rather than the active provider's default. Otherwise
 	 * we'd pair the override provider with the wrong model.
+	 *
+	 * @param string $override_provider Provider override.
+	 * @param string $override_model    Model override.
+	 * @return array{0: string, 1: string} Provider and model.
 	 */
 	private static function resolve_provider_model( $override_provider, $override_model ) {
 		$has_provider_override = is_string( $override_provider ) && '' !== $override_provider;
@@ -189,6 +210,9 @@ class Embedding_Enqueuer {
 	/**
 	 * Snapshot the current maximum post ID matching the scope. Used as the
 	 * upper bound so a long-running job does not chase newly-created posts.
+	 *
+	 * @param array $args Canonical scope args.
+	 * @return int Maximum post ID.
 	 */
 	private static function snapshot_upper_bound( $args ) {
 		global $wpdb;
@@ -205,6 +229,10 @@ class Embedding_Enqueuer {
 	 * caller supplies the leading column.
 	 *
 	 * Populates $params (by reference) with placeholder values in order.
+	 *
+	 * @param array $args   Canonical scope args.
+	 * @param array $params Placeholder values.
+	 * @return string SQL WHERE fragment.
 	 */
 	private static function build_scope_where_sql( $args, &$params ) {
 		$params  = array();
@@ -243,6 +271,10 @@ class Embedding_Enqueuer {
 	 *   - provider: string override.
 	 *   - model:    string override.
 	 *   - paused:   bool. If true, create row but do not schedule first page.
+	 *
+	 * @param array $args Raw scope args.
+	 * @param array $opts Job options.
+	 * @return array|\WP_Error Job data or validation error.
 	 */
 	public static function start_job( $args, $opts = array() ) {
 		if ( \wpvdb_is_playground_runtime() ) {
@@ -349,6 +381,9 @@ class Embedding_Enqueuer {
 	/**
 	 * Rough count of posts that match the scope, ignoring only_* filters.
 	 * Cheap upper bound for dry-run.
+	 *
+	 * @param array $args Canonical scope args.
+	 * @return int Matching post count.
 	 */
 	public static function estimate_total( $args ) {
 		global $wpdb;
@@ -360,6 +395,9 @@ class Embedding_Enqueuer {
 
 	/**
 	 * Look up an active (pending / running / paused) job by fingerprint.
+	 *
+	 * @param string $fingerprint Scope fingerprint.
+	 * @return array|null Job row, or null when none matches.
 	 */
 	private static function find_active_by_fingerprint( $fingerprint ) {
 		global $wpdb;
@@ -384,8 +422,8 @@ class Embedding_Enqueuer {
 	 * Returns [job_row, token] on success, or null if another worker owns the
 	 * page or the job is no longer in an active state.
 	 *
-	 * @param int $job_id
-	 * @return array|null
+	 * @param int $job_id Job ID.
+	 * @return array|null Job row and lock token, or null.
 	 */
 	private static function acquire_lock( $job_id ) {
 		global $wpdb;
@@ -431,6 +469,13 @@ class Embedding_Enqueuer {
 	 * The additional guard on status = 'running' ensures that a cancel issued
 	 * mid-page cannot be overwritten back to pending/completed by the worker.
 	 *
+	 * @param int         $job_id          Job ID.
+	 * @param string      $token           Lock token.
+	 * @param int|null    $cursor_advance  Cursor advance.
+	 * @param int         $scanned_delta   Scanned count delta.
+	 * @param int         $queued_delta    Queued count delta.
+	 * @param int         $skipped_delta   Skipped count delta.
+	 * @param string|null $finalize_status Final status.
 	 * @return int|false Number of rows affected, or false on DB error.
 	 */
 	private static function release_lock( $job_id, $token, $cursor_advance = null, $scanned_delta = 0, $queued_delta = 0, $skipped_delta = 0, $finalize_status = null ) {
@@ -464,6 +509,11 @@ class Embedding_Enqueuer {
 		return $wpdb->query( $wpdb->prepare( $sql, $params ) );
 	}
 
+	/**
+	 * Generate a lock token.
+	 *
+	 * @return string Lock token.
+	 */
 	private static function generate_lock_token() {
 		if ( function_exists( 'wp_generate_uuid4' ) ) {
 			return wp_generate_uuid4();
@@ -473,6 +523,9 @@ class Embedding_Enqueuer {
 
 	/**
 	 * AS callback: process one enqueue page for the given job.
+	 *
+	 * @param int $job_id Job ID.
+	 * @return void
 	 */
 	public static function process_page( $job_id ) {
 		$job_id = (int) $job_id;
@@ -580,6 +633,10 @@ class Embedding_Enqueuer {
 
 	/**
 	 * Stash an error message on the job row for visibility via status.
+	 *
+	 * @param int    $job_id  Job ID.
+	 * @param string $message Error message.
+	 * @return void
 	 */
 	private static function record_error( $job_id, $message ) {
 		global $wpdb;
@@ -599,6 +656,10 @@ class Embedding_Enqueuer {
 	 * the actual stored doc_type for each post (the queue worker writes
 	 * post->post_type, not a fixed 'post' string).
 	 *
+	 * @param int   $cursor      Last seen post ID.
+	 * @param int   $upper_bound Maximum post ID.
+	 * @param array $args        Canonical scope args.
+	 * @param int   $page_size   Page size.
 	 * @return array<int, string>
 	 */
 	private static function fetch_page_posts( $cursor, $upper_bound, $args, $page_size ) {
@@ -630,7 +691,10 @@ class Embedding_Enqueuer {
 	 * only_mismatched_model filters. Queries are grouped by post_type so the
 	 * doc_type column lookup matches the value the queue worker actually wrote.
 	 *
-	 * @param array<int, string> $posts
+	 * @param array<int, string> $posts Post types keyed by post ID.
+	 * @param array              $args  Canonical scope args.
+	 * @param string             $model Model name.
+	 * @return array<int, bool> Post IDs to skip.
 	 */
 	private static function compute_skip_set( $posts, $args, $model ) {
 		$skip = array();
@@ -680,6 +744,10 @@ class Embedding_Enqueuer {
 
 	/**
 	 * Schedule the next page action for a job.
+	 *
+	 * @param int $job_id        Job ID.
+	 * @param int $delay_seconds Delay in seconds.
+	 * @return void
 	 */
 	private static function schedule_next_page( $job_id, $delay_seconds = 0 ) {
 		if ( function_exists( 'as_schedule_single_action' ) ) {
@@ -707,6 +775,9 @@ class Embedding_Enqueuer {
 
 	/**
 	 * Get a job row as an associative array.
+	 *
+	 * @param int $job_id Job ID.
+	 * @return array|null Job row, or null when none matches.
 	 */
 	public static function get_job( $job_id ) {
 		global $wpdb;
@@ -718,6 +789,9 @@ class Embedding_Enqueuer {
 
 	/**
 	 * List recent jobs, newest first.
+	 *
+	 * @param int $limit Maximum rows.
+	 * @return array Job rows.
 	 */
 	public static function list_jobs( $limit = 20 ) {
 		global $wpdb;
@@ -732,7 +806,7 @@ class Embedding_Enqueuer {
 	 * List active model migration jobs, optionally scoped to a target.
 	 *
 	 * @param string $provider Optional provider target.
-	 * @param string $model Optional model target.
+	 * @param string $model    Optional model target.
 	 * @return array Job rows, newest first.
 	 */
 	public static function list_active_model_migration_jobs( $provider = '', $model = '' ) {
@@ -787,7 +861,7 @@ class Embedding_Enqueuer {
 	 * Find the newest active model migration job, optionally scoped to a target.
 	 *
 	 * @param string $provider Optional provider target.
-	 * @param string $model Optional model target.
+	 * @param string $model    Optional model target.
 	 * @return array|null Job row, or null when none matches.
 	 */
 	public static function find_active_model_migration_job( $provider = '', $model = '' ) {
@@ -800,6 +874,9 @@ class Embedding_Enqueuer {
 	 * the lock acquisition checks status. Also clears the lock token and
 	 * expiry so an in-flight worker cannot match its release_lock guard and
 	 * overwrite the canceled status back to pending or completed.
+	 *
+	 * @param int $job_id Job ID.
+	 * @return bool Whether the job was canceled.
 	 */
 	public static function cancel_job( $job_id ) {
 		global $wpdb;
@@ -821,6 +898,7 @@ class Embedding_Enqueuer {
 	 * Resume a paused job by setting it back to pending and scheduling the
 	 * next page.
 	 *
+	 * @param int $job_id Job ID.
 	 * @return bool|\WP_Error
 	 */
 	public static function resume_job( $job_id ) {
@@ -852,6 +930,10 @@ class Embedding_Enqueuer {
 
 	/**
 	 * Internal status setter.
+	 *
+	 * @param int    $job_id Job ID.
+	 * @param string $status Job status.
+	 * @return bool Whether the status was updated.
 	 */
 	private static function set_status( $job_id, $status ) {
 		global $wpdb;

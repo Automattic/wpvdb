@@ -135,8 +135,8 @@ class Security {
 	/**
 	 * Validate nonce for admin requests
 	 *
-	 * @param WP_REST_Request $request
-	 * @param string          $action Nonce action.
+	 * @param \WP_REST_Request $request REST request.
+	 * @param string           $action Nonce action.
 	 * @return bool|WP_Error
 	 */
 	public static function verify_nonce( $request, $action = 'wpvdb_nonce' ) {

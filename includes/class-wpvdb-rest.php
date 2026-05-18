@@ -218,6 +218,9 @@ class REST {
 	 * - Each chunk will be sent to the API for embedding generation
 	 * - Optional summarization if enabled in settings
 	 * - Embeddings are stored in the database using the insert_embedding_row method
+	 *
+	 * @param \WP_REST_Request $request REST request.
+	 * @return \WP_REST_Response|\WP_Error REST response or error.
 	 */
 	public static function handle_embed( WP_REST_Request $request ) {
 		// Rate limiting.
@@ -335,6 +338,9 @@ class REST {
 	 * - Useful for client-side embedding generation or batch operations
 	 * - The embedding will be stored using native vector types if supported
 	 * - Otherwise, it will be stored as JSON in the database
+	 *
+	 * @param \WP_REST_Request $request REST request.
+	 * @return \WP_REST_Response|\WP_Error REST response or error.
 	 */
 	public static function handle_vectors( WP_REST_Request $request ) {
 		// Rate limiting.
@@ -420,6 +426,9 @@ class REST {
 	 * - If embedding is provided, it will be used directly for vector search
 	 * - Native vector operations are used if supported by the database
 	 * - Fallback to PHP-based cosine distance calculation otherwise
+	 *
+	 * @param \WP_REST_Request $request REST request.
+	 * @return \WP_REST_Response|\WP_Error REST response or error.
 	 */
 	public static function handle_query( \WP_REST_Request $request ) {
 		// Rate limiting.
@@ -843,6 +852,9 @@ class REST {
 	/**
 	 * Return metadata about the vector database.
 	 * This provides information that might be useful to clients.
+	 *
+	 * @param \WP_REST_Request $request REST request.
+	 * @return \WP_REST_Response REST response.
 	 */
 	public static function handle_metadata( \WP_REST_Request $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 		// Initialize database if needed.
@@ -893,12 +905,12 @@ class REST {
 	 * @param string   $chunk_content Chunk content.
 	 * @param string   $summary       Summary of the chunk.
 	 * @param array    $embedding     Embedding vector.
-	 * @param string   $model       Embedding model identifier (e.g. "text-embedding-3-small").
-	 * @param string   $doc_type    Document type (e.g. "post").
-	 * @param int|null $chunk_index Zero-based chunk position within the document. Defaults to null
-	 *                              so the function can detect callers that forget to pass a value
-	 *                              (the column would otherwise silently get `0`, masking the same
-	 *                              class of bug this signature was widened to fix).
+	 * @param string   $model         Embedding model identifier (e.g. "text-embedding-3-small").
+	 * @param string   $doc_type      Document type (e.g. "post").
+	 * @param int|null $chunk_index   Zero-based chunk position within the document. Defaults to null
+	 *                                so the function can detect callers that forget to pass a value
+	 *                                (the column would otherwise silently get `0`, masking the same
+	 *                                class of bug this signature was widened to fix).
 	 * @return int|WP_Error         Row ID, or WP_Error on validation failure or DB insert failure.
 	 */
 	public static function insert_embedding_row( $doc_id, $chunk_id, $chunk_content, $summary, $embedding, $model = '', $doc_type = 'post', $chunk_index = null ) {
@@ -1088,6 +1100,10 @@ class REST {
 
 	/**
 	 * Helper for cosine distance calculation in PHP (used as fallback).
+	 *
+	 * @param array $vec1 First vector.
+	 * @param array $vec2 Second vector.
+	 * @return float Cosine distance.
 	 */
 	public static function cosine_distance( $vec1, $vec2 ) {
 		// Validate inputs.
@@ -1163,6 +1179,9 @@ class REST {
 	 *   inside WPVDB_Queue::process_post at processing time.
 	 * - Uses the currently active provider and model from settings.
 	 * - In debug mode, may process the queue immediately.
+	 *
+	 * @param \WP_REST_Request $request REST request.
+	 * @return \WP_REST_Response REST response.
 	 */
 	public static function handle_reembed( WP_REST_Request $request ) {
 		if ( \wpvdb_is_playground_runtime() ) {

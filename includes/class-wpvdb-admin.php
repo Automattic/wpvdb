@@ -32,6 +32,9 @@ class Admin {
 
 	/**
 	 * Get the canonical default model for a provider.
+	 *
+	 * @param string $provider Provider name.
+	 * @return string Default model.
 	 */
 	private function get_default_model( $provider ) {
 		return Models::get_default_model_for_provider( $provider );
@@ -39,6 +42,9 @@ class Admin {
 
 	/**
 	 * Get the default stored settings for a provider.
+	 *
+	 * @param string $provider Provider name.
+	 * @return array<string, string> Provider defaults.
 	 */
 	private function get_provider_settings_defaults( $provider ) {
 		return array(
@@ -278,6 +284,9 @@ class Admin {
 
 	/**
 	 * Validate settings and handle provider/model changes
+	 *
+	 * @param array $input Submitted settings.
+	 * @return array Validated settings.
 	 */
 	public function validate_settings( $input ) {
 		// Get the current settings.
@@ -1512,7 +1521,7 @@ class Admin {
 	/**
 	 * Render the embedding status meta box
 	 *
-	 * @param WP_Post $post
+	 * @param \WP_Post $post Current post.
 	 */
 	public function render_embedding_meta_box( $post ) {
 		// Check if post has embeddings.
@@ -1663,7 +1672,7 @@ class Admin {
 	/**
 	 * Add embedding column to post list tables
 	 *
-	 * @param array $columns
+	 * @param array $columns Existing columns.
 	 * @return array
 	 */
 	public function add_embedding_column( $columns ) {
@@ -1676,8 +1685,8 @@ class Admin {
 	/**
 	 * Render the embedding status column content
 	 *
-	 * @param string $column_name
-	 * @param int    $post_id
+	 * @param string $column_name Column name.
+	 * @param int    $post_id     Post ID.
 	 */
 	public function render_embedding_column( $column_name, $post_id ) {
 		if ( 'wpvdb_embedded' !== $column_name ) {
@@ -2141,7 +2150,7 @@ class Admin {
 	/**
 	 * Add bulk embed action to post list tables
 	 *
-	 * @param array $bulk_actions
+	 * @param array $bulk_actions Existing bulk actions.
 	 * @return array
 	 */
 	public function add_bulk_embed_action( $bulk_actions ) {
@@ -2153,8 +2162,8 @@ class Admin {
 	 * Handle bulk embed action
 	 *
 	 * @param string $redirect_to URL to redirect to after the action.
-	 * @param string $action The action being taken.
-	 * @param array  $post_ids Array of post IDs.
+	 * @param string $action      The action being taken.
+	 * @param array  $post_ids    Array of post IDs.
 	 * @return string Modified redirect URL
 	 */
 	public function handle_bulk_embed_action( $redirect_to, $action, $post_ids ) {
@@ -2428,7 +2437,7 @@ class Admin {
 	 * Return an active migration job that would overlap a new provider change.
 	 *
 	 * @param string $new_provider Pending provider target.
-	 * @param string $new_model Pending model target.
+	 * @param string $new_model    Pending model target.
 	 * @return array|null
 	 */
 	private function get_blocking_model_migration_job( $new_provider, $new_model ) {
