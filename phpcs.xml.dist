@@ -1,16 +1,24 @@
 <?xml version="1.0"?>
 <ruleset name="WPVDB Coding Standards">
-    <description>WordPress/VIP coding standards for WPVDB.</description>
+	<description>WordPress coding standards for WPVDB.</description>
 
-    <file>includes</file>
-    <file>wpvdb.php</file>
-    <file>admin</file>
+	<rule ref="WordPress">
+		<exclude name="WordPress.Files.FileName.InvalidClassFileName" />
+	</rule>
+	<rule ref="WordPress-VIP-Go">
+		<exclude name="WordPressVIPMinimum.JS" />
+	</rule>
+	<rule ref="PHPCompatibilityWP"/>
 
-    <exclude-pattern>vendor/*</exclude-pattern>
-    <exclude-pattern>tests/benchmarks/data/*</exclude-pattern>
+	<config name="testVersion" value="7.4-"/>
 
-    <rule ref="WordPress-VIP-Go" />
-    <rule ref="WordPress">
-        <exclude name="WordPress.Files.FileName.InvalidClassFileName" />
-    </rule>
+	<arg name="extensions" value="php"/>
+	<arg value="s"/>
+
+	<file>includes</file>
+	<file>wpvdb.php</file>
+	<file>admin</file>
+
+	<exclude-pattern>*/vendor/*</exclude-pattern>
+	<exclude-pattern>*/tests/benchmarks/data/*</exclude-pattern>
 </ruleset>

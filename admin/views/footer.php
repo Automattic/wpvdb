@@ -5,7 +5,7 @@
  * @package WPVDB
  */
 
-defined('ABSPATH') || exit;
+defined( 'ABSPATH' ) || exit;
 ?>
 
-</div> <!-- Close .wrap --> 
+</div> <!-- Close .wrap -->
