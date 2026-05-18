@@ -179,7 +179,7 @@ class Plugin {
 			$batch_results = WPVDB_Queue::process_batch( $args[0] );
 			$processed    += count( array_filter( $batch_results ) );
 
-			if ( $limit === 0 || $processed < $limit ) {
+			if ( 0 === $limit || $processed < $limit ) {
 				WPVDB_Queue::maybe_process_next_batch();
 			}
 			return $processed;
@@ -253,7 +253,7 @@ class Plugin {
 
 			// Get the database info.
 			$db_type     = $this->database->get_db_type();
-			$min_version = $db_type === 'mysql' ? '8.0.32' : '11.7';
+			$min_version = 'mysql' === $db_type ? '8.0.32' : '11.7';
 
 			// Add admin notice for automatic deactivation.
 			add_action(

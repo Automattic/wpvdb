@@ -93,14 +93,14 @@ class Settings {
 		// Validate model name.
 		if ( ! empty( $input['default_model'] ) ) {
 			$model = Utils::validate_model_name( $input['default_model'] );
-			if ( $model !== false ) {
+			if ( false !== $model ) {
 				$validated['default_model'] = $model;
 			}
 		}
 
 		if ( ! empty( $input['active_model'] ) ) {
 			$model = Utils::validate_model_name( $input['active_model'] );
-			if ( $model !== false ) {
+			if ( false !== $model ) {
 				$validated['active_model'] = $model;
 			}
 		}
@@ -147,14 +147,14 @@ class Settings {
 			// Validate API base URL.
 			if ( ! empty( $provider_settings['api_base'] ) ) {
 				$url = Utils::validate_url( $provider_settings['api_base'] );
-				if ( $url !== false ) {
+				if ( false !== $url ) {
 					$validated[ $provider ]['api_base'] = self::normalize_api_base_for_provider( $provider, $url );
 				}
 			}
 
 			if ( ! empty( $provider_settings['default_model'] ) ) {
 				$model = Utils::validate_model_name( $provider_settings['default_model'] );
-				if ( $model !== false && Models::get_model( $provider, $model ) ) {
+				if ( false !== $model && Models::get_model( $provider, $model ) ) {
 					$validated[ $provider ]['default_model'] = $model;
 				}
 			}
@@ -213,14 +213,14 @@ class Settings {
 			$active_provider = sanitize_key( $settings['provider'] );
 		}
 
-		if ( $active_provider !== '' && Providers::get_provider( $active_provider ) ) {
+		if ( '' !== $active_provider && Providers::get_provider( $active_provider ) ) {
 			$settings['active_provider'] = $active_provider;
 			$settings['provider']        = $active_provider;
 
 			$provider_model = self::get_model_from_settings( $settings, $active_provider );
 			$active_model   = ! empty( $settings['active_model'] ) ? sanitize_text_field( $settings['active_model'] ) : '';
 
-			if ( $active_model === '' || ! Models::get_model( $active_provider, $active_model ) ) {
+			if ( '' === $active_model || ! Models::get_model( $active_provider, $active_model ) ) {
 				$settings['active_model'] = $provider_model;
 			}
 
@@ -460,7 +460,7 @@ class Settings {
 		// Remove prefix and decode.
 		$encrypted_data = base64_decode( substr( $encrypted_key, 16 ) );
 
-		if ( $encrypted_data === false || strlen( $encrypted_data ) < 16 ) {
+		if ( false === $encrypted_data || 16 > strlen( $encrypted_data ) ) {
 			return '';
 		}
 
@@ -475,7 +475,7 @@ class Settings {
 		// Decrypt.
 		$decrypted = openssl_decrypt( $encrypted, 'AES-256-CBC', $encryption_key, 0, $iv );
 
-		return $decrypted !== false ? $decrypted : '';
+		return false !== $decrypted ? $decrypted : '';
 	}
 
 	/**
@@ -489,11 +489,11 @@ class Settings {
 		$provider = $settings['active_provider'];
 
 		// Check for constants defined in wp-config.php first.
-		if ( $provider === 'openai' && defined( 'WPVDB_OPENAI_API_KEY' ) ) {
+		if ( 'openai' === $provider && defined( 'WPVDB_OPENAI_API_KEY' ) ) {
 			return \constant( 'WPVDB_OPENAI_API_KEY' );
 		}
 
-		if ( $provider === 'automattic' && defined( 'WPVDB_AUTOMATTIC_API_KEY' ) ) {
+		if ( 'automattic' === $provider && defined( 'WPVDB_AUTOMATTIC_API_KEY' ) ) {
 			return \constant( 'WPVDB_AUTOMATTIC_API_KEY' );
 		}
 
@@ -523,11 +523,11 @@ class Settings {
 		}
 
 		// Check for constants first.
-		if ( $provider === 'openai' && defined( 'WPVDB_OPENAI_API_KEY' ) ) {
+		if ( 'openai' === $provider && defined( 'WPVDB_OPENAI_API_KEY' ) ) {
 			return \constant( 'WPVDB_OPENAI_API_KEY' );
 		}
 
-		if ( $provider === 'automattic' && defined( 'WPVDB_AUTOMATTIC_API_KEY' ) ) {
+		if ( 'automattic' === $provider && defined( 'WPVDB_AUTOMATTIC_API_KEY' ) ) {
 			return \constant( 'WPVDB_AUTOMATTIC_API_KEY' );
 		}
 
@@ -560,7 +560,7 @@ class Settings {
 		// If not found in registry, check settings.
 		if ( empty( $api_base ) ) {
 			// Fallback for filtered or unknown providers.
-			if ( $provider === 'automattic' ) {
+			if ( 'automattic' === $provider ) {
 				return get_option( 'wpvdb_automattic_endpoint', Providers::get_api_base( 'automattic' ) );
 			}
 			return isset( $settings['api_base'] ) ? $settings['api_base'] : Providers::get_api_base( 'openai' );
@@ -598,7 +598,7 @@ class Settings {
 	 * @return string Normalized API base URL
 	 */
 	public static function normalize_api_base_for_provider( $provider, $url ) {
-		if ( ! is_string( $url ) || $url === '' ) {
+		if ( ! is_string( $url ) || '' === $url ) {
 			return $url;
 		}
 

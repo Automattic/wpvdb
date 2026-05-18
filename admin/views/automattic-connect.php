@@ -4,7 +4,7 @@ remove_all_actions( 'admin_notices' );
 remove_all_actions( 'all_admin_notices' );
 
 // Check if form was submitted and redirect.
-if ( isset( $_GET['settings-updated'] ) && $_GET['settings-updated'] == 'true' ) {
+if ( isset( $_GET['settings-updated'] ) && 'true' == $_GET['settings-updated'] ) {
 	wp_safe_redirect( 'http://localhost:9081/wp-admin/admin.php?page=wpvdb-settings' );
 	exit;
 }

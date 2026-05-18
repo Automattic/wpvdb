@@ -70,14 +70,14 @@ add_filter(
 		if ( ! wpvdb_is_playground_runtime() ) {
 			return $args;
 		}
-		if ( ! is_string( $url ) || $url === '' ) {
+		if ( ! is_string( $url ) || '' === $url ) {
 			return $args;
 		}
 
 		$host                      = parse_url( $url, PHP_URL_HOST );
 		$path                      = (string) parse_url( $url, PHP_URL_PATH );
-		$is_allowed_openai         = $host === 'api.openai.com';
-		$is_allowed_wpcom_ai_proxy = $host === 'public-api.wordpress.com'
+		$is_allowed_openai         = 'api.openai.com' === $host;
+		$is_allowed_wpcom_ai_proxy = 'public-api.wordpress.com' === $host
 		&& strpos( $path, '/wpcom/v2/ai-api-proxy/' ) === 0;
 
 		if ( ! $is_allowed_openai && ! $is_allowed_wpcom_ai_proxy ) {
@@ -94,7 +94,7 @@ add_filter(
 		$opt_in_list = array();
 		foreach ( explode( ',', $existing ) as $token ) {
 			$token = strtolower( trim( $token ) );
-			if ( $token !== '' && ! in_array( $token, $opt_in_list, true ) ) {
+			if ( '' !== $token && ! in_array( $token, $opt_in_list, true ) ) {
 				$opt_in_list[] = $token;
 			}
 		}

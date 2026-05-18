@@ -57,7 +57,7 @@ class Core {
 		}
 
 		// Check for null or empty text.
-		if ( $text === null || $text === '' ) {
+		if ( null === $text || '' === $text ) {
 			return array();
 		}
 
@@ -103,7 +103,7 @@ class Core {
 		}
 
 		// Check for null or empty text.
-		if ( $text === null || $text === '' ) {
+		if ( null === $text || '' === $text ) {
 			return '';
 		}
 
@@ -135,7 +135,7 @@ class Core {
 	 */
 	public static function get_embedding( $text, $model, $api_base, $api_key ) {
 		// Check for null or empty text.
-		if ( $text === null || $text === '' ) {
+		if ( null === $text || '' === $text ) {
 			return new \WP_Error( 'embedding_error', 'Empty or null text cannot be embedded.' );
 		}
 
@@ -144,7 +144,7 @@ class Core {
 		// Check cache first. A poisoned cache entry falls through to the fresh path,
 		// which will overwrite it on success via Cache::set_embedding().
 		$cached_embedding = Cache::get_embedding( $text, $model );
-		if ( $cached_embedding !== false && is_array( $cached_embedding ) && self::is_valid_embedding( $cached_embedding ) ) {
+		if ( false !== $cached_embedding && is_array( $cached_embedding ) && self::is_valid_embedding( $cached_embedding ) ) {
 			Logger::debug(
 				'Using cached embedding',
 				array(
@@ -157,7 +157,7 @@ class Core {
 
 		// Allow plugins to provide custom embedding generation.
 		$custom_embedding = apply_filters( 'wpvdb_generate_embedding', null, $text, $model, $api_base, $api_key );
-		if ( $custom_embedding !== null ) {
+		if ( null !== $custom_embedding ) {
 			if ( ! is_array( $custom_embedding ) || ! self::is_valid_embedding( $custom_embedding ) ) {
 				return new \WP_Error( 'embedding_error', 'wpvdb_generate_embedding filter returned an invalid embedding.' );
 			}
@@ -177,7 +177,7 @@ class Core {
 			$url = add_query_arg( $query_args, $url );
 		}
 
-		if ( $request_format === 'a8c_nomic_native' ) {
+		if ( 'a8c_nomic_native' === $request_format ) {
 			// Bare list at body root; model routing is described by Models metadata.
 			$body = array( $text );
 		} else {
@@ -270,15 +270,15 @@ class Core {
 			$data = json_decode( wp_remote_retrieve_body( $response ), true );
 		}
 
-		if ( $code !== 200 ) {
+		if ( 200 !== $code ) {
 			return new \WP_Error( 'embedding_error', 'Failed to get embedding: ' . $code . ' ' . ( is_string( $data ) ? $data : wp_json_encode( $data ) ) );
 		}
 
-		if ( $response_format === 'a8c_nomic_native' ) {
+		if ( 'a8c_nomic_native' === $response_format ) {
 			// Native Nomic. Treat any non-"ok" status (or missing status) as a soft
 			// signal but still try the embeddings array first since Ray Serve has
 			// returned successful payloads without a status field in the past.
-			if ( isset( $data['status'] ) && $data['status'] !== 'ok' ) {
+			if ( isset( $data['status'] ) && 'ok' !== $data['status'] ) {
 				return new \WP_Error( 'embedding_error', 'Nomic upstream returned status: ' . wp_json_encode( $data['status'] ) );
 			}
 			if ( ! isset( $data['embeddings'][0] ) || ! is_array( $data['embeddings'][0] ) ) {
@@ -437,7 +437,7 @@ class Core {
 		return array_filter(
 			$options,
 			static function ( $value ) {
-				return $value !== null;
+				return null !== $value;
 			}
 		);
 	}
@@ -469,16 +469,16 @@ class Core {
 		$code    = $e->getCode();
 		$message = $e->getMessage();
 
-		if ( $code === 401 ) {
+		if ( 401 === $code ) {
 			return new \WP_Error( 'embedding_auth_error', $message );
 		}
-		if ( $code === 403 ) {
+		if ( 403 === $code ) {
 			return new \WP_Error( 'embedding_forbidden', $message );
 		}
-		if ( $code === 404 ) {
+		if ( 404 === $code ) {
 			return new \WP_Error( 'embedding_model_not_found', $message );
 		}
-		if ( $code === 429 ) {
+		if ( 429 === $code ) {
 			return new \WP_Error( 'embedding_rate_limited', $message );
 		}
 		if ( $code >= 500 && $code < 600 ) {
@@ -508,7 +508,7 @@ class Core {
 		}
 
 		// Check for null or empty text.
-		if ( $text === null || $text === '' ) {
+		if ( null === $text || '' === $text ) {
 			return array();
 		}
 
@@ -622,7 +622,7 @@ class Core {
 		}
 
 		// Only process published posts.
-		if ( ! isset( $post->post_status ) || $post->post_status !== 'publish' ) {
+		if ( ! isset( $post->post_status ) || 'publish' !== $post->post_status ) {
 			return;
 		}
 

@@ -79,7 +79,7 @@ class Embedding_Enqueuer {
 		sort( $post_status );
 
 		$since = is_string( $merged['since'] ) ? trim( $merged['since'] ) : '';
-		if ( $since !== '' && ! self::looks_like_date( $since ) ) {
+		if ( '' !== $since && ! self::looks_like_date( $since ) ) {
 			return new \WP_Error( 'wpvdb_enqueuer_bad_args', 'since must be YYYY-MM-DD or YYYY-MM-DD HH:MM:SS.' );
 		}
 
@@ -127,7 +127,7 @@ class Embedding_Enqueuer {
 		$value = array_filter(
 			$value,
 			static function ( $v ) {
-				return $v !== '';
+				return '' !== $v;
 			}
 		);
 		return array_values( array_unique( $value ) );
@@ -157,8 +157,8 @@ class Embedding_Enqueuer {
 	 * we'd pair the override provider with the wrong model.
 	 */
 	private static function resolve_provider_model( $override_provider, $override_model ) {
-		$has_provider_override = is_string( $override_provider ) && $override_provider !== '';
-		$has_model_override    = is_string( $override_model ) && $override_model !== '';
+		$has_provider_override = is_string( $override_provider ) && '' !== $override_provider;
+		$has_model_override    = is_string( $override_model ) && '' !== $override_model;
 
 		if ( $has_provider_override ) {
 			$provider = $override_provider;
@@ -318,7 +318,7 @@ class Embedding_Enqueuer {
 			)
 		);
 
-		if ( $inserted === false ) {
+		if ( false === $inserted ) {
 			return new \WP_Error( 'wpvdb_enqueuer_insert_failed', $wpdb->last_error );
 		}
 
@@ -404,7 +404,7 @@ class Embedding_Enqueuer {
 			)
 		);
 
-		if ( $affected === false || $affected === 0 ) {
+		if ( false === $affected || 0 === $affected ) {
 			return null;
 		}
 
@@ -440,13 +440,13 @@ class Embedding_Enqueuer {
 		);
 		$params = array();
 
-		if ( $cursor_advance !== null ) {
+		if ( null !== $cursor_advance ) {
 			$sets[]   = 'last_seen_id = %d';
 			$params[] = (int) $cursor_advance;
 		}
 
 		$sets[]   = 'status = %s';
-		$params[] = $finalize_status !== null ? $finalize_status : self::STATUS_PENDING;
+		$params[] = null !== $finalize_status ? $finalize_status : self::STATUS_PENDING;
 
 		$params[] = (int) $job_id;
 		$params[] = (string) $token;
@@ -739,11 +739,11 @@ class Embedding_Enqueuer {
 		$where  = array( 'status IN (%s, %s, %s)' );
 		$params = $active;
 
-		if ( $provider !== '' ) {
+		if ( '' !== $provider ) {
 			$where[]  = 'provider = %s';
 			$params[] = $provider;
 		}
-		if ( $model !== '' ) {
+		if ( '' !== $model ) {
 			$where[]  = 'model = %s';
 			$params[] = $model;
 		}
@@ -761,10 +761,10 @@ class Embedding_Enqueuer {
 			if ( ! in_array( isset( $row['status'] ) ? $row['status'] : '', $active, true ) ) {
 				continue;
 			}
-			if ( $provider !== '' && (string) ( isset( $row['provider'] ) ? $row['provider'] : '' ) !== $provider ) {
+			if ( '' !== $provider && (string) ( isset( $row['provider'] ) ? $row['provider'] : '' ) !== $provider ) {
 				continue;
 			}
-			if ( $model !== '' && (string) ( isset( $row['model'] ) ? $row['model'] : '' ) !== $model ) {
+			if ( '' !== $model && (string) ( isset( $row['model'] ) ? $row['model'] : '' ) !== $model ) {
 				continue;
 			}
 
@@ -858,6 +858,6 @@ class Embedding_Enqueuer {
 				(int) $job_id
 			)
 		);
-		return $affected !== false;
+		return false !== $affected;
 	}
 }

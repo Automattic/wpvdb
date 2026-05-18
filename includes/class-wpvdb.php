@@ -57,7 +57,7 @@ class WPVDB {
 				$processed    += count( array_filter( $batch_results ) );
 
 				// Continue processing more batches if needed.
-				if ( $limit === 0 || $processed < $limit ) {
+				if ( 0 === $limit || $processed < $limit ) {
 					WPVDB_Queue::maybe_process_next_batch();
 				}
 

@@ -233,7 +233,7 @@ class WPVDB_Queue {
 		// Preflight API credentials using the queued provider so a job enqueued
 		// with --provider=automattic does not fail when the active provider was
 		// later switched to something with no key configured.
-		if ( is_string( $provider ) && $provider !== '' ) {
+		if ( is_string( $provider ) && '' !== $provider ) {
 			$api_key = Settings::get_api_key_for_provider( $provider );
 		} else {
 			$api_key = Settings::get_api_key();
@@ -390,21 +390,21 @@ class WPVDB_Queue {
 	 * @return array { post_id, model, provider } for push_to_queue.
 	 */
 	public static function build_item( $post_id, $opts = array() ) {
-		$provider_override = isset( $opts['provider'] ) && is_string( $opts['provider'] ) && $opts['provider'] !== ''
+		$provider_override = isset( $opts['provider'] ) && is_string( $opts['provider'] ) && '' !== $opts['provider']
 			? $opts['provider']
 			: '';
-		$model_override    = isset( $opts['model'] ) && is_string( $opts['model'] ) && $opts['model'] !== ''
+		$model_override    = isset( $opts['model'] ) && is_string( $opts['model'] ) && '' !== $opts['model']
 			? $opts['model']
 			: '';
 
-		$provider = $provider_override !== '' ? $provider_override : Settings::get_active_provider();
+		$provider = '' !== $provider_override ? $provider_override : Settings::get_active_provider();
 		if ( empty( $provider ) ) {
 			$provider = 'openai';
 		}
 
-		if ( $model_override !== '' ) {
+		if ( '' !== $model_override ) {
 			$model = $model_override;
-		} elseif ( $provider_override !== '' ) {
+		} elseif ( '' !== $provider_override ) {
 			$model = Models::get_default_model_for_provider( $provider );
 		} else {
 			$model = Settings::get_default_model();
@@ -429,7 +429,7 @@ class WPVDB_Queue {
 		// Resolve API key + base for the explicit provider when one was queued.
 		// This keeps long-draining jobs aligned with the provider snapshot taken
 		// at enqueue time, and lets CLI --provider overrides actually take effect.
-		if ( is_string( $provider ) && $provider !== '' ) {
+		if ( is_string( $provider ) && '' !== $provider ) {
 			$api_key  = Settings::get_api_key_for_provider( $provider );
 			$api_base = Settings::get_api_base_for_provider( $provider );
 		} else {

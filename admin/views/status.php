@@ -42,7 +42,7 @@ if ( $database->get_db_type() === 'mariadb' && $database->has_native_vector_supp
 			// Check index health by running EXPLAIN on a simple query.
 			try {
 				$result                        = $wpdb->get_row( "EXPLAIN SELECT * FROM $table_name ORDER BY COSINE_DISTANCE(embedding, '[1,0,0]') LIMIT 1" );
-				$vector_index_status['health'] = ( isset( $result->key ) && $result->key === 'embedding_idx' ) ? 'good' : 'suboptimal';
+				$vector_index_status['health'] = ( isset( $result->key ) && 'embedding_idx' === $result->key ) ? 'good' : 'suboptimal';
 			} catch ( \Exception $e ) {
 				$vector_index_status['health'] = 'error';
 			}
@@ -218,7 +218,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 	</div>
 
 	<!-- System Information Section -->
-	<div class="wpvdb-status-section" <?php echo $current_section !== 'info' ? 'style="display: none;"' : ''; ?>>
+	<div class="wpvdb-status-section" <?php echo 'info' !== $current_section ? 'style="display: none;"' : ''; ?>>
 		<table class="widefat" cellspacing="0">
 			<thead>
 				<tr>
@@ -271,7 +271,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				<tr>
 					<th><?php _e( 'Vector Support', 'wpvdb' ); ?></th>
 					<td>
-						<?php if ( $system_info['vector_support'] === 'Yes' ) : ?>
+						<?php if ( 'Yes' === $system_info['vector_support'] ) : ?>
 							<span class="dashicons dashicons-yes" style="color:green;"></span> <?php _e( 'Available', 'wpvdb' ); ?>
 						<?php else : ?>
 							<span class="dashicons dashicons-no" style="color:red;"></span> <?php _e( 'Not Available', 'wpvdb' ); ?>
@@ -281,7 +281,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				<tr>
 					<th><?php _e( 'Fallbacks Enabled', 'wpvdb' ); ?></th>
 					<td>
-						<?php if ( $system_info['fallbacks_enabled'] === 'Yes' ) : ?>
+						<?php if ( 'Yes' === $system_info['fallbacks_enabled'] ) : ?>
 							<span class="dashicons dashicons-yes" style="color:orange;"></span> <?php _e( 'Yes (Performance Impact)', 'wpvdb' ); ?>
 						<?php else : ?>
 							<span class="dashicons dashicons-no"></span> <?php _e( 'No', 'wpvdb' ); ?>
@@ -291,7 +291,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				<tr>
 					<th><?php _e( 'Embeddings Table', 'wpvdb' ); ?></th>
 					<td>
-						<?php if ( $system_info['embedding_table_exists'] === 'Yes' ) : ?>
+						<?php if ( 'Yes' === $system_info['embedding_table_exists'] ) : ?>
 							<span class="dashicons dashicons-yes" style="color:green;"></span>
 							<?php
 							printf(
@@ -313,7 +313,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 							<span class="dashicons dashicons-yes" style="color:green;"></span> <?php _e( 'Available', 'wpvdb' ); ?>
 						<?php else : ?>
 							<span class="dashicons dashicons-no" style="color:red;"></span> <?php _e( 'Not Created', 'wpvdb' ); ?>
-							<?php if ( $system_info['embedding_table_exists'] === 'Yes' ) : ?>
+							<?php if ( 'Yes' === $system_info['embedding_table_exists'] ) : ?>
 							<a href="<?php echo esc_url( admin_url( 'admin.php?page=wpvdb-status&section=tools' ) ); ?>" class="button button-small" style="margin-left: 10px;">
 								<?php _e( 'Create Index', 'wpvdb' ); ?>
 							</a>
@@ -325,14 +325,14 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				<tr>
 					<th><?php _e( 'Vector Index Health', 'wpvdb' ); ?></th>
 					<td>
-						<?php if ( $vector_index_status['health'] === 'good' ) : ?>
+						<?php if ( 'good' === $vector_index_status['health'] ) : ?>
 							<span class="dashicons dashicons-yes" style="color:green;"></span> <?php _e( 'Good', 'wpvdb' ); ?>
-						<?php elseif ( $vector_index_status['health'] === 'suboptimal' ) : ?>
+						<?php elseif ( 'suboptimal' === $vector_index_status['health'] ) : ?>
 							<span class="dashicons dashicons-warning" style="color:orange;"></span> <?php _e( 'Suboptimal', 'wpvdb' ); ?>
 							<span class="description" style="display:block;margin-top:4px">
 								<?php _e( 'Index may not be used for all queries.', 'wpvdb' ); ?>
 							</span>
-						<?php elseif ( $vector_index_status['health'] === 'error' ) : ?>
+						<?php elseif ( 'error' === $vector_index_status['health'] ) : ?>
 							<span class="dashicons dashicons-no" style="color:red;"></span> <?php _e( 'Error', 'wpvdb' ); ?>
 						<?php else : ?>
 							<span class="dashicons dashicons-editor-help"></span> <?php _e( 'Unknown', 'wpvdb' ); ?>
@@ -493,7 +493,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 	</div>
 
 	<!-- Tools Section -->
-	<div class="wpvdb-status-section" <?php echo $current_section !== 'tools' ? 'style="display: none;"' : ''; ?>>
+	<div class="wpvdb-status-section" <?php echo 'tools' !== $current_section ? 'style="display: none;"' : ''; ?>>
 		<?php if ( ! apply_filters( 'wpvdb_render_status_tools_ui', true ) ) : ?>
 			<div class="wpvdb-card">
 				<h3><?php esc_html_e( 'Demo mode', 'wpvdb' ); ?></h3>
@@ -580,7 +580,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 
 			<?php
 			// Display diagnostic results if available.
-			if ( isset( $_GET['diagnostics'] ) && $_GET['diagnostics'] === 'run' ) {
+			if ( isset( $_GET['diagnostics'] ) && 'run' === $_GET['diagnostics'] ) {
 				$diagnostics = $database->run_diagnostics();
 				?>
 				<div class="wpvdb-diagnostics-results <?php echo isset( $diagnostics['error'] ) ? 'has-error' : ''; ?>">
@@ -640,7 +640,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 
 						<?php if ( isset( $diagnostics['vector_index'] ) ) : ?>
 							<li><strong><?php esc_html_e( 'Vector Index:', 'wpvdb' ); ?></strong>
-								<?php if ( $diagnostics['vector_index'] === true ) : ?>
+								<?php if ( true === $diagnostics['vector_index'] ) : ?>
 									<span style="color:green;">✓</span>
 								<?php elseif ( is_string( $diagnostics['vector_index'] ) ) : ?>
 									<?php echo esc_html( $diagnostics['vector_index'] ); ?>
@@ -750,11 +750,11 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 			<div class="wpvdb-status-row">
 				<div class="wpvdb-status-label"><?php _e( 'Health:', 'wpvdb' ); ?></div>
 				<div class="wpvdb-status-value">
-					<?php if ( $vector_index_status['health'] === 'good' ) : ?>
+					<?php if ( 'good' === $vector_index_status['health'] ) : ?>
 						<span class="dashicons dashicons-yes"></span> <?php _e( 'Good', 'wpvdb' ); ?>
-					<?php elseif ( $vector_index_status['health'] === 'suboptimal' ) : ?>
+					<?php elseif ( 'suboptimal' === $vector_index_status['health'] ) : ?>
 						<span class="dashicons dashicons-warning"></span> <?php _e( 'Suboptimal', 'wpvdb' ); ?>
-					<?php elseif ( $vector_index_status['health'] === 'error' ) : ?>
+					<?php elseif ( 'error' === $vector_index_status['health'] ) : ?>
 						<span class="dashicons dashicons-no"></span> <?php _e( 'Error', 'wpvdb' ); ?>
 					<?php else : ?>
 						<span class="dashicons dashicons-editor-help"></span> <?php _e( 'Unknown', 'wpvdb' ); ?>

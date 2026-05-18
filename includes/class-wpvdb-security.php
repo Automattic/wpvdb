@@ -52,7 +52,7 @@ class Security {
 		// Get current count.
 		$current_count = get_transient( $cache_key );
 
-		if ( $current_count === false ) {
+		if ( false === $current_count ) {
 			// First request in this minute.
 			set_transient( $cache_key, 1, MINUTE_IN_SECONDS );
 			return true;

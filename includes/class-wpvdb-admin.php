@@ -142,7 +142,7 @@ class Admin {
 		}
 
 		$db_type     = $this->database->get_db_type();
-		$min_version = $db_type === 'mysql' ? '8.0.32' : '11.7';
+		$min_version = 'mysql' === $db_type ? '8.0.32' : '11.7';
 
 		echo '<div class="notice notice-error">';
 		echo '<p><strong>' . esc_html__( 'WordPress Vector Database requires a compatible database', 'wpvdb' ) . '</strong></p>';
@@ -442,13 +442,13 @@ class Admin {
 				// Connection status changed.
 				if ( $is_connected ) {
 					// New connection - if provider is automattic, make it active immediately.
-					if ( $input['provider'] === 'automattic' ) {
+					if ( 'automattic' === $input['provider'] ) {
 						$input['active_provider']  = 'automattic';
 						$input['active_model']     = $input['automattic']['default_model'];
 						$input['pending_provider'] = '';
 						$input['pending_model']    = '';
 					}
-				} elseif ( $current_settings['active_provider'] === 'automattic' ) {
+				} elseif ( 'automattic' === $current_settings['active_provider'] ) {
 					// Disconnection - if active provider is automattic, switch to OpenAI if available.
 					// Check if OpenAI is configured.
 					if ( ! empty( $current_settings['openai']['api_key'] ) ) {
@@ -478,11 +478,11 @@ class Admin {
 			$input['active_provider'] = $current_provider;
 			$input['provider']        = $current_provider;
 
-			if ( $current_provider === 'openai' ) {
+			if ( 'openai' === $current_provider ) {
 				$input['active_model'] = isset( $input['openai']['default_model'] ) ? $input['openai']['default_model'] : $this->get_default_model( 'openai' );
-			} elseif ( $current_provider === 'automattic' ) {
+			} elseif ( 'automattic' === $current_provider ) {
 				$input['active_model'] = isset( $input['automattic']['default_model'] ) ? $input['automattic']['default_model'] : $this->get_default_model( 'automattic' );
-			} elseif ( $current_provider === 'specter' ) {
+			} elseif ( 'specter' === $current_provider ) {
 				$input['active_model'] = isset( $input['specter']['default_model'] ) ? $input['specter']['default_model'] : $this->get_default_model( 'specter' );
 			}
 
@@ -497,11 +497,11 @@ class Admin {
 			$new_provider = isset( $input['provider'] ) ? $input['provider'] : ( isset( $input['active_provider'] ) ? $input['active_provider'] : $current_provider );
 			$new_model    = '';
 
-			if ( $new_provider === 'openai' ) {
+			if ( 'openai' === $new_provider ) {
 				$new_model = isset( $input['openai']['default_model'] ) ? $input['openai']['default_model'] : ( isset( $current_settings['openai']['default_model'] ) ? $current_settings['openai']['default_model'] : $this->get_default_model( 'openai' ) );
-			} elseif ( $new_provider === 'automattic' ) {
+			} elseif ( 'automattic' === $new_provider ) {
 				$new_model = isset( $input['automattic']['default_model'] ) ? $input['automattic']['default_model'] : ( isset( $current_settings['automattic']['default_model'] ) ? $current_settings['automattic']['default_model'] : $this->get_default_model( 'automattic' ) );
-			} elseif ( $new_provider === 'specter' ) {
+			} elseif ( 'specter' === $new_provider ) {
 				$new_model = isset( $input['specter']['default_model'] ) ? $input['specter']['default_model'] : $this->get_default_model( 'specter' );
 			}
 
@@ -548,9 +548,9 @@ class Admin {
 
 		// Get pending change details.
 		$change                = Settings::get_pending_change_details();
-		$active_provider_name  = $change['active_provider'] === 'openai' ? 'OpenAI' : 'Automattic AI';
+		$active_provider_name  = 'openai' === $change['active_provider'] ? 'OpenAI' : 'Automattic AI';
 		$active_model          = $change['active_model'];
-		$pending_provider_name = $change['pending_provider'] === 'openai' ? 'OpenAI' : 'Automattic AI';
+		$pending_provider_name = 'openai' === $change['pending_provider'] ? 'OpenAI' : 'Automattic AI';
 		$pending_model         = $change['pending_model'];
 
 		?>
@@ -637,7 +637,7 @@ class Admin {
 			// Migrate individual options to structured settings.
 			foreach ( $individual_options as $option_name => $settings_path ) {
 				$option_value = get_option( $option_name );
-				if ( $option_value !== false ) {
+				if ( false !== $option_value ) {
 					// Parse the settings path (e.g., 'openai.api_key').
 					$path_parts = explode( '.', $settings_path );
 
@@ -660,9 +660,9 @@ class Admin {
 
 				// Set active model based on provider.
 				$provider = $settings['provider'];
-				if ( $provider === 'openai' && isset( $settings['openai']['default_model'] ) ) {
+				if ( 'openai' === $provider && isset( $settings['openai']['default_model'] ) ) {
 					$settings['active_model'] = $settings['openai']['default_model'];
-				} elseif ( $provider === 'automattic' && isset( $settings['automattic']['default_model'] ) ) {
+				} elseif ( 'automattic' === $provider && isset( $settings['automattic']['default_model'] ) ) {
 					$settings['active_model'] = $settings['automattic']['default_model'];
 				} else {
 					// Use registry default.
@@ -711,7 +711,7 @@ class Admin {
 			// Add any other providers.
 			$available_providers = Providers::get_available_providers();
 			foreach ( $available_providers as $provider_id => $provider_data ) {
-				if ( $provider_id !== 'openai' && $provider_id !== 'automattic' &&
+				if ( 'openai' !== $provider_id && 'automattic' !== $provider_id &&
 					( ! isset( $settings[ $provider_id ] ) || ! is_array( $settings[ $provider_id ] ) ) ) {
 					$settings[ $provider_id ] = array(
 						'api_key'       => '',
@@ -722,7 +722,7 @@ class Admin {
 
 			// Add active provider fields if they don't exist yet.
 			$settings['active_provider']  = $settings['provider'];
-			$settings['active_model']     = $settings['provider'] === 'openai'
+			$settings['active_model']     = 'openai' === $settings['provider']
 				? ( isset( $settings['openai']['default_model'] ) ? $settings['openai']['default_model'] : $this->get_default_model( 'openai' ) )
 				: ( isset( $settings['automattic']['default_model'] ) ? $settings['automattic']['default_model'] : $this->get_default_model( 'automattic' ) );
 			$settings['pending_provider'] = '';
@@ -768,7 +768,7 @@ class Admin {
 		$tab_file = WPVDB_PLUGIN_DIR . 'admin/views/' . $tab . '.php';
 		if ( file_exists( $tab_file ) ) {
 			// For status page, ensure scripts are loaded.
-			if ( $tab === 'status' && apply_filters( 'wpvdb_enqueue_admin_script', true, 'wpvdb-status' ) ) {
+			if ( 'status' === $tab && apply_filters( 'wpvdb_enqueue_admin_script', true, 'wpvdb-status' ) ) {
 				// Ensure admin script is enqueued.
 				if ( ! wp_script_is( 'wpvdb-admin', 'enqueued' ) ) {
 					wp_enqueue_script(
@@ -911,7 +911,7 @@ class Admin {
 		$is_wpvdb_page = ( strpos( $hook, 'wpvdb' ) !== false || in_array( $hook, array( 'toplevel_page_wpvdb-dashboard' ) ) );
 
 		// Only load our assets on our admin pages or post edit screens.
-		if ( ! $is_wpvdb_page && $hook !== 'post.php' && $hook !== 'post-new.php' ) {
+		if ( ! $is_wpvdb_page && 'post.php' !== $hook && 'post-new.php' !== $hook ) {
 			return;
 		}
 
@@ -969,7 +969,7 @@ class Admin {
 		}
 
 		// Specific page scripts.
-		if ( $enqueue_admin_script && $hook === 'wpvdb_page_wpvdb-embeddings' ) {
+		if ( $enqueue_admin_script && 'wpvdb_page_wpvdb-embeddings' === $hook ) {
 			// Enqueue dataTables for the embeddings page.
 			wp_enqueue_script(
 				'wpvdb-datatables',
@@ -1060,7 +1060,7 @@ class Admin {
 		// Check for cancel parameter in various formats.
 		$cancel = false;
 		if ( isset( $_POST['cancel'] ) ) {
-			if ( $_POST['cancel'] === 'true' || $_POST['cancel'] === true || $_POST['cancel'] === '1' || $_POST['cancel'] === 1 ) {
+			if ( 'true' === $_POST['cancel'] || true === $_POST['cancel'] || '1' === $_POST['cancel'] || 1 === $_POST['cancel'] ) {
 				$cancel = true;
 			}
 		}
@@ -1100,9 +1100,9 @@ class Admin {
 		if ( $cancel ) {
 			// User wants to cancel the pending change.
 			$settings['provider'] = $settings['active_provider'];
-			if ( $settings['active_provider'] === 'openai' ) {
+			if ( 'openai' === $settings['active_provider'] ) {
 				$settings['openai']['default_model'] = $settings['active_model'];
-			} elseif ( $settings['active_provider'] === 'automattic' ) {
+			} elseif ( 'automattic' === $settings['active_provider'] ) {
 				$settings['automattic']['default_model'] = $settings['active_model'];
 			}
 
@@ -1176,9 +1176,9 @@ class Admin {
 			$settings['active_model']    = $new_model;
 			$settings['provider']        = $new_provider;
 
-			if ( $new_provider === 'openai' && isset( $settings['openai'] ) ) {
+			if ( 'openai' === $new_provider && isset( $settings['openai'] ) ) {
 				$settings['openai']['default_model'] = $new_model;
-			} elseif ( $new_provider === 'automattic' && isset( $settings['automattic'] ) ) {
+			} elseif ( 'automattic' === $new_provider && isset( $settings['automattic'] ) ) {
 				$settings['automattic']['default_model'] = $new_model;
 			}
 
@@ -1298,9 +1298,9 @@ class Admin {
 		// Check if we're using the active provider/model or if we're re-indexing for a pending change.
 		$using_pending = false;
 		if ( ! empty( $settings['pending_provider'] ) && $provider === $settings['pending_provider'] ) {
-			if ( $provider === 'openai' && $model === $settings['pending_model'] ) {
+			if ( 'openai' === $provider && $model === $settings['pending_model'] ) {
 				$using_pending = true;
-			} elseif ( $provider === 'automattic' && $model === $settings['pending_model'] ) {
+			} elseif ( 'automattic' === $provider && $model === $settings['pending_model'] ) {
 				$using_pending = true;
 			}
 		}
@@ -1311,7 +1311,7 @@ class Admin {
 
 			// Get the default model if not specified.
 			if ( empty( $model ) ) {
-				if ( $provider === 'automattic' ) {
+				if ( 'automattic' === $provider ) {
 					$model = ! empty( $settings['active_model'] ) ?
 						$settings['active_model'] :
 						( ! empty( $settings['automattic']['default_model'] ) ?
@@ -1421,7 +1421,7 @@ class Admin {
 				<p><strong><?php esc_html_e( 'Success!', 'wpvdb' ); ?></strong> <?php esc_html_e( 'Your Automattic AI account has been connected successfully.', 'wpvdb' ); ?></p>
 			</div>
 			<?php
-		} elseif ( isset( $_GET['page'] ) && $_GET['page'] === 'wpvdb-settings' && isset( $_GET['automattic_connected'] ) ) {
+		} elseif ( isset( $_GET['page'] ) && 'wpvdb-settings' === $_GET['page'] && isset( $_GET['automattic_connected'] ) ) {
 			// Also keep the original check for backward compatibility.
 			?>
 			<div class="notice notice-success is-dismissible">
@@ -1452,7 +1452,7 @@ class Admin {
 		$connect_method = isset( $_POST['connect_method'] ) ? sanitize_text_field( $_POST['connect_method'] ) : '';
 
 		// Mock connection process.
-		if ( $connect_method === 'one_click' ) {
+		if ( 'one_click' === $connect_method ) {
 			// Simulate getting API key from Automattic.
 			$mock_api_key = 'auto_' . wp_generate_password( 32, false );
 
@@ -1671,7 +1671,7 @@ class Admin {
 	 * @param int    $post_id
 	 */
 	public function render_embedding_column( $column_name, $post_id ) {
-		if ( $column_name !== 'wpvdb_embedded' ) {
+		if ( 'wpvdb_embedded' !== $column_name ) {
 			return;
 		}
 
@@ -1693,7 +1693,7 @@ class Admin {
 		$is_embedded = $is_embedded_meta && $actual_count > 0;
 
 		// If meta says it's embedded but no actual embeddings exist, fix the meta.
-		if ( $is_embedded_meta && $actual_count == 0 ) {
+		if ( $is_embedded_meta && 0 == $actual_count ) {
 			delete_post_meta( $post_id, '_wpvdb_embedded' );
 			delete_post_meta( $post_id, '_wpvdb_chunks_count' );
 			delete_post_meta( $post_id, '_wpvdb_embedded_date' );
@@ -1889,7 +1889,7 @@ class Admin {
 	 */
 	public function handle_admin_actions() {
 		// Check if we're on our admin page.
-		if ( ! isset( $_GET['page'] ) || $_GET['page'] !== 'wpvdb-status' ) {
+		if ( ! isset( $_GET['page'] ) || 'wpvdb-status' !== $_GET['page'] ) {
 			return;
 		}
 
@@ -1901,7 +1901,7 @@ class Admin {
 		$action = sanitize_text_field( $_POST['wpvdb_action'] );
 
 		// Run diagnostics action.
-		if ( $action === 'run_diagnostics' ) {
+		if ( 'run_diagnostics' === $action ) {
 			if ( ! isset( $_POST['wpvdb_diagnostics_nonce'] ) || ! wp_verify_nonce( $_POST['wpvdb_diagnostics_nonce'], 'wpvdb_diagnostics_action' ) ) {
 				wp_die( 'Security check failed. Please try again.' );
 			}
@@ -1916,7 +1916,7 @@ class Admin {
 		}
 
 		// Recreate tables.
-		if ( isset( $_GET['action'] ) && $_GET['action'] === 'wpvdb_recreate_tables' ) {
+		if ( isset( $_GET['action'] ) && 'wpvdb_recreate_tables' === $_GET['action'] ) {
 			check_admin_referer( 'wpvdb_recreate_tables' );
 
 			// For safety, only allow this action if the user has manage_options.
@@ -1925,7 +1925,7 @@ class Admin {
 			}
 
 			// Check if Force flag is set.
-			$force = isset( $_GET['force'] ) && $_GET['force'] === '1';
+			$force = isset( $_GET['force'] ) && '1' === $_GET['force'];
 
 			// Call the forcible table recreation method.
 			$success = Activation::recreate_tables();
@@ -1939,7 +1939,7 @@ class Admin {
 		}
 
 		// Handle clear_embeddings action.
-		if ( $action === 'clear_embeddings' ) {
+		if ( 'clear_embeddings' === $action ) {
 			if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( $_POST['_wpnonce'], 'wpvdb_clear_embeddings' ) ) {
 				wp_die( __( 'Security check failed', 'wpvdb' ) );
 			}
@@ -1977,7 +1977,7 @@ class Admin {
 		if ( $recreate_status ) {
 			delete_transient( 'wpvdb_table_recreate_status' );
 
-			if ( $recreate_status === 'success' ) {
+			if ( 'success' === $recreate_status ) {
 				echo '<div class="notice notice-success is-dismissible"><p>';
 				_e( 'Database tables recreated successfully.', 'wpvdb' );
 				echo '</p></div>';
@@ -2149,7 +2149,7 @@ class Admin {
 	 * @return string Modified redirect URL
 	 */
 	public function handle_bulk_embed_action( $redirect_to, $action, $post_ids ) {
-		if ( $action !== 'wpvdb_bulk_embed' ) {
+		if ( 'wpvdb_bulk_embed' !== $action ) {
 			return $redirect_to;
 		}
 
@@ -2182,13 +2182,13 @@ class Admin {
 		$provider = ! empty( $settings['active_provider'] ) ? $settings['active_provider'] : 'openai';
 
 		$model = '';
-		if ( $provider === 'openai' ) {
+		if ( 'openai' === $provider ) {
 			$model = ! empty( $settings['active_model'] ) ?
 					$settings['active_model'] :
 					( ! empty( $settings['openai']['default_model'] ) ?
 						$settings['openai']['default_model'] :
 						$this->get_default_model( 'openai' ) );
-		} elseif ( $provider === 'automattic' ) {
+		} elseif ( 'automattic' === $provider ) {
 			$model = ! empty( $settings['active_model'] ) ?
 					$settings['active_model'] :
 					( ! empty( $settings['automattic']['default_model'] ) ?
@@ -2531,9 +2531,9 @@ class Admin {
 		$settings['active_model']    = $new_model;
 		$settings['provider']        = $new_provider;
 
-		if ( $new_provider === 'openai' && isset( $settings['openai'] ) ) {
+		if ( 'openai' === $new_provider && isset( $settings['openai'] ) ) {
 			$settings['openai']['default_model'] = $new_model;
-		} elseif ( $new_provider === 'automattic' && isset( $settings['automattic'] ) ) {
+		} elseif ( 'automattic' === $new_provider && isset( $settings['automattic'] ) ) {
 			$settings['automattic']['default_model'] = $new_model;
 		}
 

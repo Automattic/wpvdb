@@ -263,7 +263,7 @@ class Activation {
                         "
 						);
 
-						if ( $result === false ) {
+						if ( false === $result ) {
 							if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 								error_log( '[WPVDB] Failed to add vector index using new syntax: ' . $wpdb->last_error ); }
 
@@ -275,7 +275,7 @@ class Activation {
                             "
 							);
 
-							if ( $result !== false ) {
+							if ( false !== $result ) {
 								if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 									error_log( '[WPVDB] Added vector index with simplified syntax' ); }
 							} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {

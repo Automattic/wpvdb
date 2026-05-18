@@ -126,7 +126,7 @@
 
 						// Use Database class to get the appropriate distance function with both vectors.
 						$db_type = $database->get_db_type();
-						if ( $db_type === 'mariadb' ) {
+						if ( 'mariadb' === $db_type ) {
 							$distance_function = "VEC_DISTANCE_COSINE(e.embedding, $vector_function)";
 						} else {
 							$distance_function = "DISTANCE(e.embedding, $vector_function, 'COSINE')";

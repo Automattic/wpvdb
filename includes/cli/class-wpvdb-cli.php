@@ -183,7 +183,7 @@ class Jobs_Command extends \WP_CLI_Command {
 			\WP_CLI::error( "Job {$job_id} not found." );
 		}
 		foreach ( $job as $key => $value ) {
-			if ( $key === 'scope_args' && is_string( $value ) ) {
+			if ( 'scope_args' === $key && is_string( $value ) ) {
 				$decoded = json_decode( $value, true );
 				$value   = wp_json_encode( $decoded );
 			}

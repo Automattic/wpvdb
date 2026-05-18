@@ -151,7 +151,7 @@ class Cache {
 	 */
 	private static function get_query_cache_version() {
 		$cached = wp_cache_get( 'wpvdb_query_cache_version', self::CACHE_GROUP );
-		if ( $cached !== false ) {
+		if ( false !== $cached ) {
 			return (int) $cached;
 		}
 		$stored = (int) get_option( 'wpvdb_query_cache_version', 1 );
@@ -184,7 +184,7 @@ class Cache {
 	 * @return string Cache key
 	 */
 	private static function get_query_cache_key( $query_text, $model, $limit, $key_seed_override = null ) {
-		if ( $key_seed_override !== null && $key_seed_override !== '' ) {
+		if ( null !== $key_seed_override && '' !== $key_seed_override ) {
 			$query_hash = (string) $key_seed_override;
 			if ( strlen( $query_hash ) > 128 ) {
 				$query_hash = hash( 'sha256', $query_hash );

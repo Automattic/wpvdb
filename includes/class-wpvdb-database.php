@@ -89,7 +89,7 @@ class Database {
 		try {
 			if ( \wpvdb_is_sqlite() ) {
 				$sqlite_version = (string) $wpdb->get_var( 'SELECT sqlite_version()' );
-				return $sqlite_version !== '' ? sprintf( 'SQLite %s', $sqlite_version ) : 'SQLite';
+				return '' !== $sqlite_version ? sprintf( 'SQLite %s', $sqlite_version ) : 'SQLite';
 			}
 
 			return (string) $wpdb->get_var( 'SELECT VERSION()' );
@@ -140,7 +140,7 @@ class Database {
 			// First, check the database type.
 			$db_type = $this->get_db_type();
 
-			if ( $db_type === 'mariadb' ) {
+			if ( 'mariadb' === $db_type ) {
 				// Check for MariaDB version with vector support.
 				try {
 					$version = $wpdb->get_var( 'SELECT VERSION()' );
@@ -158,7 +158,7 @@ class Database {
 								$major = (int) $version_parts[0];
 								$minor = (int) $version_parts[1];
 
-								if ( $major > 11 || ( $major == 11 && $minor >= 7 ) ) {
+								if ( 11 < $major || ( 11 == $major && 7 <= $minor ) ) {
 									// Version is sufficient, but let's also verify vector functionality exists.
 									$this->has_vector_support = true;
 								}
@@ -176,7 +176,7 @@ class Database {
 					try {
 						// Check if we can create a vector data type (without actually creating it).
 						$check = $wpdb->get_var( "SELECT COUNT(*) FROM information_schema.columns WHERE column_type LIKE 'VECTOR%' LIMIT 1" );
-						if ( $check === null && $wpdb->last_error ) {
+						if ( null === $check && $wpdb->last_error ) {
 							// Failed to query for VECTOR type, might not be supported.
 							if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 								error_log( '[WPVDB] Vector type check failed: ' . $wpdb->last_error ); }
@@ -188,7 +188,7 @@ class Database {
 						$this->has_vector_support = false;
 					}
 				}
-			} elseif ( $db_type === 'mysql' ) {
+			} elseif ( 'mysql' === $db_type ) {
 				// Check for MySQL version with vector support (8.0.32+).
 				try {
 					$version = $wpdb->get_var( 'SELECT VERSION()' );
@@ -204,7 +204,7 @@ class Database {
 							$minor = (int) $version_parts[1];
 							$patch = isset( $version_parts[2] ) ? (int) $version_parts[2] : 0;
 
-							if ( $major > 8 || ( $major == 8 && $minor > 0 ) || ( $major == 8 && $minor == 0 && $patch >= 32 ) ) {
+							if ( 8 < $major || ( 8 == $major && 0 < $minor ) || ( 8 == $major && 0 == $minor && 32 <= $patch ) ) {
 								$this->has_vector_support = true;
 							}
 						}
@@ -236,7 +236,7 @@ class Database {
 			$probe_table = $wpdb->prefix . 'wpvdb_vector_probe';
 			$wpdb->query( "DROP TABLE IF EXISTS {$probe_table}" );
 			$create = $wpdb->query( "CREATE TABLE {$probe_table} (id INT PRIMARY KEY AUTO_INCREMENT, embedding VECTOR(3) NOT NULL)" );
-			if ( $create === false ) {
+			if ( false === $create ) {
 				return false;
 			}
 
@@ -263,7 +263,7 @@ class Database {
 			$probe_table = $wpdb->prefix . 'wpvdb_vector_probe';
 			$wpdb->query( "DROP TABLE IF EXISTS {$probe_table}" );
 			$create = $wpdb->query( "CREATE TABLE {$probe_table} (id INT PRIMARY KEY AUTO_INCREMENT, embedding VECTOR(3) NOT NULL)" );
-			if ( $create === false ) {
+			if ( false === $create ) {
 				return false;
 			}
 
@@ -271,7 +271,7 @@ class Database {
 			$row_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$probe_table}" );
 			$wpdb->query( "DROP TABLE IF EXISTS {$probe_table}" );
 
-			return $row_count === 1;
+			return 1 === $row_count;
 		} catch ( \Exception $e ) {
 			Logger::log_exception( $e, 'MySQL vector storage probe failed' );
 			return false;
@@ -312,7 +312,7 @@ class Database {
 			// The JSON must be single-quoted inside the SQL function call so it
 			// parses as a string literal; callers pass raw JSON (e.g. "[0.1,0.2]").
 			$quoted = "'" . esc_sql( $json_string ) . "'";
-			if ( $db_type === 'mariadb' ) {
+			if ( 'mariadb' === $db_type ) {
 				// MariaDB 11.7+ parses a JSON array with VEC_FromText().
 				return "VEC_FromText($quoted)";
 			} else {
@@ -339,7 +339,7 @@ class Database {
 		if ( $this->has_native_vector_support() ) {
 			$db_type = $this->get_db_type();
 
-			if ( $db_type === 'mariadb' ) {
+			if ( 'mariadb' === $db_type ) {
 				// Try to determine the exact version to use the right function names.
 				global $wpdb;
 				$version            = $wpdb->get_var( 'SELECT VERSION()' );
@@ -354,7 +354,7 @@ class Database {
 						$major = (int) $version_parts[0];
 						$minor = (int) $version_parts[1];
 
-						if ( $major > 11 || ( $major == 11 && $minor >= 7 ) ) {
+						if ( 11 < $major || ( 11 == $major && 7 <= $minor ) ) {
 							$using_newer_syntax = true;
 						}
 					}
@@ -438,7 +438,7 @@ class Database {
 
 			return array(
 				'db_type'            => 'sqlite',
-				'db_version'         => $sqlite_version !== '' ? sprintf( 'SQLite %s', $sqlite_version ) : 'SQLite',
+				'db_version'         => '' !== $sqlite_version ? sprintf( 'SQLite %s', $sqlite_version ) : 'SQLite',
 				'has_vector_support' => false,
 				'fallbacks_enabled'  => $this->are_fallbacks_enabled(),
 				'playground'         => \wpvdb_is_playground_runtime(),
@@ -456,7 +456,7 @@ class Database {
 		$diagnostics['db_version'] = $version_string;
 
 		// Extract version number.
-		if ( $db_type === 'mariadb' ) {
+		if ( 'mariadb' === $db_type ) {
 			preg_match( '/(\d+\.\d+\.\d+)/', $version_string, $matches );
 			if ( ! empty( $matches[1] ) ) {
 				$version_number                = $matches[1];
@@ -464,7 +464,7 @@ class Database {
 				$diagnostics['min_required']   = '11.7';
 				$diagnostics['is_compatible']  = version_compare( $version_number, '11.7', '>=' );
 			}
-		} elseif ( $db_type === 'mysql' ) {
+		} elseif ( 'mysql' === $db_type ) {
 			preg_match( '/(\d+\.\d+\.\d+)/', $version_string, $matches );
 			if ( ! empty( $matches[1] ) ) {
 				$version_number                = $matches[1];
@@ -494,21 +494,21 @@ class Database {
                 )"
 				);
 
-				$diagnostics['create_table'] = ( $result !== false );
+				$diagnostics['create_table'] = ( false !== $result );
 
 				if ( $diagnostics['create_table'] ) {
 					// Insert test data.
 					$result                     = $wpdb->query( "INSERT INTO $test_table (embedding) VALUES ('[1.0, 0.0, 0.0]'), ('[0.0, 1.0, 0.0]'), ('[0.0, 0.0, 1.0]')" );
-					$diagnostics['insert_data'] = ( $result !== false && $result === 3 );
+					$diagnostics['insert_data'] = ( false !== $result && 3 === $result );
 
 					// Test cosine distance.
 					$distance                       = $wpdb->get_var( "SELECT COSINE_DISTANCE(embedding, '[1.0, 1.0, 0.0]') FROM $test_table WHERE id = 1" );
-					$diagnostics['cosine_distance'] = ( $distance !== null && is_numeric( $distance ) );
+					$diagnostics['cosine_distance'] = ( null !== $distance && is_numeric( $distance ) );
 
 					// Test vector indexing (MariaDB only).
-					if ( $db_type === 'mariadb' ) {
+					if ( 'mariadb' === $db_type ) {
 						$result                      = $wpdb->query( "ALTER TABLE $test_table ADD VECTOR INDEX embedding_idx(embedding) USING HNSW" );
-						$diagnostics['vector_index'] = ( $result !== false );
+						$diagnostics['vector_index'] = ( false !== $result );
 					} else {
 						$diagnostics['vector_index'] = 'Not supported in MySQL';
 					}
@@ -559,7 +559,7 @@ class Database {
 
 			// Invalidate query cache so subsequent /query calls don't return
 			// results referencing the just-deleted document.
-			if ( $deleted !== false && $deleted > 0 ) {
+			if ( false !== $deleted && 0 < $deleted ) {
 				Cache::invalidate_query_cache();
 			}
 
@@ -614,7 +614,7 @@ class Database {
 			// Add the vector index with correct MariaDB 11.7 syntax.
 			$result = $wpdb->query( "ALTER TABLE $table_name ADD VECTOR INDEX embedding_idx(embedding) M=$m_value DISTANCE='$distance_type'" );
 
-			return $result !== false;
+			return false !== $result;
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( '[WPVDB ERROR] Failed to add vector index: ' . $e->getMessage() ); }

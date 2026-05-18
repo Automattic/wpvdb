@@ -115,7 +115,7 @@ class Models {
 			$models[ $provider ] = array_filter(
 				$provider_models,
 				static function ( $model ) use ( $target_dim ) {
-					return ( ! isset( $model['selectable'] ) || $model['selectable'] !== false )
+					return ( ! isset( $model['selectable'] ) || false !== $model['selectable'] )
 						&& self::is_model_storage_compatible( $model, $target_dim );
 				}
 			);

@@ -267,7 +267,7 @@ class REST {
 
 		foreach ( $chunks as $index => $chunk ) {
 			// Skip null or empty chunks.
-			if ( $chunk === null || $chunk === '' ) {
+			if ( null === $chunk || '' === $chunk ) {
 				continue;
 			}
 
@@ -492,7 +492,7 @@ class REST {
 			}
 
 			$vector_json        = wp_json_encode( $normalized_vector );
-			$cache_key_override = 'vec:' . hash( 'sha256', $vector_json !== false ? $vector_json : '' );
+			$cache_key_override = 'vec:' . hash( 'sha256', false !== $vector_json ? $vector_json : '' );
 		} else {
 			$text_cache_seed    = wp_json_encode(
 				array(
@@ -501,12 +501,12 @@ class REST {
 					'api_base' => $api_base,
 				)
 			);
-			$cache_key_override = 'text:' . hash( 'sha256', $text_cache_seed !== false ? $text_cache_seed : $text );
+			$cache_key_override = 'text:' . hash( 'sha256', false !== $text_cache_seed ? $text_cache_seed : $text );
 		}
 
 		// Check cache first for expensive queries.
 		$cached_result = Cache::get_query_result( $text, $model, $limit, $cache_key_override );
-		if ( $cached_result !== false ) {
+		if ( false !== $cached_result ) {
 			Logger::debug(
 				'Using cached query result',
 				array(
@@ -604,7 +604,7 @@ class REST {
 				try {
 					// Convert the embedding array to JSON and validate.
 					$embedding_json = wp_json_encode( $embedding );
-					if ( $embedding_json === false ) {
+					if ( false === $embedding_json ) {
 						return new \WP_Error( 'encoding_error', __( 'Failed to encode embedding data', 'wpvdb' ), array( 'status' => 500 ) );
 					}
 
@@ -616,10 +616,10 @@ class REST {
 					// Build safe SQL based on database type. MariaDB 11.7+ uses
 					// VEC_FromText to parse a JSON array; MySQL 9 uses its own
 					// ingest function (VECTOR_FROM_JSON here is a placeholder).
-					if ( $db_type === 'mariadb' ) {
+					if ( 'mariadb' === $db_type ) {
 						$vector_function   = "VEC_FromText('" . esc_sql( $embedding_json ) . "')";
 						$distance_function = 'VEC_DISTANCE_COSINE(embedding, ' . $vector_function . ')';
-					} elseif ( $db_type === 'mysql' ) {
+					} elseif ( 'mysql' === $db_type ) {
 						$vector_function   = "VECTOR_FROM_JSON('" . esc_sql( $embedding_json ) . "')";
 						$distance_function = 'COSINE_DISTANCE(embedding, ' . $vector_function . ')';
 					} else {
@@ -898,7 +898,7 @@ class REST {
 	public static function insert_embedding_row( $doc_id, $chunk_id, $chunk_content, $summary, $embedding, $model = '', $doc_type = 'post', $chunk_index = null ) {
 		// Detect callers using the legacy 5/6/7-arg signature; fall back to 0 for backward
 		// compatibility but emit a debug-only warning so the regression is visible.
-		if ( $chunk_index === null ) {
+		if ( null === $chunk_index ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( '[WPVDB WARN] insert_embedding_row called without chunk_index; defaulting to 0' ); }
 			$chunk_index = 0;
@@ -1015,7 +1015,7 @@ class REST {
 			);
 		}
 
-		if ( $result === false ) {
+		if ( false === $result ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( '[WPVDB ERROR] Failed to insert embedding row: ' . $wpdb->last_error ); }
 			return new \WP_Error(
@@ -1123,7 +1123,7 @@ class REST {
 		$mag1 = sqrt( $mag1 );
 		$mag2 = sqrt( $mag2 );
 
-		if ( $mag1 == 0 || $mag2 == 0 ) {
+		if ( 0 == $mag1 || 0 == $mag2 ) {
 			return 1.0; // Maximum distance if either vector is zero.
 		}
 

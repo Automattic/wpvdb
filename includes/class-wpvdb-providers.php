@@ -92,7 +92,7 @@ class Providers {
 	 * @return bool Whether the URL uses the Automattic AI proxy endpoint
 	 */
 	public static function is_automattic_ai_proxy_url( $url ) {
-		if ( ! is_string( $url ) || $url === '' ) {
+		if ( ! is_string( $url ) || '' === $url ) {
 			return false;
 		}
 
