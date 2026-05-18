@@ -37,7 +37,7 @@ class Query {
 	 * We'll find the top matching doc_ids from pivot table, then limit WP_Query to those posts.
 	 */
 	public static function maybe_vector_search( $query ) {
-		// Initialize database
+		// Initialize database.
 		self::init_database();
 
 		// Only run in front-end or REST contexts, and only if vdb_vector_query is set.
@@ -71,7 +71,7 @@ class Query {
 			return;
 		}
 
-		// Make sure we have a valid model name
+		// Make sure we have a valid model name.
 		$model = Settings::get_default_model();
 		if ( empty( $model ) ) {
 			$model = Models::get_default_model_for_provider( 'openai' );
@@ -79,7 +79,7 @@ class Query {
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			error_log( '[WPVDB DEBUG] Using embedding model: ' . $model ); }
 
-		// Get API base URL with fallback
+		// Get API base URL with fallback.
 		$api_base = Settings::get_api_base();
 		if ( empty( $api_base ) ) {
 			$api_base = 'https://api.openai.com/v1/';
@@ -92,7 +92,7 @@ class Query {
 			if ( is_wp_error( $embedding_result ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					error_log( '[WPVDB ERROR] Error generating embedding: ' . $embedding_result->get_error_message() ); }
-				return; // skip
+				return; // skip.
 			}
 
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -111,21 +111,21 @@ class Query {
 
 			if ( $has_vector ) {
 				try {
-					// Convert the embedding array to JSON
+					// Convert the embedding array to JSON.
 					$embedding_json = json_encode( $embedding );
 
-					// Use Database class to get the appropriate vector function
+					// Use Database class to get the appropriate vector function.
 					$vector_function = self::$database->get_vector_from_string_function( $embedding_json );
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 						error_log( '[WPVDB DEBUG] Using vector function: ' . $vector_function ); }
 
-					// Use Database class to get the appropriate distance function
+					// Use Database class to get the appropriate distance function.
 					$distance_function = self::$database->get_vector_distance_function( 'embedding', $vector_function, 'cosine' );
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 						error_log( '[WPVDB DEBUG] Using distance function: ' . $distance_function ); }
 
 					// Set an appropriate similarity threshold - we discovered this is critical for performance
-					// Lower values (0.2-0.3) are more strict but faster, higher values (0.4-0.6) give more results
+					// Lower values (0.2-0.3) are more strict but faster, higher values (0.4-0.6) give more results.
 					$similarity_threshold = apply_filters( 'wpvdb_similarity_threshold', 0.35 );
 
 					// Optimized query that uses the vector index with a distance threshold.
@@ -142,7 +142,7 @@ class Query {
                     ",
 						$similarity_threshold,
 						$model,
-						$limit * 3 // fetch more candidates than needed
+						$limit * 3 // fetch more candidates than needed.
 					);
 
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -201,12 +201,12 @@ class Query {
 			}
 
 			if ( empty( $doc_ids ) ) {
-				// No matches, so force query to return no posts
+				// No matches, so force query to return no posts.
 				$query->set( 'post__in', array( 0 ) );
 				return;
 			}
 
-			// If there are doc_ids, limit the WP query to only those
+			// If there are doc_ids, limit the WP query to only those.
 			$doc_ids = array_unique( $doc_ids );
 			$query->set( 'post__in', $doc_ids );
 			$query->set( 'orderby', 'post__in' );
@@ -219,8 +219,8 @@ class Query {
 	/**
 	 * Modify SQL query to include vector search
 	 *
-	 * @param string   $sql  SQL query string
-	 * @param WP_Query $query Query instance
+	 * @param string   $sql  SQL query string.
+	 * @param WP_Query $query Query instance.
 	 * @return string Modified SQL query
 	 */
 	public function posts_request( $sql, $query ) {
@@ -230,19 +230,19 @@ class Query {
 
 		global $wpdb;
 
-		// Get vector query from query vars
+		// Get vector query from query vars.
 		$vector_query = $query->query_vars['wpvdb_vector_query'];
 
-		// Get database handler
+		// Get database handler.
 		$database = new Database();
 
-		// Check if we have vector support
+		// Check if we have vector support.
 		$has_vector = $database->has_native_vector_support();
 
-		// Get embedding table
+		// Get embedding table.
 		$embedding_table = $wpdb->prefix . 'wpvdb_embeddings';
 
-		// Check if embedding table exists
+		// Check if embedding table exists.
 		$table_exists = $wpdb->get_var( "SHOW TABLES LIKE '$embedding_table'" ) === $embedding_table;
 
 		if ( ! $table_exists ) {

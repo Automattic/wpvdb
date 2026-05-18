@@ -85,7 +85,7 @@ class Plugin {
 		$this->settings = new Settings();
 		$this->admin    = new Admin();
 
-		// Initialize maintenance system
+		// Initialize maintenance system.
 		if ( ! \wpvdb_is_playground_runtime() ) {
 			Maintenance::init();
 		}
@@ -95,52 +95,52 @@ class Plugin {
 	 * Initialize the plugin
 	 */
 	public function init() {
-		// Initialize settings
+		// Initialize settings.
 		$this->settings->init();
 
-		// Check for incompatible database at plugin init time
+		// Check for incompatible database at plugin init time.
 		if ( is_admin() && ! wp_doing_ajax() ) {
 			$this->check_database_compatibility();
 		}
 
-		// Initialize core logic
+		// Initialize core logic.
 		$this->core->init();
 
-		// Initialize database hooks for cleanup operations
+		// Initialize database hooks for cleanup operations.
 		$this->database->init();
 
-		// Register REST routes
+		// Register REST routes.
 		add_action( 'rest_api_init', array( $this->rest, 'register_routes' ) );
 
-		// Extend WP_Query
+		// Extend WP_Query.
 		Query::init();
 
-		// Initialize admin interface
+		// Initialize admin interface.
 		if ( is_admin() ) {
 			$this->admin->init();
 
-			// Show admin notice if Action Scheduler is missing
+			// Show admin notice if Action Scheduler is missing.
 			if ( ! $this->has_action_scheduler() && ! \wpvdb_is_playground_runtime() ) {
 				add_action( 'admin_notices', array( $this, 'action_scheduler_missing_notice' ) );
 			}
 		}
 
-		// Hook into post saving for auto-embedding
+		// Hook into post saving for auto-embedding.
 		if ( ! \wpvdb_is_playground_runtime() ) {
 			add_action( 'wp_insert_post', array( $this->core, 'auto_embed_post' ), 10, 3 );
 		}
 
-		// Enhanced chunking filter (override default chunking)
+		// Enhanced chunking filter (override default chunking).
 		add_filter( 'wpvdb_chunk_text', array( $this->core, 'enhanced_chunking' ), 10, 2 );
 
-		// Register Action Scheduler handler (if available)
+		// Register Action Scheduler handler (if available).
 		if ( $this->has_action_scheduler() && ! \wpvdb_is_playground_runtime() ) {
 			add_action( 'wpvdb_process_embedding', array( WPVDB_Queue::class, 'process_item' ), 10, 1 );
 			add_action( 'wpvdb_process_embedding_batch', array( WPVDB_Queue::class, 'process_batch' ), 10, 1 );
 			add_action( 'wpvdb_run_queue_now', array( $this, 'run_queue_immediately' ) );
 			add_action( Embedding_Enqueuer::AS_HOOK, array( Embedding_Enqueuer::class, 'process_page' ), 10, 1 );
 
-			// Add more frequent runner for Action Scheduler
+			// Add more frequent runner for Action Scheduler.
 			add_action( 'init', array( $this, 'maybe_run_action_scheduler' ) );
 		}
 	}
@@ -237,25 +237,25 @@ class Plugin {
 	 * Check for database compatibility and handle accordingly
 	 */
 	public function check_database_compatibility() {
-		// Get the current screen to avoid notices on plugin activation
+		// Get the current screen to avoid notices on plugin activation.
 		if ( function_exists( 'get_current_screen' ) ) {
 			$screen = get_current_screen();
 
-			// Skip this check on the plugins page to avoid redirect loops
+			// Skip this check on the plugins page to avoid redirect loops.
 			if ( $screen && in_array( $screen->id, array( 'plugins', 'plugins-network' ) ) ) {
 				return;
 			}
 		}
 
-		// Check if we have an incompatible database notice pending
+		// Check if we have an incompatible database notice pending.
 		if ( get_transient( 'wpvdb_incompatible_db_notice' ) ) {
 			delete_transient( 'wpvdb_incompatible_db_notice' );
 
-			// Get the database info
+			// Get the database info.
 			$db_type     = $this->database->get_db_type();
 			$min_version = $db_type === 'mysql' ? '8.0.32' : '11.7';
 
-			// Add admin notice for automatic deactivation
+			// Add admin notice for automatic deactivation.
 			add_action(
 				'admin_notices',
 				function () use ( $db_type, $min_version ) {
@@ -263,7 +263,7 @@ class Plugin {
 				}
 			);
 
-			// Schedule deactivation if the user hasn't taken action after 24 hours
+			// Schedule deactivation if the user hasn't taken action after 24 hours.
 			if ( ! wp_next_scheduled( 'wpvdb_maybe_deactivate_plugin' ) ) {
 				wp_schedule_single_event( time() + DAY_IN_SECONDS, 'wpvdb_maybe_deactivate_plugin' );
 			}
@@ -274,34 +274,34 @@ class Plugin {
 	 * Auto deactivate plugin if the database is incompatible and the user hasn't enabled fallbacks
 	 */
 	public function maybe_deactivate_plugin() {
-		// Only run if incompatible flag is still set
+		// Only run if incompatible flag is still set.
 		if ( get_option( 'wpvdb_incompatible_db', false ) ) {
-			// Double check compatibility
+			// Double check compatibility.
 			if ( ! $this->database->has_native_vector_support() && ! $this->database->are_fallbacks_enabled() ) {
-				// Deactivate plugin using global constant (outside namespace)
+				// Deactivate plugin using global constant (outside namespace).
 				deactivate_plugins( plugin_basename( \WPVDB_PLUGIN_FILE ) );
 
-				// Clear the flag
+				// Clear the flag.
 				delete_option( 'wpvdb_incompatible_db' );
 
-				// Set a transient to show a notice after deactivation
+				// Set a transient to show a notice after deactivation.
 				set_transient( 'wpvdb_was_deactivated', true, 60 * 60 );
 
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					error_log( '[WPVDB] Plugin deactivated due to incompatible database.' ); }
 
-				// If this is running in a CRON or admin context without a screen, we're done
+				// If this is running in a CRON or admin context without a screen, we're done.
 				if ( ! function_exists( 'get_current_screen' ) || ! get_current_screen() ) {
 					return;
 				}
 
-				// Redirect to plugins page if we're in the admin
+				// Redirect to plugins page if we're in the admin.
 				if ( is_admin() && ! wp_doing_ajax() ) {
 					wp_redirect( admin_url( 'plugins.php?deactivate=true' ) );
 					exit;
 				}
 			} else {
-				// Database now compatible or fallbacks enabled, clear the flag
+				// Database now compatible or fallbacks enabled, clear the flag.
 				delete_option( 'wpvdb_incompatible_db' );
 			}
 		}
@@ -323,9 +323,9 @@ class Plugin {
 	 */
 	public function maybe_run_action_scheduler() {
 		if ( is_admin() && function_exists( 'as_has_scheduled_action' ) && ! wp_doing_ajax() ) {
-			// Check if we have any pending wpvdb actions
+			// Check if we have any pending wpvdb actions.
 			if ( as_has_scheduled_action( 'wpvdb_process_embedding', null, 'wpvdb' ) ) {
-				// Make sure scheduler runs
+				// Make sure scheduler runs.
 				if ( function_exists( 'as_schedule_cron_action' ) ) {
 					as_schedule_cron_action( time(), '* * * * *', 'action_scheduler_run_queue', array(), 'action-scheduler' );
 				}
@@ -348,7 +348,7 @@ class Plugin {
 	 * Process items in the fallback queue via WP Cron
 	 */
 	public function process_fallback_queue() {
-		$this->queue->process_fallback_queue( 10 ); // Process 10 items at a time
+		$this->queue->process_fallback_queue( 10 ); // Process 10 items at a time.
 	}
 
 	/**
@@ -362,7 +362,7 @@ class Plugin {
 	 * Plugin deactivation routine
 	 */
 	public function deactivate() {
-		// Deactivation logic if needed (e.g., remove scheduled events)
+		// Deactivation logic if needed (e.g., remove scheduled events).
 	}
 
 	/**

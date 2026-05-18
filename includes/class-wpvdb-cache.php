@@ -27,8 +27,8 @@ class Cache {
 	/**
 	 * Get cached embedding by hash
 	 *
-	 * @param string $text Text that was embedded
-	 * @param string $model Model used for embedding
+	 * @param string $text Text that was embedded.
+	 * @param string $model Model used for embedding.
 	 * @return array|false Embedding array or false if not cached
 	 */
 	public static function get_embedding( $text, $model ) {
@@ -39,9 +39,9 @@ class Cache {
 	/**
 	 * Cache an embedding
 	 *
-	 * @param string $text Text that was embedded
-	 * @param string $model Model used for embedding
-	 * @param array  $embedding Embedding vector
+	 * @param string $text Text that was embedded.
+	 * @param string $model Model used for embedding.
+	 * @param array  $embedding Embedding vector.
 	 * @return bool Success
 	 */
 	public static function set_embedding( $text, $model, $embedding ) {
@@ -94,7 +94,7 @@ class Cache {
 	/**
 	 * Cache database statistics
 	 *
-	 * @param array $stats Database statistics
+	 * @param array $stats Database statistics.
 	 * @return bool Success
 	 */
 	public static function set_db_stats( $stats ) {
@@ -105,7 +105,7 @@ class Cache {
 	/**
 	 * Invalidate cache when embeddings are updated
 	 *
-	 * @param int $doc_id Document ID that was updated
+	 * @param int $doc_id Document ID that was updated.
 	 */
 	public static function invalidate_document_cache( $doc_id ) {
 		// Invalidate query results since document embeddings changed.
@@ -113,10 +113,10 @@ class Cache {
 		// by a real version-bump that orphans every prior cache key.
 		self::invalidate_query_cache();
 
-		// Invalidate database stats
+		// Invalidate database stats.
 		wp_cache_delete( 'db_stats', self::CACHE_GROUP );
 
-		// Log cache invalidation
+		// Log cache invalidation.
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( "[WPVDB CACHE] Invalidated cache for document {$doc_id}" ); }
@@ -165,12 +165,12 @@ class Cache {
 	/**
 	 * Generate cache key for embedding
 	 *
-	 * @param string $text Text content
-	 * @param string $model Model name
+	 * @param string $text Text content.
+	 * @param string $model Model name.
 	 * @return string Cache key
 	 */
 	private static function get_embedding_cache_key( $text, $model ) {
-		// Use hash to avoid very long cache keys and ensure uniqueness
+		// Use hash to avoid very long cache keys and ensure uniqueness.
 		$text_hash = hash( 'sha256', $text );
 		return "embedding_{$model}_{$text_hash}";
 	}
@@ -178,9 +178,9 @@ class Cache {
 	/**
 	 * Generate cache key for query result
 	 *
-	 * @param string $query_text Query text
-	 * @param string $model Model name
-	 * @param int    $limit Result limit
+	 * @param string $query_text Query text.
+	 * @param string $model Model name.
+	 * @param int    $limit Result limit.
 	 * @return string Cache key
 	 */
 	private static function get_query_cache_key( $query_text, $model, $limit, $key_seed_override = null ) {
@@ -190,7 +190,7 @@ class Cache {
 				$query_hash = hash( 'sha256', $query_hash );
 			}
 		} else {
-			// Use hash to avoid very long cache keys
+			// Use hash to avoid very long cache keys.
 			$query_hash = hash( 'sha256', (string) $query_text );
 		}
 		// Prefix with the current cache version so invalidate_query_cache()
@@ -202,23 +202,23 @@ class Cache {
 	/**
 	 * Flush all cache entries with a specific prefix
 	 *
-	 * @param string $prefix Cache key prefix
+	 * @param string $prefix Cache key prefix.
 	 */
 	private static function flush_cache_group( $prefix ) {
 		// WordPress doesn't have a built-in way to flush by prefix
-		// So we'll use a cache invalidation marker
+		// So we'll use a cache invalidation marker.
 		$invalidation_key = "invalidation_{$prefix}_" . time();
 		wp_cache_set( $invalidation_key, true, self::CACHE_GROUP, 60 );
 
 		// In a more robust implementation, you might maintain a list of keys
-		// or use a more advanced caching system like Redis
+		// or use a more advanced caching system like Redis.
 	}
 
 	/**
 	 * Clear all WPVDB caches
 	 */
 	public static function flush_all() {
-		// WordPress doesn't have wp_cache_flush_group, so we'll use invalidation timestamps
+		// WordPress doesn't have wp_cache_flush_group, so we'll use invalidation timestamps.
 		$timestamp = time();
 		wp_cache_set( 'cache_invalidation_timestamp', $timestamp, self::CACHE_GROUP, DAY_IN_SECONDS );
 		self::invalidate_query_cache();
@@ -233,8 +233,8 @@ class Cache {
 	/**
 	 * Check if cache is still valid based on invalidation timestamp
 	 *
-	 * @param string $cache_key Cache key to check
-	 * @param int    $cached_time When the item was cached
+	 * @param string $cache_key Cache key to check.
+	 * @param int    $cached_time When the item was cached.
 	 * @return bool Whether cache is still valid
 	 */
 	public static function is_cache_valid( $cache_key, $cached_time ) {
@@ -268,7 +268,7 @@ class Cache {
 	 * @return string Estimated memory usage
 	 */
 	private static function estimate_cache_memory_usage() {
-		// This is a rough estimate - actual implementation would depend on cache backend
+		// This is a rough estimate - actual implementation would depend on cache backend.
 		$test_embedding = wp_cache_get( 'test_embedding_size', self::CACHE_GROUP );
 		if ( $test_embedding ) {
 			$size_per_embedding = strlen( serialize( $test_embedding ) );
@@ -285,10 +285,10 @@ class Cache {
 	public static function preload_popular_embeddings() {
 		global $wpdb;
 
-		// Get most frequently queried embeddings (if we tracked this)
+		// Get most frequently queried embeddings (if we tracked this).
 		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-		// Simple approach: cache recent embeddings
+		// Simple approach: cache recent embeddings.
 		$recent_embeddings = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT chunk_content, model, embedding FROM {$table_name}

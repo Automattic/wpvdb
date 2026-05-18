@@ -30,61 +30,61 @@ class Activation {
 	public static function activate() {
 		global $wpdb;
 
-		// Initialize database
+		// Initialize database.
 		self::init_database();
 
-		// Silence errors during activation to prevent "headers already sent"
+		// Silence errors during activation to prevent "headers already sent".
 		$wpdb->hide_errors();
 		$show_errors         = $wpdb->show_errors;
 		$wpdb->show_errors   = false;
 		$old_error_reporting = error_reporting( 0 );
 
-		// Check database version
+		// Check database version.
 		self::check_db_version_or_warn();
 
 		// Check if database is compatible - if not and fallbacks aren't enabled, set a transient
-		// to display a notice about compatibility and possible auto-deactivation
+		// to display a notice about compatibility and possible auto-deactivation.
 		$is_compatible     = self::$database->has_native_vector_support();
 		$fallbacks_enabled = self::$database->are_fallbacks_enabled();
 
 		if ( ! $is_compatible && ! $fallbacks_enabled ) {
-			// Set transient for admin notice
+			// Set transient for admin notice.
 			set_transient( 'wpvdb_incompatible_db_notice', true, 0 );
 
-			// Set a flag to possibly deactivate the plugin later
+			// Set a flag to possibly deactivate the plugin later.
 			update_option( 'wpvdb_incompatible_db', true );
 
-			// Log the incompatible activation
+			// Log the incompatible activation.
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( '[WPVDB] Activated on incompatible database. Vector features require MySQL 8.0.32+ or MariaDB 11.7+.' ); }
 
-			// Restore error reporting and return early (we'll show the warning later)
+			// Restore error reporting and return early (we'll show the warning later).
 			error_reporting( $old_error_reporting );
 			$wpdb->show_errors = $show_errors;
 			return;
 		} else {
-			// Database is compatible or fallbacks are enabled, remove any flags
+			// Database is compatible or fallbacks are enabled, remove any flags.
 			delete_option( 'wpvdb_incompatible_db' );
 			delete_transient( 'wpvdb_incompatible_db_notice' );
 		}
 
-		// Get the SQL for creating tables
+		// Get the SQL for creating tables.
 		$sql = self::get_schema_sql();
 
-		// Apply schema changes (create/update tables)
+		// Apply schema changes (create/update tables).
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta( $sql );
 
-		// Create index on name column (improves lookup performance)
+		// Create index on name column (improves lookup performance).
 		self::add_vector_index_to_existing_table();
 
-		// Create Meta tables
+		// Create Meta tables.
 		self::create_meta_tables();
 
-		// Store the current DB version
+		// Store the current DB version.
 		update_option( 'wpvdb_db_version', WPVDB_VERSION );
 
-		// Restore error reporting
+		// Restore error reporting.
 		error_reporting( $old_error_reporting );
 		$wpdb->show_errors = $show_errors;
 	}
@@ -98,10 +98,10 @@ class Activation {
 		$has_vector = self::$database->has_native_vector_support();
 
 		if ( $has_vector || self::$database->are_fallbacks_enabled() ) {
-			// Compatible database or fallbacks enabled, no warning needed
+			// Compatible database or fallbacks enabled, no warning needed.
 			update_option( 'wpvdb_db_vector_support_warning', 0 );
 		} else {
-			// Incompatible database, set warning flag
+			// Incompatible database, set warning flag.
 			update_option( 'wpvdb_db_vector_support_warning', 1 );
 		}
 	}
@@ -116,7 +116,7 @@ class Activation {
 		$collate    = $wpdb->get_charset_collate();
 		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-		// Determine the embedding column type (vector or longtext fallback)
+		// Determine the embedding column type (vector or longtext fallback).
 		$has_vector     = self::$database->has_native_vector_support();
 		$embed_dim      = defined( 'WPVDB_DEFAULT_EMBED_DIM' ) ? WPVDB_DEFAULT_EMBED_DIM : 1536;
 		$embedding_type = self::$database->get_embedding_column_type( $embed_dim );
@@ -127,7 +127,7 @@ class Activation {
 			$has_meta_column = true;
 		}
 
-		// Build the SQL for creating the table with optimized indexes
+		// Build the SQL for creating the table with optimized indexes.
 		$sql = "CREATE TABLE {$table_name} (
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
             doc_id bigint(20) unsigned NOT NULL,
@@ -151,7 +151,7 @@ class Activation {
         ) $collate;\n";
 
 		if ( ! $has_meta_column ) {
-			// Add meta column if it doesn't exist (for upgrade from older versions)
+			// Add meta column if it doesn't exist (for upgrade from older versions).
 			$sql .= "ALTER TABLE {$table_name} ADD COLUMN meta longtext DEFAULT NULL;\n";
 		}
 
@@ -211,7 +211,7 @@ class Activation {
 		try {
 			self::init_database();
 
-			// Only proceed if database is ready and we've initialized properly
+			// Only proceed if database is ready and we've initialized properly.
 			if ( ! self::$database ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					error_log( '[WPVDB] Database not initialized, skipping vector index creation' ); }
@@ -220,7 +220,7 @@ class Activation {
 
 			$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-			// Check if table exists before proceeding
+			// Check if table exists before proceeding.
 			try {
 				$table_exists = $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) === $table_name;
 			} catch ( \Exception $e ) {
@@ -229,7 +229,7 @@ class Activation {
 				return false;
 			}
 
-			// Only proceed if we have MariaDB with vector support
+			// Only proceed if we have MariaDB with vector support.
 			$has_vector_support = false;
 			$is_mariadb         = false;
 
@@ -244,7 +244,7 @@ class Activation {
 
 			if ( $table_exists && $is_mariadb && $has_vector_support ) {
 				try {
-					// Check if the index already exists to avoid errors
+					// Check if the index already exists to avoid errors.
 					$index_exists = false;
 					try {
 						$index_check  = $wpdb->get_results( "SHOW INDEX FROM $table_name WHERE Key_name = 'embedding_idx'" );
@@ -255,7 +255,7 @@ class Activation {
 					}
 
 					if ( ! $index_exists ) {
-						// Use M=12 for better performance balance based on our testing
+						// Use M=12 for better performance balance based on our testing.
 						$result = $wpdb->query(
 							"
                             ALTER TABLE $table_name
@@ -267,7 +267,7 @@ class Activation {
 							if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 								error_log( '[WPVDB] Failed to add vector index using new syntax: ' . $wpdb->last_error ); }
 
-							// Try with simpler syntax as fallback
+							// Try with simpler syntax as fallback.
 							$result = $wpdb->query(
 								"
                                 ALTER TABLE $table_name
@@ -288,7 +288,7 @@ class Activation {
 						error_log( '[WPVDB] Vector index already exists, skipping creation' );
 					}
 
-					// After creating the main vector index, add supporting indexes if needed
+					// After creating the main vector index, add supporting indexes if needed.
 					try {
 						$supporting_indexes = array(
 							'doc_id_idx'   => "CREATE INDEX IF NOT EXISTS doc_id_idx ON $table_name(doc_id)",
@@ -297,24 +297,24 @@ class Activation {
 
 						foreach ( $supporting_indexes as $index_name => $create_sql ) {
 							try {
-								// Check if index exists first
+								// Check if index exists first.
 								$index_check = $wpdb->get_results( "SHOW INDEX FROM $table_name WHERE Key_name = '$index_name'" );
 								if ( empty( $index_check ) ) {
 									$wpdb->query( $create_sql );
 								}
 							} catch ( \Exception $e ) {
-								// Ignore errors for supporting indexes, they're not critical
+								// Ignore errors for supporting indexes, they're not critical.
 								if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 									error_log( "[WPVDB] Error creating supporting index $index_name: " . $e->getMessage() ); }
 							}
 						}
 					} catch ( \Exception $e ) {
-						// Ignore errors for supporting indexes, they're not critical
+						// Ignore errors for supporting indexes, they're not critical.
 						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 							error_log( '[WPVDB] Error creating supporting indexes: ' . $e->getMessage() ); }
 					}
 				} catch ( \Exception $e ) {
-					// Log error but don't let it crash the activation
+					// Log error but don't let it crash the activation.
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 						error_log( '[WPVDB] Error adding vector index: ' . $e->getMessage() ); }
 				}
@@ -322,7 +322,7 @@ class Activation {
 
 			return true;
 		} catch ( \Exception $e ) {
-			// Catch all exceptions to prevent activation failure
+			// Catch all exceptions to prevent activation failure.
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( '[WPVDB] Fatal error in add_vector_index_to_existing_table: ' . $e->getMessage() ); }
 			return false;
@@ -338,21 +338,21 @@ class Activation {
 
 		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-		// Drop the existing table
+		// Drop the existing table.
 		$wpdb->query( "DROP TABLE IF EXISTS $table_name" );
 
-		// Create the table with the current schema
+		// Create the table with the current schema.
 		self::activate();
 
 		// Invalidate query cache after the destructive schema change.
 		Cache::invalidate_query_cache();
 
-		// Add vector index with optimized parameters for MariaDB
+		// Add vector index with optimized parameters for MariaDB.
 		if ( self::$database->get_db_type() === 'mariadb' ) {
 			try {
 				if ( self::$database->has_native_vector_support() ) {
 					// Create optimized vector index with parameters determined from our performance testing
-					// M=12 provided better performance while maintaining good accuracy
+					// M=12 provided better performance while maintaining good accuracy.
 					$wpdb->query(
 						"
                         ALTER TABLE $table_name
@@ -360,19 +360,19 @@ class Activation {
                     "
 					);
 
-					// Add additional supporting indexes for improved join performance
+					// Add additional supporting indexes for improved join performance.
 					$wpdb->query( "CREATE INDEX doc_id_idx ON $table_name(doc_id)" );
 					$wpdb->query( "CREATE INDEX doc_type_idx ON $table_name(doc_type)" );
 					$wpdb->query( "CREATE INDEX model_idx ON $table_name(model)" );
 
-					// Update table statistics for optimal query planning
+					// Update table statistics for optimal query planning.
 					$wpdb->query( "ANALYZE TABLE $table_name" );
 
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 						error_log( '[WPVDB] Added optimized vector index and supporting indexes to embeddings table' ); }
 				}
 			} catch ( \Exception $e ) {
-				// Ignore errors
+				// Ignore errors.
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					error_log( '[WPVDB] Error adding vector index during recreation: ' . $e->getMessage() ); }
 			}
@@ -385,6 +385,6 @@ class Activation {
 	 * Create meta tables for storing embedding-related metadata
 	 */
 	private static function create_meta_tables() {
-		// Reserved for future use if needed
+		// Reserved for future use if needed.
 	}
 }

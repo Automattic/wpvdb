@@ -38,19 +38,19 @@ class Providers {
 				'name'             => 'specter',
 				'label'            => 'SPECTER',
 				'api_base'         => 'http://localhost:8000/v1/',
-				'api_key_constant' => '',  // No API key needed for local server
+				'api_key_constant' => '',  // No API key needed for local server.
 				'description'      => __( 'SPECTER2 is a research model for scientific document embeddings, running locally.', 'wpvdb' ),
 			),
 		);
 
-		// Allow plugins to register additional providers
+		// Allow plugins to register additional providers.
 		return apply_filters( 'wpvdb_available_providers', $default_providers );
 	}
 
 	/**
 	 * Get a specific provider by name
 	 *
-	 * @param string $provider_name Provider name
+	 * @param string $provider_name Provider name.
 	 * @return array|null Provider details or null if not found
 	 */
 	public static function get_provider( $provider_name ) {
@@ -61,7 +61,7 @@ class Providers {
 	/**
 	 * Get provider name by its label
 	 *
-	 * @param string $label Provider label
+	 * @param string $label Provider label.
 	 * @return string|null Provider name or null if not found
 	 */
 	public static function get_provider_by_label( $label ) {
@@ -77,7 +77,7 @@ class Providers {
 	/**
 	 * Get API base URL for a provider
 	 *
-	 * @param string $provider_name Provider name
+	 * @param string $provider_name Provider name.
 	 * @return string API base URL or empty string if not found
 	 */
 	public static function get_api_base( $provider_name ) {
@@ -88,7 +88,7 @@ class Providers {
 	/**
 	 * Check whether a URL points at the Automattic AI proxy.
 	 *
-	 * @param string $url URL to check
+	 * @param string $url URL to check.
 	 * @return bool Whether the URL uses the Automattic AI proxy endpoint
 	 */
 	public static function is_automattic_ai_proxy_url( $url ) {

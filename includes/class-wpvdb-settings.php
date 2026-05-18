@@ -49,7 +49,7 @@ class Settings {
 	 * Initialize settings
 	 */
 	public static function init() {
-		// Register settings validation
+		// Register settings validation.
 		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
 	}
 
@@ -74,7 +74,7 @@ class Settings {
 	 * Validate and sanitize settings
 	 *
 	 * @since 1.0.13
-	 * @param array $input Raw settings input
+	 * @param array $input Raw settings input.
 	 * @return array Validated settings
 	 */
 	public static function validate_settings( $input ) {
@@ -84,13 +84,13 @@ class Settings {
 
 		$validated = self::get_defaults();
 
-		// Validate active provider
+		// Validate active provider.
 		if ( isset( $input['active_provider'] ) && in_array( $input['active_provider'], array( 'openai', 'automattic' ), true ) ) {
 			$validated['active_provider'] = $input['active_provider'];
 			$validated['default_model']   = Models::get_default_model_for_provider( $validated['active_provider'] );
 		}
 
-		// Validate model name
+		// Validate model name.
 		if ( ! empty( $input['default_model'] ) ) {
 			$model = Utils::validate_model_name( $input['default_model'] );
 			if ( $model !== false ) {
@@ -105,7 +105,7 @@ class Settings {
 			}
 		}
 
-		// Validate chunk size
+		// Validate chunk size.
 		$validated['chunk_size'] = Utils::validate_positive_int(
 			isset( $input['chunk_size'] ) ? $input['chunk_size'] : self::DEFAULTS['chunk_size'],
 			50,
@@ -113,7 +113,7 @@ class Settings {
 			self::DEFAULTS['chunk_size']
 		);
 
-		// Validate batch size
+		// Validate batch size.
 		$validated['batch_size'] = Utils::validate_positive_int(
 			isset( $input['batch_size'] ) ? $input['batch_size'] : self::DEFAULTS['batch_size'],
 			1,
@@ -121,17 +121,17 @@ class Settings {
 			self::DEFAULTS['batch_size']
 		);
 
-		// Validate boolean settings
+		// Validate boolean settings.
 		$validated['require_auth']         = ! empty( $input['require_auth'] ) ? 1 : 0;
 		$validated['enable_summarization'] = ! empty( $input['enable_summarization'] ) ? 1 : 0;
 
-		// Validate auto embed post types
+		// Validate auto embed post types.
 		if ( isset( $input['auto_embed_post_types'] ) && is_array( $input['auto_embed_post_types'] ) ) {
 			$validated['auto_embed_post_types'] = array_map( 'sanitize_key', $input['auto_embed_post_types'] );
 			$validated['auto_embed_post_types'] = array_filter( $validated['auto_embed_post_types'] );
 		}
 
-		// Validate provider settings
+		// Validate provider settings.
 		foreach ( array( 'openai', 'automattic' ) as $provider ) {
 			if ( ! isset( $input[ $provider ] ) || ! is_array( $input[ $provider ] ) ) {
 				continue;
@@ -139,12 +139,12 @@ class Settings {
 
 			$provider_settings = $input[ $provider ];
 
-			// Validate and encrypt API key
+			// Validate and encrypt API key.
 			if ( ! empty( $provider_settings['api_key'] ) ) {
 				$validated[ $provider ]['api_key'] = self::encrypt_api_key( $provider_settings['api_key'] );
 			}
 
-			// Validate API base URL
+			// Validate API base URL.
 			if ( ! empty( $provider_settings['api_base'] ) ) {
 				$url = Utils::validate_url( $provider_settings['api_base'] );
 				if ( $url !== false ) {
@@ -162,7 +162,7 @@ class Settings {
 
 		$validated = self::normalize_settings_for_storage( $validated );
 
-		// Log settings update
+		// Log settings update.
 		Logger::info(
 			'Settings updated',
 			array(
@@ -172,7 +172,7 @@ class Settings {
 			)
 		);
 
-		// Trigger settings update hook
+		// Trigger settings update hook.
 		do_action( 'wpvdb_settings_updated', $validated, $input );
 
 		return $validated;
@@ -192,7 +192,7 @@ class Settings {
 	/**
 	 * Normalize settings that are already sanitized enough to store.
 	 *
-	 * @param array $settings Settings array
+	 * @param array $settings Settings array.
 	 * @return array Normalized settings array
 	 */
 	public static function normalize_settings_for_storage( $settings ) {
@@ -333,7 +333,7 @@ class Settings {
 	public static function validate_configuration() {
 		$settings = self::get_validated_settings();
 
-		// Check if API key is configured for active provider
+		// Check if API key is configured for active provider.
 		$api_key = self::get_api_key();
 		if ( empty( $api_key ) ) {
 			return new \WP_Error(
@@ -345,7 +345,7 @@ class Settings {
 			);
 		}
 
-		// Check if API base is valid
+		// Check if API base is valid.
 		$api_base = self::get_api_base();
 		if ( empty( $api_base ) ) {
 			return new \WP_Error(
@@ -357,7 +357,7 @@ class Settings {
 			);
 		}
 
-		// Validate API base URL format
+		// Validate API base URL format.
 		if ( Utils::validate_url( $api_base ) === false ) {
 			return new \WP_Error(
 				'invalid_api_base',
@@ -402,7 +402,7 @@ class Settings {
 
 		$settings = self::get_validated_settings();
 
-		// Remove sensitive information
+		// Remove sensitive information.
 		unset( $settings['openai']['api_key'] );
 		unset( $settings['automattic']['api_key'] );
 
@@ -422,22 +422,22 @@ class Settings {
 			return '';
 		}
 
-		// Check if already encrypted (starts with encrypted prefix)
+		// Check if already encrypted (starts with encrypted prefix).
 		if ( strpos( $api_key, 'wpvdb_encrypted_' ) === 0 ) {
 			return $api_key;
 		}
 
-		// Use WordPress salts as encryption key
+		// Use WordPress salts as encryption key.
 		$encryption_key = wp_salt( 'auth' ) . wp_salt( 'secure_auth' );
 		$encryption_key = hash( 'sha256', $encryption_key, true );
 
-		// Generate a random IV
+		// Generate a random IV.
 		$iv = openssl_random_pseudo_bytes( 16 );
 
-		// Encrypt the API key
+		// Encrypt the API key.
 		$encrypted = openssl_encrypt( $api_key, 'AES-256-CBC', $encryption_key, 0, $iv );
 
-		// Combine IV and encrypted data, then base64 encode
+		// Combine IV and encrypted data, then base64 encode.
 		$encrypted_data = base64_encode( $iv . $encrypted );
 
 		return 'wpvdb_encrypted_' . $encrypted_data;
@@ -451,28 +451,28 @@ class Settings {
 			return '';
 		}
 
-		// Check if it's encrypted (has our prefix)
+		// Check if it's encrypted (has our prefix).
 		if ( strpos( $encrypted_key, 'wpvdb_encrypted_' ) !== 0 ) {
-			// Not encrypted, return as-is (for backward compatibility)
+			// Not encrypted, return as-is (for backward compatibility).
 			return $encrypted_key;
 		}
 
-		// Remove prefix and decode
+		// Remove prefix and decode.
 		$encrypted_data = base64_decode( substr( $encrypted_key, 16 ) );
 
 		if ( $encrypted_data === false || strlen( $encrypted_data ) < 16 ) {
 			return '';
 		}
 
-		// Extract IV and encrypted content
+		// Extract IV and encrypted content.
 		$iv        = substr( $encrypted_data, 0, 16 );
 		$encrypted = substr( $encrypted_data, 16 );
 
-		// Use the same encryption key
+		// Use the same encryption key.
 		$encryption_key = wp_salt( 'auth' ) . wp_salt( 'secure_auth' );
 		$encryption_key = hash( 'sha256', $encryption_key, true );
 
-		// Decrypt
+		// Decrypt.
 		$decrypted = openssl_decrypt( $encrypted, 'AES-256-CBC', $encryption_key, 0, $iv );
 
 		return $decrypted !== false ? $decrypted : '';
@@ -488,7 +488,7 @@ class Settings {
 		$settings = self::get_validated_settings();
 		$provider = $settings['active_provider'];
 
-		// Check for constants defined in wp-config.php first
+		// Check for constants defined in wp-config.php first.
 		if ( $provider === 'openai' && defined( 'WPVDB_OPENAI_API_KEY' ) ) {
 			return \constant( 'WPVDB_OPENAI_API_KEY' );
 		}
@@ -499,19 +499,19 @@ class Settings {
 
 		$encrypted_key = isset( $settings[ $provider ]['api_key'] ) ? $settings[ $provider ]['api_key'] : '';
 
-		// If no key in options, check filter
+		// If no key in options, check filter.
 		if ( empty( $encrypted_key ) ) {
 			$encrypted_key = apply_filters( 'wpvdb_default_api_key', '' );
 		}
 
-		// Decrypt the API key before returning
+		// Decrypt the API key before returning.
 		return self::decrypt_api_key( $encrypted_key );
 	}
 
 	/**
 	 * Get API key for a specific provider
 	 *
-	 * @param string $provider Provider name (openai, automattic, etc.)
+	 * @param string $provider Provider name (openai, automattic, etc.).
 	 * @return string API key or empty string if not found
 	 */
 	public static function get_api_key_for_provider( $provider ) {
@@ -522,7 +522,7 @@ class Settings {
 			return '';
 		}
 
-		// Check for constants first
+		// Check for constants first.
 		if ( $provider === 'openai' && defined( 'WPVDB_OPENAI_API_KEY' ) ) {
 			return \constant( 'WPVDB_OPENAI_API_KEY' );
 		}
@@ -533,17 +533,17 @@ class Settings {
 
 		$encrypted_key = '';
 
-		// Check in the provider-specific settings
+		// Check in the provider-specific settings.
 		if ( isset( $settings[ $provider ]['api_key'] ) && ! empty( $settings[ $provider ]['api_key'] ) ) {
 			$encrypted_key = $settings[ $provider ]['api_key'];
 		}
 
-		// Check in the active provider setting
+		// Check in the active provider setting.
 		if ( empty( $encrypted_key ) && isset( $settings['active_provider'] ) && $settings['active_provider'] === $provider ) {
 			$encrypted_key = isset( $settings['api_key'] ) ? $settings['api_key'] : '';
 		}
 
-		// Decrypt and return
+		// Decrypt and return.
 		return self::decrypt_api_key( $encrypted_key );
 	}
 
@@ -554,10 +554,10 @@ class Settings {
 		$settings = get_option( 'wpvdb_settings', array() );
 		$provider = isset( $settings['active_provider'] ) ? $settings['active_provider'] : 'openai';
 
-		// Get the API base from the provider registry
+		// Get the API base from the provider registry.
 		$api_base = Providers::get_api_base( $provider );
 
-		// If not found in registry, check settings
+		// If not found in registry, check settings.
 		if ( empty( $api_base ) ) {
 			// Fallback for filtered or unknown providers.
 			if ( $provider === 'automattic' ) {
@@ -572,7 +572,7 @@ class Settings {
 	/**
 	 * Get API base URL for a specific provider
 	 *
-	 * @param string $provider Provider name (openai, automattic, etc.)
+	 * @param string $provider Provider name (openai, automattic, etc.).
 	 * @return string API base URL or empty string if not found
 	 */
 	public static function get_api_base_for_provider( $provider ) {
@@ -582,7 +582,7 @@ class Settings {
 			return '';
 		}
 
-		// Check in the provider-specific settings
+		// Check in the provider-specific settings.
 		if ( isset( $settings[ $provider ]['api_base'] ) && ! empty( $settings[ $provider ]['api_base'] ) ) {
 			return self::normalize_api_base_for_provider( $provider, $settings[ $provider ]['api_base'] );
 		}
@@ -593,8 +593,8 @@ class Settings {
 	/**
 	 * Normalize a provider API base to the root URL where paths are appended.
 	 *
-	 * @param string $provider Provider name
-	 * @param string $url API base URL
+	 * @param string $provider Provider name.
+	 * @param string $url API base URL.
 	 * @return string Normalized API base URL
 	 */
 	public static function normalize_api_base_for_provider( $provider, $url ) {
@@ -639,7 +639,7 @@ class Settings {
 	/**
 	 * Get default model for a specific provider
 	 *
-	 * @param string $provider Provider name (openai, automattic, etc.)
+	 * @param string $provider Provider name (openai, automattic, etc.).
 	 * @return string Model name or empty string if not found
 	 */
 	public static function get_model_for_provider( $provider ) {
@@ -659,8 +659,8 @@ class Settings {
 	/**
 	 * Get a valid provider model from settings or registry defaults.
 	 *
-	 * @param array  $settings Settings array
-	 * @param string $provider Provider name
+	 * @param array  $settings Settings array.
+	 * @param string $provider Provider name.
 	 * @return string Model name
 	 */
 	private static function get_model_from_settings( $settings, $provider ) {
@@ -697,7 +697,7 @@ class Settings {
 	 * @return bool Whether there is a pending change
 	 */
 	public static function has_pending_provider_change() {
-		// CRITICAL FIX: Get settings directly from database, bypassing cache
+		// CRITICAL FIX: Get settings directly from database, bypassing cache.
 		$settings = get_option( 'wpvdb_settings', array() );
 
 		if ( ! is_array( $settings ) ) {

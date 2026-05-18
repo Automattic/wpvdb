@@ -25,35 +25,35 @@ class Security {
 	/**
 	 * Check rate limit for current user/IP
 	 *
-	 * @param string $endpoint Endpoint name (embed, query, vectors)
-	 * @param int    $limit Custom limit override
+	 * @param string $endpoint Endpoint name (embed, query, vectors).
+	 * @param int    $limit Custom limit override.
 	 * @return bool|WP_Error True if allowed, WP_Error if rate limited
 	 */
 	public static function check_rate_limit( $endpoint, $limit = null ) {
 		$endpoint = sanitize_key( $endpoint );
 
-		// Get limit for this endpoint
+		// Get limit for this endpoint.
 		if ( null === $limit ) {
 			$limit = isset( self::DEFAULT_LIMITS[ $endpoint ] ) ? self::DEFAULT_LIMITS[ $endpoint ] : 60;
 		}
 
-		// Apply filter to allow customization
+		// Apply filter to allow customization.
 		$limit = apply_filters( 'wpvdb_rate_limit', $limit, $endpoint );
 
-		// Skip rate limiting if disabled
+		// Skip rate limiting if disabled.
 		if ( $limit <= 0 ) {
 			return true;
 		}
 
-		// Get identifier for rate limiting (user ID or IP)
+		// Get identifier for rate limiting (user ID or IP).
 		$identifier = self::get_rate_limit_identifier();
 		$cache_key  = self::RATE_LIMIT_PREFIX . $endpoint . '_' . $identifier;
 
-		// Get current count
+		// Get current count.
 		$current_count = get_transient( $cache_key );
 
 		if ( $current_count === false ) {
-			// First request in this minute
+			// First request in this minute.
 			set_transient( $cache_key, 1, MINUTE_IN_SECONDS );
 			return true;
 		}
@@ -70,7 +70,7 @@ class Security {
 			);
 		}
 
-		// Increment counter
+		// Increment counter.
 		set_transient( $cache_key, $current_count + 1, MINUTE_IN_SECONDS );
 
 		return true;
@@ -82,13 +82,13 @@ class Security {
 	 * @return string
 	 */
 	private static function get_rate_limit_identifier() {
-		// Use user ID if logged in
+		// Use user ID if logged in.
 		$user_id = get_current_user_id();
 		if ( $user_id > 0 ) {
 			return 'user_' . $user_id;
 		}
 
-		// Fall back to IP address (with privacy considerations)
+		// Fall back to IP address (with privacy considerations).
 		$ip = self::get_client_ip();
 		return 'ip_' . hash( 'sha256', $ip . wp_salt( 'nonce' ) );
 	}
@@ -99,7 +99,7 @@ class Security {
 	 * @return string
 	 */
 	private static function get_client_ip() {
-		// Check for IP from headers (be cautious of spoofing)
+		// Check for IP from headers (be cautious of spoofing).
 		$ip_headers = array(
 			'HTTP_X_FORWARDED_FOR',
 			'HTTP_X_REAL_IP',
@@ -111,30 +111,30 @@ class Security {
 			if ( ! empty( $_SERVER[ $header ] ) ) {
 				$ip = sanitize_text_field( $_SERVER[ $header ] );
 
-				// Handle comma-separated IPs (X-Forwarded-For)
+				// Handle comma-separated IPs (X-Forwarded-For).
 				if ( strpos( $ip, ',' ) !== false ) {
 					$ip = trim( explode( ',', $ip )[0] );
 				}
 
-				// Validate IP
+				// Validate IP.
 				if ( filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
 					return $ip;
 				}
 			}
 		}
 
-		return '0.0.0.0'; // Fallback
+		return '0.0.0.0'; // Fallback.
 	}
 
 	/**
 	 * Validate nonce for admin requests
 	 *
 	 * @param WP_REST_Request $request
-	 * @param string          $action Nonce action
+	 * @param string          $action Nonce action.
 	 * @return bool|WP_Error
 	 */
 	public static function verify_nonce( $request, $action = 'wpvdb_nonce' ) {
-		// Skip nonce check for non-admin requests if auth is disabled
+		// Skip nonce check for non-admin requests if auth is disabled.
 		$require_auth = get_option( 'wpvdb_require_auth', 1 );
 		if ( empty( $require_auth ) && ! is_admin() ) {
 			return true;
@@ -142,7 +142,7 @@ class Security {
 
 		$nonce = $request->get_header( 'X-WP-Nonce' );
 		if ( empty( $nonce ) ) {
-			// Try to get from query param as fallback
+			// Try to get from query param as fallback.
 			$nonce = $request->get_param( '_wpnonce' );
 		}
 
@@ -160,8 +160,8 @@ class Security {
 	/**
 	 * Log security events
 	 *
-	 * @param string $event Event type
-	 * @param array  $data Event data
+	 * @param string $event Event type.
+	 * @param array  $data Event data.
 	 */
 	public static function log_security_event( $event, $data = array() ) {
 		$log_data = array(
@@ -178,15 +178,15 @@ class Security {
 			error_log( '[WPVDB SECURITY] ' . wp_json_encode( $log_data ) );
 		}
 
-		// Allow plugins to hook into security logging
+		// Allow plugins to hook into security logging.
 		do_action( 'wpvdb_security_event', $event, $log_data );
 	}
 
 	/**
 	 * Sanitize and validate vector embedding array
 	 *
-	 * @param array $embedding Raw embedding array
-	 * @param int   $max_dimensions Maximum allowed dimensions
+	 * @param array $embedding Raw embedding array.
+	 * @param int   $max_dimensions Maximum allowed dimensions.
 	 * @return array|WP_Error Sanitized embedding or error
 	 */
 	public static function validate_embedding( $embedding, $max_dimensions = 8192 ) {
@@ -210,7 +210,7 @@ class Security {
 
 			$float_val = floatval( $value );
 
-			// Check for valid float (not NaN or infinite)
+			// Check for valid float (not NaN or infinite).
 			if ( ! is_finite( $float_val ) ) {
 				return new \WP_Error( 'invalid_embedding_value', sprintf( __( 'Embedding value at index %d is not a valid number', 'wpvdb' ), $i ), array( 'status' => 400 ) );
 			}
@@ -234,14 +234,14 @@ class Security {
 	 * Escape SQL for vector database operations
 	 * Additional escaping for vector-specific SQL
 	 *
-	 * @param string $value Value to escape
+	 * @param string $value Value to escape.
 	 * @return string Escaped value
 	 */
 	public static function escape_vector_sql( $value ) {
-		// Use WordPress's esc_sql and add additional vector-specific escaping
+		// Use WordPress's esc_sql and add additional vector-specific escaping.
 		$escaped = esc_sql( $value );
 
-		// Remove any potential SQL injection patterns specific to vector operations
+		// Remove any potential SQL injection patterns specific to vector operations.
 		$escaped = preg_replace( '/[\'";\\\\]/', '', $escaped );
 
 		return $escaped;

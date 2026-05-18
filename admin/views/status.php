@@ -9,37 +9,37 @@
 
 defined( 'ABSPATH' ) || exit;
 
-// Get the database instance
+// Get the database instance.
 $database = $wpvdb_plugin->get_database();
 
-// Check vector index status
+// Check vector index status.
 $vector_index_status = array(
 	'exists'       => false,
 	'health'       => 'unknown',
 	'optimization' => false,
 );
 
-// Check if vector index exists (only for MariaDB)
+// Check if vector index exists (only for MariaDB).
 if ( $database->get_db_type() === 'mariadb' && $database->has_native_vector_support() ) {
 	global $wpdb;
 	$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-	// Check if the table exists first
+	// Check if the table exists first.
 	$table_exists = $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) === $table_name;
 
 	if ( $table_exists ) {
-		// Check if the index exists
+		// Check if the index exists.
 		$index_exists                  = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'embedding_idx'" ) !== null;
 		$vector_index_status['exists'] = $index_exists;
 
 		if ( $index_exists ) {
-			// Check if other supporting indexes exist for optimal performance
+			// Check if other supporting indexes exist for optimal performance.
 			$has_doc_id_index   = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'doc_id_idx'" ) !== null;
 			$has_doc_type_index = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'doc_type_idx'" ) !== null;
 
 			$vector_index_status['optimization'] = $has_doc_id_index && $has_doc_type_index;
 
-			// Check index health by running EXPLAIN on a simple query
+			// Check index health by running EXPLAIN on a simple query.
 			try {
 				$result                        = $wpdb->get_row( "EXPLAIN SELECT * FROM $table_name ORDER BY COSINE_DISTANCE(embedding, '[1,0,0]') LIMIT 1" );
 				$vector_index_status['health'] = ( isset( $result->key ) && $result->key === 'embedding_idx' ) ? 'good' : 'suboptimal';
@@ -50,7 +50,7 @@ if ( $database->get_db_type() === 'mariadb' && $database->has_native_vector_supp
 	}
 }
 
-// Get provider change status - CRITICAL FIX: Force fresh data retrieval
+// Get provider change status - CRITICAL FIX: Force fresh data retrieval.
 wp_cache_delete( 'wpvdb_settings', 'options' );
 $settings           = get_option( 'wpvdb_settings', array() );
 $has_pending_change = \WPVDB\Settings::has_pending_provider_change();
@@ -77,18 +77,18 @@ if ( $active_reindex_job && ! empty( $active_reindex_job['updated_at'] ) ) {
 		: $active_reindex_job['updated_at'];
 }
 
-// Get system information
+// Get system information.
 $system_info                    = array();
 $system_info['php_version']     = phpversion();
 $system_info['wp_version']      = get_bloginfo( 'version' );
 $system_info['wp_memory_limit'] = WP_MEMORY_LIMIT;
 $system_info['wp_debug_mode']   = defined( 'WP_DEBUG' ) && WP_DEBUG ? 'Yes' : 'No';
 
-// Database info
+// Database info.
 global $wpdb;
 $system_info['mysql_version'] = $database->get_db_version();
 
-// Plugin info
+// Plugin info.
 $plugins                = get_plugins();
 $active_plugins         = get_option( 'active_plugins', array() );
 $system_info['plugins'] = array();
@@ -100,12 +100,12 @@ foreach ( $plugins as $plugin_path => $plugin_data ) {
 	);
 }
 
-// WPVDB specific info
+// WPVDB specific info.
 $system_info['db_type']           = $database->get_db_type();
 $system_info['vector_support']    = $database->has_native_vector_support() ? 'Yes' : 'No';
 $system_info['fallbacks_enabled'] = $database->are_fallbacks_enabled() ? 'Yes' : 'No';
 
-// Get embedding tables info
+// Get embedding tables info.
 $embedding_table                       = $wpdb->prefix . 'wpvdb_embeddings';
 $embedding_table_exists                = $wpdb->get_var( "SHOW TABLES LIKE '$embedding_table'" ) === $embedding_table;
 $system_info['embedding_table_exists'] = $embedding_table_exists ? 'Yes' : 'No';
@@ -116,16 +116,16 @@ if ( $embedding_table_exists ) {
 	$system_info['embedding_count'] = '0';
 }
 
-// Define available sections
+// Define available sections.
 $sections = array(
 	'info'  => __( 'System Information', 'wpvdb' ),
 	'tools' => __( 'Tools', 'wpvdb' ),
 );
 
-// Get the current section from URL or default to 'info'
+// Get the current section from URL or default to 'info'.
 $current_section = isset( $_GET['section'] ) ? sanitize_key( $_GET['section'] ) : 'info';
 
-// Ensure we have a valid section
+// Ensure we have a valid section.
 if ( ! array_key_exists( $current_section, $sections ) ) {
 	$current_section = 'info';
 }
@@ -454,7 +454,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				<?php
 					$debug_settings = $settings;
 
-					// Mask API keys for security
+					// Mask API keys for security.
 				if ( isset( $debug_settings['openai']['api_key'] ) && ! empty( $debug_settings['openai']['api_key'] ) ) {
 					$debug_settings['openai']['api_key'] = '********' . substr( $debug_settings['openai']['api_key'], -4 );
 				}
@@ -578,7 +578,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 			</p>
 
 			<?php
-			// Display diagnostic results if available
+			// Display diagnostic results if available.
 			if ( isset( $_GET['diagnostics'] ) && $_GET['diagnostics'] === 'run' ) {
 				$diagnostics = $database->run_diagnostics();
 				?>
@@ -696,7 +696,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 							<select id="wpvdb-test-model" name="model">
 								<?php
 								$models = \WPVDB\Models::get_selectable_models();
-								// Models are organized by provider, so we need to iterate through each provider's models
+								// Models are organized by provider, so we need to iterate through each provider's models.
 								foreach ( $models as $provider_id => $provider_models ) {
 									echo '<optgroup label="' . esc_attr( ucfirst( $provider_id ) ) . '">';
 									foreach ( $provider_models as $model_id => $model_data ) {

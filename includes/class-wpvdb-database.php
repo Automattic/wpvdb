@@ -130,36 +130,36 @@ class Database {
 				return false;
 			}
 
-			// If we've already determined vector support, return cached result
+			// If we've already determined vector support, return cached result.
 			if ( isset( $this->has_vector_support ) ) {
 				return $this->has_vector_support;
 			}
 
 			$this->has_vector_support = false;
 
-			// First, check the database type
+			// First, check the database type.
 			$db_type = $this->get_db_type();
 
 			if ( $db_type === 'mariadb' ) {
-				// Check for MariaDB version with vector support
+				// Check for MariaDB version with vector support.
 				try {
 					$version = $wpdb->get_var( 'SELECT VERSION()' );
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 						error_log( '[WPVDB] Database version: ' . $version ); }
 
 					if ( stripos( $version, 'MariaDB' ) !== false ) {
-						// Extract version number
+						// Extract version number.
 						if ( preg_match( '/(\d+\.\d+\.\d+)/', $version, $matches ) ) {
 							$version_number = $matches[1];
 							$version_parts  = explode( '.', $version_number );
 
-							// MariaDB 11.7.0 or higher has vector support
+							// MariaDB 11.7.0 or higher has vector support.
 							if ( isset( $version_parts[0] ) && isset( $version_parts[1] ) ) {
 								$major = (int) $version_parts[0];
 								$minor = (int) $version_parts[1];
 
 								if ( $major > 11 || ( $major == 11 && $minor >= 7 ) ) {
-									// Version is sufficient, but let's also verify vector functionality exists
+									// Version is sufficient, but let's also verify vector functionality exists.
 									$this->has_vector_support = true;
 								}
 							}
@@ -171,13 +171,13 @@ class Database {
 					return false;
 				}
 
-				// If version check passed, try to verify vector functions exist
+				// If version check passed, try to verify vector functions exist.
 				if ( $this->has_vector_support ) {
 					try {
-						// Check if we can create a vector data type (without actually creating it)
+						// Check if we can create a vector data type (without actually creating it).
 						$check = $wpdb->get_var( "SELECT COUNT(*) FROM information_schema.columns WHERE column_type LIKE 'VECTOR%' LIMIT 1" );
 						if ( $check === null && $wpdb->last_error ) {
-							// Failed to query for VECTOR type, might not be supported
+							// Failed to query for VECTOR type, might not be supported.
 							if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 								error_log( '[WPVDB] Vector type check failed: ' . $wpdb->last_error ); }
 							$this->has_vector_support = false;
@@ -189,16 +189,16 @@ class Database {
 					}
 				}
 			} elseif ( $db_type === 'mysql' ) {
-				// Check for MySQL version with vector support (8.0.32+)
+				// Check for MySQL version with vector support (8.0.32+).
 				try {
 					$version = $wpdb->get_var( 'SELECT VERSION()' );
 
-					// Extract version number (MySQL version strings can be just the number or include "MySQL")
+					// Extract version number (MySQL version strings can be just the number or include "MySQL").
 					if ( preg_match( '/(\d+\.\d+(?:\.\d+)?)/', $version, $matches ) ) {
 						$version_number = $matches[1];
 						$version_parts  = explode( '.', $version_number );
 
-						// MySQL 8.0.32 or higher has vector support
+						// MySQL 8.0.32 or higher has vector support.
 						if ( isset( $version_parts[0] ) && isset( $version_parts[1] ) ) {
 							$major = (int) $version_parts[0];
 							$minor = (int) $version_parts[1];
@@ -302,7 +302,7 @@ class Database {
 	/**
 	 * Get the SQL function to convert a JSON string to a vector
 	 *
-	 * @param string $json_string JSON string containing vector data
+	 * @param string $json_string JSON string containing vector data.
 	 * @return string SQL function
 	 */
 	public function get_vector_from_string_function( $json_string ) {
@@ -322,7 +322,7 @@ class Database {
 				return "VECTOR_FROM_JSON($quoted)";
 			}
 		} else {
-			// Fallback - just return the JSON string
+			// Fallback - just return the JSON string.
 			return $json_string;
 		}
 	}
@@ -330,9 +330,9 @@ class Database {
 	/**
 	 * Get the appropriate vector distance function SQL for the current database
 	 *
-	 * @param string $vector1 First vector column/value
-	 * @param string $vector2 Second vector column/value
-	 * @param string $distance_type Type of distance to calculate
+	 * @param string $vector1 First vector column/value.
+	 * @param string $vector2 Second vector column/value.
+	 * @param string $distance_type Type of distance to calculate.
 	 * @return string SQL function call for vector distance
 	 */
 	public function get_vector_distance_function( $vector1, $vector2, $distance_type = 'cosine' ) {
@@ -340,12 +340,12 @@ class Database {
 			$db_type = $this->get_db_type();
 
 			if ( $db_type === 'mariadb' ) {
-				// Try to determine the exact version to use the right function names
+				// Try to determine the exact version to use the right function names.
 				global $wpdb;
 				$version            = $wpdb->get_var( 'SELECT VERSION()' );
 				$using_newer_syntax = false;
 
-				// MariaDB 11.7+ uses VEC_DISTANCE_* functions
+				// MariaDB 11.7+ uses VEC_DISTANCE_* functions.
 				if ( preg_match( '/(\d+\.\d+\.\d+)/', $version, $matches ) ) {
 					$version_number = $matches[1];
 					$version_parts  = explode( '.', $version_number );
@@ -361,7 +361,7 @@ class Database {
 				}
 
 				if ( $using_newer_syntax ) {
-					// MariaDB 11.7+ syntax
+					// MariaDB 11.7+ syntax.
 					switch ( $distance_type ) {
 						case 'cosine':
 							return "VEC_DISTANCE_COSINE($vector1, $vector2)";
@@ -373,10 +373,10 @@ class Database {
 							return "VEC_DISTANCE_COSINE($vector1, $vector2)";
 					}
 				} else {
-					// Older style MariaDB syntax or fallback
+					// Older style MariaDB syntax or fallback.
 					switch ( $distance_type ) {
 						case 'cosine':
-							// Try the generic function first
+							// Try the generic function first.
 							return "VEC_DISTANCE($vector1, $vector2, 'cosine')";
 						case 'euclidean':
 							return "VEC_DISTANCE($vector1, $vector2, 'euclidean')";
@@ -387,7 +387,7 @@ class Database {
 					}
 				}
 			} else {
-				// MySQL has similar functions
+				// MySQL has similar functions.
 				switch ( $distance_type ) {
 					case 'cosine':
 						return "COSINE_DISTANCE($vector1, $vector2)";
@@ -400,22 +400,22 @@ class Database {
 				}
 			}
 		} else {
-			// Fallback - we can't calculate distance in SQL
-			return '1.0'; // Return a constant value
+			// Fallback - we can't calculate distance in SQL.
+			return '1.0'; // Return a constant value.
 		}
 	}
 
 	/**
 	 * Get the SQL column type for embedding storage
 	 *
-	 * @param int $dimensions Number of dimensions in the embedding
+	 * @param int $dimensions Number of dimensions in the embedding.
 	 * @return string SQL column type
 	 */
 	public function get_embedding_column_type( $dimensions = 1536 ) {
 		if ( $this->has_native_vector_support() ) {
 			return "VECTOR($dimensions)";
 		} else {
-			// Fallback to LONGTEXT for JSON storage
+			// Fallback to LONGTEXT for JSON storage.
 			return 'LONGTEXT';
 		}
 	}
@@ -448,14 +448,14 @@ class Database {
 
 		$diagnostics = array();
 
-		// Get database type and version
+		// Get database type and version.
 		$db_type        = $this->get_db_type();
 		$version_string = $wpdb->get_var( 'SELECT VERSION()' );
 
 		$diagnostics['db_type']    = $db_type;
 		$diagnostics['db_version'] = $version_string;
 
-		// Extract version number
+		// Extract version number.
 		if ( $db_type === 'mariadb' ) {
 			preg_match( '/(\d+\.\d+\.\d+)/', $version_string, $matches );
 			if ( ! empty( $matches[1] ) ) {
@@ -474,16 +474,16 @@ class Database {
 			}
 		}
 
-		// Check if vector type is supported
+		// Check if vector type is supported.
 		$diagnostics['has_vector_support'] = $this->has_native_vector_support();
 
-		// Check if fallbacks are enabled
+		// Check if fallbacks are enabled.
 		$diagnostics['fallbacks_enabled'] = $this->are_fallbacks_enabled();
 
-		// Test vector operations if supported
+		// Test vector operations if supported.
 		if ( $diagnostics['has_vector_support'] ) {
 			try {
-				// Create test table
+				// Create test table.
 				$test_table = $wpdb->prefix . 'wpvdb_vector_test';
 				$wpdb->query( "DROP TABLE IF EXISTS $test_table" );
 				$result = $wpdb->query(
@@ -497,15 +497,15 @@ class Database {
 				$diagnostics['create_table'] = ( $result !== false );
 
 				if ( $diagnostics['create_table'] ) {
-					// Insert test data
+					// Insert test data.
 					$result                     = $wpdb->query( "INSERT INTO $test_table (embedding) VALUES ('[1.0, 0.0, 0.0]'), ('[0.0, 1.0, 0.0]'), ('[0.0, 0.0, 1.0]')" );
 					$diagnostics['insert_data'] = ( $result !== false && $result === 3 );
 
-					// Test cosine distance
+					// Test cosine distance.
 					$distance                       = $wpdb->get_var( "SELECT COSINE_DISTANCE(embedding, '[1.0, 1.0, 0.0]') FROM $test_table WHERE id = 1" );
 					$diagnostics['cosine_distance'] = ( $distance !== null && is_numeric( $distance ) );
 
-					// Test vector indexing (MariaDB only)
+					// Test vector indexing (MariaDB only).
 					if ( $db_type === 'mariadb' ) {
 						$result                      = $wpdb->query( "ALTER TABLE $test_table ADD VECTOR INDEX embedding_idx(embedding) USING HNSW" );
 						$diagnostics['vector_index'] = ( $result !== false );
@@ -513,7 +513,7 @@ class Database {
 						$diagnostics['vector_index'] = 'Not supported in MySQL';
 					}
 
-					// Clean up
+					// Clean up.
 					$wpdb->query( "DROP TABLE IF EXISTS $test_table" );
 				}
 			} catch ( \Exception $e ) {
@@ -528,29 +528,29 @@ class Database {
 	 * Initialize database hooks
 	 */
 	public function init() {
-		// Add hook to delete embeddings when a post is deleted
+		// Add hook to delete embeddings when a post is deleted.
 		add_action( 'delete_post', array( $this, 'delete_post_embeddings' ) );
 
-		// Add hook to delete embeddings when a post is trashed
+		// Add hook to delete embeddings when a post is trashed.
 		add_action( 'wp_trash_post', array( $this, 'delete_post_embeddings' ) );
 	}
 
 	/**
 	 * Delete embeddings for a post
 	 *
-	 * @param int $post_id Post ID
+	 * @param int $post_id Post ID.
 	 */
 	public function delete_post_embeddings( $post_id ) {
 		global $wpdb;
 
-		// Get the embedding table name
+		// Get the embedding table name.
 		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-		// Check if the table exists
+		// Check if the table exists.
 		$table_exists = $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) === $table_name;
 
 		if ( $table_exists ) {
-			// Delete all embeddings for this post
+			// Delete all embeddings for this post.
 			$deleted = $wpdb->delete(
 				$table_name,
 				array( 'doc_id' => $post_id ),
@@ -570,7 +570,7 @@ class Database {
 			delete_post_meta( $post_id, '_wpvdb_embedded_date' );
 			delete_post_meta( $post_id, '_wpvdb_embedded_model' );
 
-			// Log the deletion
+			// Log the deletion.
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( "[WPVDB] Deleted embeddings for post ID: $post_id" ); }
 		}
@@ -580,38 +580,38 @@ class Database {
 	 * Add vector index to a table with optimized parameters
 	 *
 	 * @since 1.0.13
-	 * @param int    $m_value      M value for HNSW index (default 16)
-	 * @param string $distance_type Distance type (cosine, euclidean, dot)
+	 * @param int    $m_value      M value for HNSW index (default 16).
+	 * @param string $distance_type Distance type (cosine, euclidean, dot).
 	 * @return bool Whether the index was added successfully
 	 */
 	public function add_vector_index( $m_value = 16, $distance_type = 'cosine' ) {
 		global $wpdb;
 
-		// Only MariaDB supports vector indexes
+		// Only MariaDB supports vector indexes.
 		if ( $this->get_db_type() !== 'mariadb' || ! $this->has_native_vector_support() ) {
 			return false;
 		}
 
 		try {
-			// Get the embedding table name
+			// Get the embedding table name.
 			$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-			// Check if the table exists
+			// Check if the table exists.
 			$table_exists = $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) === $table_name;
 
 			if ( ! $table_exists ) {
 				return false;
 			}
 
-			// Check if the index already exists
+			// Check if the index already exists.
 			$index_exists = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'embedding_idx'" ) !== null;
 
 			if ( $index_exists ) {
-				// Index already exists
+				// Index already exists.
 				return true;
 			}
 
-			// Add the vector index with correct MariaDB 11.7 syntax
+			// Add the vector index with correct MariaDB 11.7 syntax.
 			$result = $wpdb->query( "ALTER TABLE $table_name ADD VECTOR INDEX embedding_idx(embedding) M=$m_value DISTANCE='$distance_type'" );
 
 			return $result !== false;
@@ -632,7 +632,7 @@ class Database {
 	public function optimize_vector_performance() {
 		global $wpdb;
 
-		// Only works with MariaDB that has vector support
+		// Only works with MariaDB that has vector support.
 		if ( $this->get_db_type() !== 'mariadb' || ! $this->has_native_vector_support() ) {
 			return false;
 		}
@@ -640,17 +640,17 @@ class Database {
 		try {
 			$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-			// Check if table exists
+			// Check if table exists.
 			$table_exists = $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) === $table_name;
 			if ( ! $table_exists ) {
 				return false;
 			}
 
-			// Check for the supporting indexes we need for optimal performance
+			// Check for the supporting indexes we need for optimal performance.
 			$has_doc_id_index   = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'doc_id_idx'" ) !== null;
 			$has_doc_type_index = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'doc_type_idx'" ) !== null;
 
-			// Add any missing indexes
+			// Add any missing indexes.
 			if ( ! $has_doc_id_index ) {
 				$wpdb->query( "CREATE INDEX doc_id_idx ON $table_name(doc_id)" );
 			}
@@ -659,10 +659,10 @@ class Database {
 				$wpdb->query( "CREATE INDEX doc_type_idx ON $table_name(doc_type)" );
 			}
 
-			// Update statistics for query optimization
+			// Update statistics for query optimization.
 			$wpdb->query( "ANALYZE TABLE $table_name" );
 
-			// Run OPTIMIZE TABLE to defragment and optimize storage
+			// Run OPTIMIZE TABLE to defragment and optimize storage.
 			$wpdb->query( "OPTIMIZE TABLE $table_name" );
 
 			return true;

@@ -56,12 +56,12 @@ class Core {
 			return $chunks;
 		}
 
-		// Check for null or empty text
+		// Check for null or empty text.
 		if ( $text === null || $text === '' ) {
 			return array();
 		}
 
-		// Ensure text is a string
+		// Ensure text is a string.
 		if ( ! is_string( $text ) ) {
 			if ( is_array( $text ) || is_object( $text ) ) {
 				$text = json_encode( $text );
@@ -93,8 +93,8 @@ class Core {
 	 * Default summarization approach using OpenAI or does nothing if no API configured.
 	 * Called via filter 'wpvdb_ai_summarize_chunk'.
 	 *
-	 * @param string $summary existing summary if any
-	 * @param string $text    chunk text
+	 * @param string $summary existing summary if any.
+	 * @param string $text    chunk text.
 	 * @return string summarization
 	 */
 	public function default_summary( $summary, $text ) {
@@ -102,12 +102,12 @@ class Core {
 			return $summary;
 		}
 
-		// Check for null or empty text
+		// Check for null or empty text.
 		if ( $text === null || $text === '' ) {
 			return '';
 		}
 
-		// Ensure text is a string
+		// Ensure text is a string.
 		if ( ! is_string( $text ) ) {
 			if ( is_array( $text ) || is_object( $text ) ) {
 				$text = json_encode( $text );
@@ -134,7 +134,7 @@ class Core {
 	 * @return array|WP_Error Array of float values representing the embedding, or WP_Error on failure.
 	 */
 	public static function get_embedding( $text, $model, $api_base, $api_key ) {
-		// Check for null or empty text
+		// Check for null or empty text.
 		if ( $text === null || $text === '' ) {
 			return new \WP_Error( 'embedding_error', 'Empty or null text cannot be embedded.' );
 		}
@@ -155,7 +155,7 @@ class Core {
 			return $cached_embedding;
 		}
 
-		// Allow plugins to provide custom embedding generation
+		// Allow plugins to provide custom embedding generation.
 		$custom_embedding = apply_filters( 'wpvdb_generate_embedding', null, $text, $model, $api_base, $api_key );
 		if ( $custom_embedding !== null ) {
 			if ( ! is_array( $custom_embedding ) || ! self::is_valid_embedding( $custom_embedding ) ) {
@@ -188,7 +188,7 @@ class Core {
 			$body = self::merge_custom_options( $body, $custom_options );
 		}
 
-		// Validate required parameters
+		// Validate required parameters.
 		if ( empty( $api_key ) || ! is_string( $api_key ) ) {
 			return new \WP_Error( 'embedding_error', __( 'API key is required for embedding.', 'wpvdb' ) );
 		}
@@ -296,7 +296,7 @@ class Core {
 			return new \WP_Error( 'embedding_error', 'Provider returned an empty or zero-magnitude embedding.' );
 		}
 
-		// Cache the successful embedding
+		// Cache the successful embedding.
 		Cache::set_embedding( $text, $model, $embedding );
 
 		return $embedding;
@@ -340,13 +340,13 @@ class Core {
 	/**
 	 * Get embedding using registered model and provider details
 	 *
-	 * @param string $text The text to embed
-	 * @param string $model_name The model name
-	 * @param string $provider_name The provider name
+	 * @param string $text The text to embed.
+	 * @param string $model_name The model name.
+	 * @param string $provider_name The provider name.
 	 * @return array|WP_Error Embedding vector or error
 	 */
 	public static function get_embedding_for_model( $text, $model_name, $provider_name ) {
-		// Get provider and model details
+		// Get provider and model details.
 		$provider = Providers::get_provider( $provider_name );
 		$model    = Models::get_model( $provider_name, $model_name );
 
@@ -354,13 +354,13 @@ class Core {
 			return new \WP_Error( 'invalid_model', 'Invalid provider or model specified' );
 		}
 
-		// Get API key
+		// Get API key.
 		$api_key = Settings::get_api_key_for_provider( $provider_name );
 
-		// Get the API base URL
+		// Get the API base URL.
 		$api_base = Providers::get_api_base( $provider_name );
 
-		// Call the embedding function
+		// Call the embedding function.
 		return self::get_embedding( $text, $model_name, $api_base, $api_key );
 	}
 
@@ -488,7 +488,7 @@ class Core {
 		return new \WP_Error( 'embedding_error', $message );
 	}
 
-	// Add a logging function (deprecated - use Logger class directly)
+	// Add a logging function (deprecated - use Logger class directly).
 	public static function log_error( $message, $context = array() ) {
 		Logger::error( $message, $context );
 	}
@@ -496,23 +496,23 @@ class Core {
 	/**
 	 * Enhanced chunking that respects semantic boundaries
 	 *
-	 * @param array  $chunks Existing chunks
-	 * @param string $text Text to chunk
-	 * @param int    $chunk_size Optional chunk size override
+	 * @param array  $chunks Existing chunks.
+	 * @param string $text Text to chunk.
+	 * @param int    $chunk_size Optional chunk size override.
 	 * @return array
 	 */
 	public static function enhanced_chunking( $chunks, $text, $chunk_size = null ) {
 		if ( ! empty( $chunks ) ) {
-			// If some other filter added chunks, just return them
+			// If some other filter added chunks, just return them.
 			return $chunks;
 		}
 
-		// Check for null or empty text
+		// Check for null or empty text.
 		if ( $text === null || $text === '' ) {
 			return array();
 		}
 
-		// Ensure text is a string
+		// Ensure text is a string.
 		if ( ! is_string( $text ) ) {
 			if ( is_array( $text ) || is_object( $text ) ) {
 				$text = json_encode( $text );
@@ -521,44 +521,44 @@ class Core {
 			}
 		}
 
-		// Get chunk size from settings or use default
+		// Get chunk size from settings or use default.
 		if ( null === $chunk_size ) {
 			$chunk_size = Settings::get_chunk_size();
 		}
 
-		// Split into paragraphs first
+		// Split into paragraphs first.
 		$paragraphs    = preg_split( '/\n\s*\n/', $text, -1, PREG_SPLIT_NO_EMPTY );
 		$current_chunk = '';
 		$current_words = 0;
 		$chunks        = array();
 
 		foreach ( $paragraphs as $paragraph ) {
-			// Clean whitespace
+			// Clean whitespace.
 			$paragraph = trim( $paragraph );
 			if ( empty( $paragraph ) ) {
 				continue;
 			}
 
-			// Count words in this paragraph
+			// Count words in this paragraph.
 			$paragraph_words = str_word_count( $paragraph );
 
 			// If adding this paragraph would exceed chunk size and we already have content,
-			// save current chunk and start a new one
+			// save current chunk and start a new one.
 			if ( $current_words > 0 && ( $current_words + $paragraph_words ) > $chunk_size ) {
 				$chunks[]      = $current_chunk;
 				$current_chunk = $paragraph;
 				$current_words = $paragraph_words;
 			}
-			// If this single paragraph exceeds chunk size, we need to split it
+			// If this single paragraph exceeds chunk size, we need to split it.
 			elseif ( $paragraph_words > $chunk_size ) {
-				// If we have a current chunk, save it first
+				// If we have a current chunk, save it first.
 				if ( $current_words > 0 ) {
 					$chunks[]      = $current_chunk;
 					$current_chunk = '';
 					$current_words = 0;
 				}
 
-				// Split paragraph into sentences
+				// Split paragraph into sentences.
 				$sentences      = preg_split( '/(?<=[.!?])\s+/', $paragraph, -1, PREG_SPLIT_NO_EMPTY );
 				$sentence_chunk = '';
 				$sentence_words = 0;
@@ -567,13 +567,13 @@ class Core {
 					$sentence_word_count = str_word_count( $sentence );
 
 					// If adding this sentence would exceed chunk size and we have content,
-					// save current sentence chunk and start a new one
+					// save current sentence chunk and start a new one.
 					if ( $sentence_words > 0 && ( $sentence_words + $sentence_word_count ) > $chunk_size ) {
 						$chunks[]       = $sentence_chunk;
 						$sentence_chunk = $sentence;
 						$sentence_words = $sentence_word_count;
 					} else {
-						// Add to current sentence chunk
+						// Add to current sentence chunk.
 						if ( ! empty( $sentence_chunk ) ) {
 							$sentence_chunk .= ' ';
 						}
@@ -582,12 +582,12 @@ class Core {
 					}
 				}
 
-				// Add any remaining sentence chunk
+				// Add any remaining sentence chunk.
 				if ( ! empty( $sentence_chunk ) ) {
 					$chunks[] = $sentence_chunk;
 				}
 			}
-			// Otherwise, add to current chunk
+			// Otherwise, add to current chunk.
 			else {
 				if ( ! empty( $current_chunk ) ) {
 					$current_chunk .= "\n\n";
@@ -597,7 +597,7 @@ class Core {
 			}
 		}
 
-		// Add any remaining content
+		// Add any remaining content.
 		if ( ! empty( $current_chunk ) ) {
 			$chunks[] = $current_chunk;
 		}
@@ -613,7 +613,7 @@ class Core {
 	 * @param bool   $update  Whether the post is being updated.
 	 */
 	public static function auto_embed_post( $post_id, $post, $update ) {
-		// Validate inputs
+		// Validate inputs.
 		if ( empty( $post_id ) || ! is_numeric( $post_id ) || ! is_object( $post ) ) {
 			return;
 		}
@@ -623,27 +623,27 @@ class Core {
 			return;
 		}
 
-		// Only process published posts
+		// Only process published posts.
 		if ( ! isset( $post->post_status ) || $post->post_status !== 'publish' ) {
 			return;
 		}
 
-		// Check post type property exists
+		// Check post type property exists.
 		if ( ! isset( $post->post_type ) || empty( $post->post_type ) ) {
 			return;
 		}
 
-		// Check if this post type should be auto-embedded
+		// Check if this post type should be auto-embedded.
 		$auto_embed_types = Settings::get_auto_embed_post_types();
 		if ( ! is_array( $auto_embed_types ) || ! in_array( $post->post_type, $auto_embed_types ) ) {
 			return;
 		}
 
-		// Queue for background processing with validation
+		// Queue for background processing with validation.
 		$queue = new WPVDB_Queue();
 		$queue->push_to_queue( WPVDB_Queue::build_item( $post_id ) );
 
-		// Try to run the queue immediately if we're in the admin
+		// Try to run the queue immediately if we're in the admin.
 		if ( is_admin() && function_exists( 'as_enqueue_async_action' ) ) {
 			as_enqueue_async_action( 'wpvdb_run_queue_now', array(), 'wpvdb' );
 		}

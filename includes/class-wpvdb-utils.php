@@ -17,10 +17,10 @@ class Utils {
 	 * Validate and sanitize a positive integer
 	 *
 	 * @since 1.0.13
-	 * @param mixed $value Value to validate
-	 * @param int   $min   Minimum allowed value
-	 * @param int   $max   Maximum allowed value
-	 * @param int   $default Default value if validation fails
+	 * @param mixed $value Value to validate.
+	 * @param int   $min   Minimum allowed value.
+	 * @param int   $max   Maximum allowed value.
+	 * @param int   $default Default value if validation fails.
 	 * @return int Validated integer
 	 */
 	public static function validate_positive_int( $value, $min = 1, $max = PHP_INT_MAX, $default = 1 ) {
@@ -41,10 +41,10 @@ class Utils {
 	 * Validate and sanitize a floating point number
 	 *
 	 * @since 1.0.13
-	 * @param mixed $value Value to validate
-	 * @param float $min   Minimum allowed value
-	 * @param float $max   Maximum allowed value
-	 * @param float $default Default value if validation fails
+	 * @param mixed $value Value to validate.
+	 * @param float $min   Minimum allowed value.
+	 * @param float $max   Maximum allowed value.
+	 * @param float $default Default value if validation fails.
 	 * @return float Validated float
 	 */
 	public static function validate_float( $value, $min = -PHP_FLOAT_MAX, $max = PHP_FLOAT_MAX, $default = 0.0 ) {
@@ -73,7 +73,7 @@ class Utils {
 	 * Validate a model name against allowed patterns
 	 *
 	 * @since 1.0.13
-	 * @param string $model_name Model name to validate
+	 * @param string $model_name Model name to validate.
 	 * @return string|false Valid model name or false if invalid
 	 */
 	public static function validate_model_name( $model_name ) {
@@ -83,12 +83,12 @@ class Utils {
 
 		$sanitized = sanitize_text_field( $model_name );
 
-		// Model names should only contain letters, numbers, hyphens, and underscores
+		// Model names should only contain letters, numbers, hyphens, and underscores.
 		if ( ! preg_match( '/^[a-zA-Z0-9_-]+$/', $sanitized ) ) {
 			return false;
 		}
 
-		// Reasonable length limits
+		// Reasonable length limits.
 		if ( strlen( $sanitized ) < 1 || strlen( $sanitized ) > 100 ) {
 			return false;
 		}
@@ -100,7 +100,7 @@ class Utils {
 	 * Validate a provider name
 	 *
 	 * @since 1.0.13
-	 * @param string $provider_name Provider name to validate
+	 * @param string $provider_name Provider name to validate.
 	 * @return string|false Valid provider name or false if invalid
 	 */
 	public static function validate_provider_name( $provider_name ) {
@@ -110,7 +110,7 @@ class Utils {
 
 		$sanitized = sanitize_key( $provider_name );
 
-		// Provider names should be alphanumeric with underscores
+		// Provider names should be alphanumeric with underscores.
 		if ( ! preg_match( '/^[a-z0-9_]+$/', $sanitized ) ) {
 			return false;
 		}
@@ -122,8 +122,8 @@ class Utils {
 	 * Format bytes into human readable format
 	 *
 	 * @since 1.0.13
-	 * @param int $bytes Bytes to format
-	 * @param int $precision Number of decimal places
+	 * @param int $bytes Bytes to format.
+	 * @param int $precision Number of decimal places.
 	 * @return string Formatted string
 	 */
 	public static function format_bytes( $bytes, $precision = 2 ) {
@@ -144,9 +144,9 @@ class Utils {
 	 * Get a truncated version of text for display
 	 *
 	 * @since 1.0.13
-	 * @param string $text   Text to truncate
-	 * @param int    $length Maximum length
-	 * @param string $suffix Suffix to add if truncated
+	 * @param string $text   Text to truncate.
+	 * @param int    $length Maximum length.
+	 * @param string $suffix Suffix to add if truncated.
 	 * @return string Truncated text
 	 */
 	public static function truncate_text( $text, $length = 100, $suffix = '...' ) {
@@ -193,7 +193,7 @@ class Utils {
 	 * Generate a secure hash for caching keys
 	 *
 	 * @since 1.0.13
-	 * @param string $data Data to hash
+	 * @param string $data Data to hash.
 	 * @return string Hash string
 	 */
 	public static function generate_cache_key( $data ) {
@@ -204,7 +204,7 @@ class Utils {
 	 * Validate URL format
 	 *
 	 * @since 1.0.13
-	 * @param string $url URL to validate
+	 * @param string $url URL to validate.
 	 * @return string|false Valid URL or false if invalid
 	 */
 	public static function validate_url( $url ) {
@@ -214,7 +214,7 @@ class Utils {
 			return false;
 		}
 
-		// Only allow HTTP and HTTPS
+		// Only allow HTTP and HTTPS.
 		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
 		if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
 			return false;
@@ -251,7 +251,7 @@ class Utils {
 	 * Check if a WordPress feature is available
 	 *
 	 * @since 1.0.13
-	 * @param string $feature Feature to check
+	 * @param string $feature Feature to check.
 	 * @return bool True if feature is available
 	 */
 	public static function has_feature( $feature ) {
@@ -306,7 +306,7 @@ class Utils {
 	 * Escape output for HTML context with proper encoding
 	 *
 	 * @since 1.0.13
-	 * @param string $text Text to escape
+	 * @param string $text Text to escape.
 	 * @return string Escaped text
 	 */
 	public static function esc_html( $text ) {
@@ -317,7 +317,7 @@ class Utils {
 	 * Escape output for HTML attribute context
 	 *
 	 * @since 1.0.13
-	 * @param string $text Text to escape
+	 * @param string $text Text to escape.
 	 * @return string Escaped text
 	 */
 	public static function esc_attr( $text ) {

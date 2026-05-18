@@ -1,15 +1,15 @@
 <?php
-// Get current settings
+// Get current settings.
 $settings = get_option( 'wpvdb_settings', array() );
 $provider = isset( $settings['active_provider'] ) ? $settings['active_provider'] : 'openai';
 
-// Get available providers from the registry class
+// Get available providers from the registry class.
 $available_providers = \WPVDB\Providers::get_available_providers();
 
-// Check if there's a pending provider change
+// Check if there's a pending provider change.
 $has_pending_change = \WPVDB\Settings::has_pending_provider_change();
 
-// Get other settings
+// Get other settings.
 $auto_embed_post_types  = isset( $settings['post_types'] ) ? $settings['post_types'] : array( 'post' );
 $chunk_size             = isset( $settings['chunk_size'] ) ? $settings['chunk_size'] : 1000;
 $chunk_overlap          = isset( $settings['chunk_overlap'] ) ? $settings['chunk_overlap'] : 20;
@@ -23,7 +23,7 @@ $include_custom_fields  = isset( $settings['include_custom_fields'] ) ? $setting
 $exclude_taxonomies     = isset( $settings['exclude_taxonomies'] ) ? $settings['exclude_taxonomies'] : array();
 $exclude_custom_fields  = isset( $settings['exclude_custom_fields'] ) ? $settings['exclude_custom_fields'] : array();
 
-// Current model and provider settings
+// Current model and provider settings.
 $active_model         = isset( $settings['active_model'] ) ? $settings['active_model'] : '';
 $openai_api_key       = isset( $settings['openai']['api_key'] ) ? $settings['openai']['api_key'] : '';
 $openai_organization  = isset( $settings['openai']['organization'] ) ? $settings['openai']['organization'] : '';
@@ -47,7 +47,7 @@ $specter_model        = $provider_model( 'specter' );
 
 <div class="wrap wpvdb-settings">
 	<?php
-	// Show WordPress settings updated notice
+	// Show WordPress settings updated notice.
 	if ( isset( $_GET['settings-updated'] ) && $_GET['settings-updated'] ) {
 		add_settings_error( 'wpvdb_settings', 'wpvdb_settings_updated', __( 'Settings saved.', 'wpvdb' ), 'success' );
 	}
@@ -73,22 +73,22 @@ $specter_model        = $provider_model( 'specter' );
 	<!-- <h1><?php esc_html_e( 'Vector Database Settings', 'wpvdb' ); ?></h1> -->
 
 	<?php
-	// Define available sections
+	// Define available sections.
 	$sections = array(
 		'api'       => __( 'API Configuration', 'wpvdb' ),
 		'content'   => __( 'Content Settings', 'wpvdb' ),
 		'inclusion' => __( 'Content Inclusion', 'wpvdb' ),
 	);
 
-	// Get the current section from URL or default to 'api'
+	// Get the current section from URL or default to 'api'.
 	$current_section = isset( $_GET['section'] ) ? sanitize_key( $_GET['section'] ) : 'api';
 
-	// Ensure we have a valid section
+	// Ensure we have a valid section.
 	if ( ! array_key_exists( $current_section, $sections ) ) {
 		$current_section = 'api';
 	}
 
-	// Generate the section navigation using the same structure as status page
+	// Generate the section navigation using the same structure as status page.
 	echo '<div class="wpvdb-section-nav">';
 	$i = 0;
 	foreach ( $sections as $section_id => $section_label ) {
