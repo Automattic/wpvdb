@@ -11,6 +11,11 @@ if (defined('WPVDB_DEBUG')) {
 
 $active_provider = \WPVDB\Settings::get_active_provider();
 $api_key = \WPVDB\Settings::get_api_key();
+$search_query = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
+$search_enabled = apply_filters('wpvdb_embeddings_search_enabled', true, $search_query);
+if (!$search_enabled) {
+    $search_query = '';
+}
     
     if ($show_debug) {
         // Get and display settings information
@@ -43,6 +48,7 @@ $api_key = \WPVDB\Settings::get_api_key();
     ?>
     
     <div class="tablenav top">
+        <?php if ($search_enabled) : ?>
         <div class="alignleft actions">
             <form method="get" class="search-form">
                 <input type="hidden" name="page" value="wpvdb-embeddings">
@@ -50,25 +56,25 @@ $api_key = \WPVDB\Settings::get_api_key();
                 <input type="search" 
                        id="wpvdb-semantic-search"
                        name="s" 
-                       value="<?php echo isset($_GET['s']) ? esc_attr($_GET['s']) : ''; ?>" 
+                       value="<?php echo esc_attr($search_query); ?>"
                        placeholder="<?php esc_attr_e('Search embeddings...', 'wpvdb'); ?>"
                        class="regular-text">
                 <input type="submit" class="button" value="<?php esc_attr_e('Semantic Search', 'wpvdb'); ?>">
             </form>
         </div>
+        <?php endif; ?>
         
+        <?php if (apply_filters('wpvdb_render_bulk_embed_ui', true, 'embeddings')) : ?>
         <div class="alignright">
             <button id="wpvdb-bulk-embed-button" class="button button-primary">
                 <?php esc_html_e('Bulk Generate Embeddings', 'wpvdb'); ?>
             </button>
         </div>
+        <?php endif; ?>
         <br class="clear">
     </div>
     
     <?php 
-    // Check if we have a search query
-    $search_query = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
-    
     // If we have a search query, use the semantic search
     $search_results = [];
     if (!empty($search_query)) {
@@ -128,14 +134,16 @@ $api_key = \WPVDB\Settings::get_api_key();
                         }
                         error_log('[WPVDB DEBUG] Using distance function: ' . $distance_function);
                         
-                        // Optimized query that will use the vector index
-                        // The ORDER BY + LIMIT pattern is what triggers the vector index usage
+                        // Optimized query that will use the vector index.
+                        // The ORDER BY + LIMIT pattern is what triggers the vector index usage.
                         $sql = $wpdb->prepare(
-                            "SELECT e.*, 
+                            "SELECT e.*,
                             $distance_function as distance
                             FROM $table_name e
+                            WHERE e.model = %s
                             ORDER BY distance
                             LIMIT %d",
+                            $model,
                             20 // Show top 20 matches
                         );
                         
@@ -167,7 +175,10 @@ $api_key = \WPVDB\Settings::get_api_key();
                                     
                                     // Fall back to PHP-based distance calculation
                                     error_log('[WPVDB DEBUG] Falling back to PHP-based distance calculation');
-                                    $all_rows = $wpdb->get_results("SELECT * FROM $table_name", ARRAY_A);
+                                    $all_rows = $wpdb->get_results(
+                                        $wpdb->prepare("SELECT * FROM $table_name WHERE model = %s", $model),
+                                        ARRAY_A
+                                    );
                                     $distances = [];
                                     
                                     foreach ($all_rows as $r) {
@@ -201,7 +212,10 @@ $api_key = \WPVDB\Settings::get_api_key();
                     } else {
                         // Fallback: do in PHP
                         error_log('[WPVDB DEBUG] Using PHP fallback search');
-                        $all_rows = $wpdb->get_results("SELECT * FROM $table_name", ARRAY_A);
+                        $all_rows = $wpdb->get_results(
+                            $wpdb->prepare("SELECT * FROM $table_name WHERE model = %s", $model),
+                            ARRAY_A
+                        );
                         $total_vectors_searched = count($all_rows);
                         error_log('[WPVDB DEBUG] Total vectors searched: ' . $total_vectors_searched);
                         
@@ -425,6 +439,7 @@ $api_key = \WPVDB\Settings::get_api_key();
         </div>
     </div>
     
+    <?php if (apply_filters('wpvdb_render_bulk_embed_ui', true, 'embeddings')) : ?>
     <div id="wpvdb-bulk-embed-modal" class="wpvdb-modal" style="display:none;">
         <div class="wpvdb-modal-content">
             <span class="wpvdb-modal-close">&times;</span>
@@ -468,7 +483,7 @@ $api_key = \WPVDB\Settings::get_api_key();
                         // Get models for the first provider
                         $first_provider = reset($providers);
                         $first_provider_id = key($providers);
-                        $provider_models = \WPVDB\Models::get_provider_models($first_provider_id);
+                        $provider_models = \WPVDB\Models::get_selectable_provider_models($first_provider_id);
                         
                         foreach ($provider_models as $model_id => $model) {
                             echo '<option value="' . esc_attr($model_id) . '">' . esc_html($model['label']) . '</option>';
@@ -479,7 +494,7 @@ $api_key = \WPVDB\Settings::get_api_key();
                 
                 <script type="text/javascript">
                 // Store all models data for dynamic switching
-                var wpvdbBulkModels = <?php echo json_encode(\WPVDB\Models::get_available_models()); ?>;
+                var wpvdbBulkModels = <?php echo wp_json_encode(\WPVDB\Models::get_selectable_models(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
                 
                 jQuery(document).ready(function($) {
                     // Update models when provider changes
@@ -517,6 +532,7 @@ $api_key = \WPVDB\Settings::get_api_key();
             </div>
         </div>
     </div>
+    <?php endif; ?>
 </div>
 
 <style>

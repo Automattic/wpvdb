@@ -37,6 +37,10 @@ class WPVDB_Queue {
      * @return $this
      */
     public function push_to_queue($data, $batch = false) {
+        if (\wpvdb_is_playground_runtime()) {
+            return $this;
+        }
+
         // Use Action Scheduler if available
         if (function_exists('wpvdb_has_action_scheduler') && wpvdb_has_action_scheduler()) {
             // Note: we use the global function, not namespaced
@@ -62,6 +66,10 @@ class WPVDB_Queue {
      */
     public function push_batch_to_queue($items) {
         if (empty($items) || !is_array($items)) {
+            return $this;
+        }
+
+        if (\wpvdb_is_playground_runtime()) {
             return $this;
         }
         
@@ -98,6 +106,10 @@ class WPVDB_Queue {
      * @return void
      */
     private function add_to_fallback_queue($data) {
+        if (\wpvdb_is_playground_runtime()) {
+            return;
+        }
+
         $queue = get_option(self::FALLBACK_QUEUE_OPTION, []);
         $queue[] = $data;
         update_option(self::FALLBACK_QUEUE_OPTION, $queue);
@@ -115,6 +127,10 @@ class WPVDB_Queue {
      * @return void
      */
     public function process_fallback_queue($limit = 5) {
+        if (\wpvdb_is_playground_runtime()) {
+            return;
+        }
+
         $queue = get_option(self::FALLBACK_QUEUE_OPTION, []);
         
         // Nothing to do
@@ -161,6 +177,10 @@ class WPVDB_Queue {
      * @return $this
      */
     public function dispatch() {
+        if (\wpvdb_is_playground_runtime()) {
+            return $this;
+        }
+
         // For development environments, force run the scheduler immediately
         if (function_exists('as_has_scheduled_action') && 
             (as_has_scheduled_action(self::PROCESS_SINGLE_ACTION, null, 'wpvdb') || 
@@ -182,6 +202,10 @@ class WPVDB_Queue {
      * @return bool Success status
      */
     public static function process_item($item) {
+        if (\wpvdb_is_playground_runtime()) {
+            return false;
+        }
+
         // Extract data from item
         $post_id = isset($item['post_id']) ? absint($item['post_id']) : 0;
         $model = isset($item['model']) ? sanitize_text_field($item['model']) : Settings::get_default_model();
@@ -206,17 +230,20 @@ class WPVDB_Queue {
             return false;
         }
         
-        // Get API key
-        $api_key = Settings::get_api_key();
-        
+        // Preflight API credentials using the queued provider so a job enqueued
+        // with --provider=automattic does not fail when the active provider was
+        // later switched to something with no key configured.
+        if (is_string($provider) && $provider !== '') {
+            $api_key = Settings::get_api_key_for_provider($provider);
+        } else {
+            $api_key = Settings::get_api_key();
+        }
+
         if (empty($api_key)) {
-            Core::log_error('No API key configured', ['post_id' => $post_id]);
+            Core::log_error('No API key configured', ['post_id' => $post_id, 'provider' => $provider]);
             return false;
         }
-        
-        // Get API base
-        $api_base = Settings::get_api_base();
-        
+
         // Combine content (title + content)
         $title = !empty($post->post_title) ? $post->post_title : '';
         $content = !empty($post->post_content) ? wp_strip_all_tags($post->post_content) : '';
@@ -242,18 +269,24 @@ class WPVDB_Queue {
         if (empty($items) || !is_array($items)) {
             return [];
         }
-        
+
         $results = [];
-        
+
         foreach ($items as $item) {
             $post_id = isset($item['post_id']) ? absint($item['post_id']) : 0;
             $success = self::process_item($item);
             $results[$post_id] = $success;
-            
-            // Schedule the next batch to run immediately after this one completes
-            self::maybe_process_next_batch();
         }
-        
+
+        // Do NOT drain the queue here. Action Scheduler is the scheduler of
+        // record: each batch action should be a self-contained unit of work
+        // so AS can track per-batch status (complete / failed) accurately.
+        // Inline recursion into the next batch inside process_batch() caused
+        // subsequent batches to be unscheduled (marked "canceled") and
+        // processed within the same request, defeating retries, timeouts,
+        // and accurate bookkeeping. Use the explicit run_queue_now async
+        // action if you need to kick the queue immediately.
+
         return $results;
     }
     
@@ -272,12 +305,11 @@ class WPVDB_Queue {
             
             if (!empty($actions)) {
                 $action = reset($actions);
-                $action_id = $action->get_id();
                 $args = $action->get_args();
-                
+
                 // Remove this action from the queue to avoid duplicate processing
                 as_unschedule_action(self::PROCESS_BATCH_ACTION, $args, 'wpvdb');
-                
+
                 // Process the batch
                 self::process_batch($args[0]);
             } else {
@@ -302,19 +334,18 @@ class WPVDB_Queue {
             
             if (!empty($actions)) {
                 $batch_items = [];
-                
+
                 foreach ($actions as $action) {
-                    $action_id = $action->get_id();
                     $args = $action->get_args();
-                    
+
                     // Add to our batch
                     if (!empty($args[0])) {
                         $batch_items[] = $args[0];
                     }
-                    
+
                     // Remove this action from the queue to avoid duplicate processing
                     as_unschedule_action(self::PROCESS_SINGLE_ACTION, $args, 'wpvdb');
-                    
+
                     // If we've reached our batch size, stop
                     if (count($batch_items) >= self::get_batch_size()) {
                         break;
@@ -337,7 +368,45 @@ class WPVDB_Queue {
     public static function get_batch_size() {
         return Settings::get_batch_size();
     }
-    
+
+    /**
+     * Build a queue item for a single post.
+     *
+     * @param int|string $post_id Post ID to embed, cast to int.
+     * @param array $opts {
+     *     @type string $provider Override the active provider.
+     *     @type string $model    Override the resolved model.
+     * }
+     * @return array { post_id, model, provider } for push_to_queue.
+     */
+    public static function build_item($post_id, $opts = []) {
+        $provider_override = isset($opts['provider']) && is_string($opts['provider']) && $opts['provider'] !== ''
+            ? $opts['provider']
+            : '';
+        $model_override = isset($opts['model']) && is_string($opts['model']) && $opts['model'] !== ''
+            ? $opts['model']
+            : '';
+
+        $provider = $provider_override !== '' ? $provider_override : Settings::get_active_provider();
+        if (empty($provider)) {
+            $provider = 'openai';
+        }
+
+        if ($model_override !== '') {
+            $model = $model_override;
+        } elseif ($provider_override !== '') {
+            $model = Models::get_default_model_for_provider($provider);
+        } else {
+            $model = Settings::get_default_model();
+        }
+
+        return [
+            'post_id'  => (int) $post_id,
+            'model'    => (string) $model,
+            'provider' => (string) $provider,
+        ];
+    }
+
     /**
      * Process a post - extract content, chunk, and generate embeddings
      *
@@ -347,31 +416,37 @@ class WPVDB_Queue {
      * @return bool Success status
      */
     private static function process_post($post, $model, $provider = '') {
-        // Get API key
-        $api_key = Settings::get_api_key();
+        // Resolve API key + base for the explicit provider when one was queued.
+        // This keeps long-draining jobs aligned with the provider snapshot taken
+        // at enqueue time, and lets CLI --provider overrides actually take effect.
+        if (is_string($provider) && $provider !== '') {
+            $api_key = Settings::get_api_key_for_provider($provider);
+            $api_base = Settings::get_api_base_for_provider($provider);
+        } else {
+            $api_key = Settings::get_api_key();
+            $api_base = Settings::get_api_base();
+        }
+
         if (empty($api_key)) {
-            Core::log_error('No API key available for embedding generation', ['post_id' => $post->ID]);
+            Core::log_error('No API key available for embedding generation', ['post_id' => $post->ID, 'provider' => $provider]);
             return false;
         }
         
-        // Get API base
-        $api_base = Settings::get_api_base();
-        
-        // First, delete any existing embeddings for this post
         global $wpdb;
         $table_name = $wpdb->prefix . 'wpvdb_embeddings';
-        $existing_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_name WHERE doc_id = %d", $post->ID));
-        
+        $existing_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_name WHERE doc_id = %d", $post->ID));
+
         if ($existing_count > 0) {
-            error_log("[WPVDB] Deleting {$existing_count} existing embeddings for post {$post->ID} before creating new ones.");
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log("[WPVDB] Deleting {$existing_count} existing embeddings for post {$post->ID} before creating new ones."); }
             $wpdb->delete($table_name, ['doc_id' => $post->ID], ['%d']);
-            
-            // Also delete the post meta about embeddings
-            delete_post_meta($post->ID, '_wpvdb_embedded');
-            delete_post_meta($post->ID, '_wpvdb_chunks_count');
-            delete_post_meta($post->ID, '_wpvdb_embedded_date');
-            delete_post_meta($post->ID, '_wpvdb_embedded_model');
+            // Bust here so cache invalidates even if no inserts succeed below.
+            Cache::invalidate_query_cache();
         }
+
+        delete_post_meta($post->ID, '_wpvdb_embedded');
+        delete_post_meta($post->ID, '_wpvdb_chunks_count');
+        delete_post_meta($post->ID, '_wpvdb_embedded_date');
+        delete_post_meta($post->ID, '_wpvdb_embedded_model');
         
         // Combine content (title + content)
         $text = $post->post_title . "\n\n" . wp_strip_all_tags($post->post_content);

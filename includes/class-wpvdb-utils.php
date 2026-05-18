@@ -325,15 +325,8 @@ class Utils {
     }
 }
 
-/**
- * Check whether Action Scheduler is available.
- *
- * @since 1.0.13
- *
- * @return bool
- */
-if (!function_exists('wpvdb_has_action_scheduler')) {
-    function wpvdb_has_action_scheduler() {
-        return class_exists('ActionScheduler') && function_exists('as_schedule_single_action');
-    }
-}
+// Note: the global helper `wpvdb_has_action_scheduler()` lives in the main
+// bootstrap (wpvdb.php) because it must be in the global namespace. Defining
+// it here (inside `namespace WPVDB;`) would put it in `WPVDB\` and callers
+// using unqualified `function_exists('wpvdb_has_action_scheduler')` would
+// never find it, silently forcing the queue into its wp_options fallback.

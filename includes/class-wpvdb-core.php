@@ -141,33 +141,46 @@ class Core {
 
         $custom_options = self::get_embedding_custom_options($model, $api_base);
         
-        // Check cache first
+        // Check cache first. A poisoned cache entry falls through to the fresh path,
+        // which will overwrite it on success via Cache::set_embedding().
         $cached_embedding = Cache::get_embedding($text, $model);
-        if ($cached_embedding !== false && is_array($cached_embedding)) {
+        if ($cached_embedding !== false && is_array($cached_embedding) && self::is_valid_embedding($cached_embedding)) {
             Logger::debug('Using cached embedding', ['text_length' => strlen($text), 'model' => $model]);
             return $cached_embedding;
         }
-        
+
         // Allow plugins to provide custom embedding generation
         $custom_embedding = apply_filters('wpvdb_generate_embedding', null, $text, $model, $api_base, $api_key);
         if ($custom_embedding !== null) {
-            // Cache custom embeddings too
-            if (is_array($custom_embedding)) {
-                Cache::set_embedding($text, $model, $custom_embedding);
+            if (!is_array($custom_embedding) || !self::is_valid_embedding($custom_embedding)) {
+                return new \WP_Error('embedding_error', 'wpvdb_generate_embedding filter returned an invalid embedding.');
             }
+            Cache::set_embedding($text, $model, $custom_embedding);
             return $custom_embedding;
         }
         
         // Remove newlines (as recommended in many embedding docs).
         $text = str_replace(["\r\n", "\r", "\n"], " ", $text);
 
-        // Example using WP remote post:
-        $url = trailingslashit($api_base) . 'embeddings';
-        $body = [
-            'model' => $model,
-            'input' => $text,
-        ];
-        $body = self::merge_custom_options($body, $custom_options);
+        $request_format  = Models::get_request_format($model, $api_base);
+        $response_format = Models::get_response_format($model, $api_base);
+        $endpoint        = Models::get_endpoint($model, $api_base);
+        $query_args      = Models::get_request_query_args($model, $api_base);
+        $url             = trailingslashit($api_base) . ltrim($endpoint, '/');
+        if (!empty($query_args)) {
+            $url = add_query_arg($query_args, $url);
+        }
+
+        if ($request_format === 'a8c_nomic_native') {
+            // Bare list at body root; model routing is described by Models metadata.
+            $body = [$text];
+        } else {
+            $body = [
+                'model' => $model,
+                'input' => $text,
+            ];
+            $body = self::merge_custom_options($body, $custom_options);
+        }
 
         // Validate required parameters
         if (empty($api_key) || !is_string($api_key)) {
@@ -182,28 +195,44 @@ class Core {
             return new \WP_Error('embedding_error', __('API base URL is required for embedding.', 'wpvdb'));
         }
 
+        $skip_sdk = \wpvdb_is_playground_runtime();
+
         // Prefer PHP AI Client embeddings when using the default OpenAI endpoint.
-        $ai_client_embedding = self::maybe_get_embedding_via_ai_client($text, $model, $api_base, $api_key, $custom_options);
-        if (is_array($ai_client_embedding)) {
-            Cache::set_embedding($text, $model, $ai_client_embedding);
-            return $ai_client_embedding;
-        } elseif (is_wp_error($ai_client_embedding)) {
-            Logger::debug(
-                'AI Client embedding failed, falling back to HTTP request.',
-                [
-                    'error' => $ai_client_embedding->get_error_message(),
-                    'model' => $model,
-                ]
-            );
+        if (!$skip_sdk) {
+            $ai_client_embedding = self::maybe_get_embedding_via_ai_client($text, $model, $api_base, $api_key, $custom_options);
+            if (is_array($ai_client_embedding)) {
+                if (!self::is_valid_embedding($ai_client_embedding)) {
+                    return new \WP_Error('embedding_error', 'AI Client returned an invalid embedding.');
+                }
+                Cache::set_embedding($text, $model, $ai_client_embedding);
+                return $ai_client_embedding;
+            } elseif (is_wp_error($ai_client_embedding)) {
+                Logger::debug(
+                    'AI Client embedding failed, falling back to HTTP request.',
+                    [
+                        'error' => $ai_client_embedding->get_error_message(),
+                        'model' => $model,
+                    ]
+                );
+            }
         }
         
+        $extra_headers = [];
+        if (Providers::is_automattic_ai_proxy_url($url)) {
+            $extra_headers['X-WPCOM-AI-Feature'] = apply_filters('wpvdb_a8c_ai_feature', 'wpcloud-vector-search', $model, $api_base);
+        }
+
         // Try AI Client transporter first for consistency with the WP AI stack.
         try {
+            if ($skip_sdk) {
+                throw new \RuntimeException('wpvdb Playground runtime uses wp_remote_post for embedding requests.');
+            }
+
             $transporter = HttpTransporterFactory::createTransporter();
             $request     = new Request(
                 HttpMethodEnum::POST(),
                 $url,
-                ['Content-Type' => 'application/json'],
+                array_merge(['Content-Type' => 'application/json'], $extra_headers),
                 wp_json_encode($body)
             );
 
@@ -216,10 +245,13 @@ class Core {
         } catch (\Throwable $e) {
             // Fallback to wp_remote_post if transporter or SDK pieces are unavailable.
             $args = [
-                'headers' => [
-                    'Content-Type'  => 'application/json',
-                    'Authorization' => 'Bearer ' . $api_key,
-                ],
+                'headers' => array_merge(
+                    [
+                        'Content-Type'  => 'application/json',
+                        'Authorization' => 'Bearer ' . $api_key,
+                    ],
+                    $extra_headers
+                ),
                 'body'    => wp_json_encode($body),
                 'timeout' => 30,
             ];
@@ -236,16 +268,67 @@ class Core {
             return new \WP_Error('embedding_error', 'Failed to get embedding: ' . $code . ' ' . (is_string($data) ? $data : wp_json_encode($data)));
         }
 
-        if (!isset($data['data'][0]['embedding']) || !is_array($data['data'][0]['embedding'])) {
-            return new \WP_Error('embedding_error', 'Invalid embedding response structure.');
+        if ($response_format === 'a8c_nomic_native') {
+            // Native Nomic. Treat any non-"ok" status (or missing status) as a soft
+            // signal but still try the embeddings array first since Ray Serve has
+            // returned successful payloads without a status field in the past.
+            if (isset($data['status']) && $data['status'] !== 'ok') {
+                return new \WP_Error('embedding_error', 'Nomic upstream returned status: ' . wp_json_encode($data['status']));
+            }
+            if (!isset($data['embeddings'][0]) || !is_array($data['embeddings'][0])) {
+                return new \WP_Error('embedding_error', 'Invalid native Nomic embedding response structure.');
+            }
+            $embedding = $data['embeddings'][0];
+        } else {
+            if (!isset($data['data'][0]['embedding']) || !is_array($data['data'][0]['embedding'])) {
+                return new \WP_Error('embedding_error', 'Invalid OpenAI embedding response structure.');
+            }
+            $embedding = $data['data'][0]['embedding'];
         }
 
-        $embedding = $data['data'][0]['embedding'];
-        
+        if (!self::is_valid_embedding($embedding)) {
+            return new \WP_Error('embedding_error', 'Provider returned an empty or zero-magnitude embedding.');
+        }
+
         // Cache the successful embedding
         Cache::set_embedding($text, $model, $embedding);
 
         return $embedding;
+    }
+
+    /**
+     * True when $embedding is a non-empty zero-indexed list of finite int|float values
+     * whose L2 norm is comfortably non-zero.
+     *
+     * Numeric strings and associative arrays are rejected so the value JSON-encodes
+     * as a number array, not a string or object (VEC_FromText rejects both).
+     * The 1e-30 squared-norm floor is a semantic near-zero guard, well above float32's
+     * smallest normal (~1.18e-38).
+     *
+     * @param mixed $embedding Candidate embedding. Expected to be array<int, int|float>.
+     * @return bool True if the candidate is a usable embedding; false otherwise.
+     */
+    public static function is_valid_embedding($embedding) {
+        if (!is_array($embedding) || count($embedding) === 0) {
+            return false;
+        }
+        $expected_key = 0;
+        $sum_sq = 0.0;
+        foreach ($embedding as $k => $v) {
+            if ($k !== $expected_key) {
+                return false;
+            }
+            $expected_key++;
+            if (!is_int($v) && !is_float($v)) {
+                return false;
+            }
+            $f = (float) $v;
+            if (!is_finite($f)) {
+                return false;
+            }
+            $sum_sq += $f * $f;
+        }
+        return $sum_sq > 1e-30;
     }
     
     /**
@@ -336,11 +419,11 @@ class Core {
             return [];
         }
 
-        // Optionally add dimensions from constant if not provided and using OpenAI-compatible endpoints.
+        // Only send dimensions to models that explicitly support it.
         if (
             !isset($options['dimensions']) &&
             defined('WPVDB_DEFAULT_EMBED_DIM') &&
-            strpos($api_base, 'openai') !== false
+            Models::supports_dimensions($model, $api_base)
         ) {
             $options['dimensions'] = (int) WPVDB_DEFAULT_EMBED_DIM;
         }
@@ -550,27 +633,9 @@ class Core {
             return;
         }
         
-        // If this is an update and post is already embedded, clear existing embeddings
-        if ($update && get_post_meta($post_id, '_wpvdb_embedded', true)) {
-            // Delete any existing embeddings for this post
-            global $wpdb;
-            $table_name = $wpdb->prefix . 'wpvdb_embeddings';
-            $wpdb->delete($table_name, ['doc_id' => $post_id], ['%d']);
-            
-            // Delete post meta
-            delete_post_meta($post_id, '_wpvdb_embedded');
-            delete_post_meta($post_id, '_wpvdb_chunks_count');
-            delete_post_meta($post_id, '_wpvdb_embedded_date');
-            delete_post_meta($post_id, '_wpvdb_embedded_model');
-        }
-        
         // Queue for background processing with validation
         $queue = new WPVDB_Queue();
-        $queue->push_to_queue([
-            'post_id' => $post_id,
-            'model' => Settings::get_default_model(),
-            'provider' => self::get_active_provider(),
-        ]);
+        $queue->push_to_queue(WPVDB_Queue::build_item($post_id));
         
         // Try to run the queue immediately if we're in the admin
         if (is_admin() && function_exists('as_enqueue_async_action')) {

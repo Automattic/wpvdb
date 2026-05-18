@@ -13,8 +13,7 @@ $database = $plugin->get_database();
 // Get the detected database info
 $db_type = $database->get_db_type();
 $version = '';
-global $wpdb;
-$version_string = $wpdb->get_var('SELECT VERSION()');
+$version_string = $database->get_db_version();
 
 // Extract version number
 if ($db_type === 'mariadb') {
@@ -151,4 +150,4 @@ add_filter(\'wpvdb_enable_fallbacks\', \'__return_true\');</code></pre>',
             </tbody>
         </table>
     </div>
-</div> 
+</div>

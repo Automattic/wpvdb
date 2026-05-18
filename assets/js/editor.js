@@ -52,7 +52,7 @@ const EmbeddingStatusInfo = () => {
             // Send request to reembed post
             setStatusMessage(__('Generating embeddings...', 'wpvdb'));
             const response = await apiFetch({ 
-                path: '/wp/v2/wpvdb/reembed',
+                path: '/wpvdb/v1/reembed',
                 method: 'POST',
                 data: { post_id: postId }
             });
@@ -226,4 +226,4 @@ const EmbeddingStatusInfo = () => {
 registerPlugin('wpvdb-embedding-status', {
     render: EmbeddingStatusInfo,
     icon: 'database'
-}); 
+});

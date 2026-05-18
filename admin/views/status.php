@@ -61,11 +61,20 @@ $active_model = isset($settings['active_model']) ? $settings['active_model'] : '
 $pending_provider = $pending_details ? $pending_details['pending_provider'] : '';
 $pending_model = $pending_details ? $pending_details['pending_model'] : '';
 
-// Debug output for settings status
-error_log('WPVDB STATUS PAGE: Current settings: ' . print_r($settings, true));
-error_log('WPVDB STATUS PAGE: Has pending change: ' . ($has_pending_change ? 'YES' : 'NO'));
-if ($pending_details) {
-    error_log('WPVDB STATUS PAGE: Pending details: ' . print_r($pending_details, true));
+// Surface only model-migration jobs started through this UI.
+$active_reindex_job = null;
+if (class_exists('\\WPVDB\\Embedding_Enqueuer')) {
+    $active_reindex_job = \WPVDB\Embedding_Enqueuer::find_active_model_migration_job($active_provider, $active_model);
+}
+
+$active_reindex_job_updated_at = '';
+if ($active_reindex_job && !empty($active_reindex_job['updated_at'])) {
+    $date_format = get_option('date_format') ?: 'Y-m-d';
+    $time_format = get_option('time_format') ?: 'H:i:s';
+    $date_time_format = trim($date_format . ' ' . $time_format);
+    $active_reindex_job_updated_at = function_exists('mysql2date')
+        ? mysql2date($date_time_format, $active_reindex_job['updated_at'])
+        : $active_reindex_job['updated_at'];
 }
 
 // Get system information 
@@ -77,7 +86,7 @@ $system_info['wp_debug_mode'] = defined('WP_DEBUG') && WP_DEBUG ? 'Yes' : 'No';
 
 // Database info
 global $wpdb;
-$system_info['mysql_version'] = $wpdb->get_var('SELECT VERSION()');
+$system_info['mysql_version'] = $database->get_db_version();
 
 // Plugin info
 $plugins = get_plugins();
@@ -124,14 +133,15 @@ if (!array_key_exists($current_section, $sections)) {
 ?>
 <div class="wrap wpvdb-admin">
 
-    
+    <?php settings_errors('wpvdb_settings'); ?>
+
     <?php if ($has_pending_change): ?>
     <div class="notice notice-warning inline">
         <p>
             <strong><?php esc_html_e('Provider Change Pending', 'wpvdb'); ?></strong>
         </p>
         <p>
-            <?php esc_html_e('You have a pending change to your embedding provider or model. This change requires re-indexing all content.', 'wpvdb'); ?>
+            <?php esc_html_e('You have a pending change to your embedding provider or model. Applying it will activate the new provider and queue a background re-embed for posts whose existing rows are on the old model.', 'wpvdb'); ?>
         </p>
         <p>
             <button id="wpvdb-apply-provider-change-notice" class="button button-primary">
@@ -141,6 +151,34 @@ if (!array_key_exists($current_section, $sections)) {
                 <?php _e('Cancel Change', 'wpvdb'); ?>
             </button>
         </p>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($active_reindex_job): ?>
+    <div class="notice notice-info inline">
+        <p>
+            <strong><?php esc_html_e('Re-embed job in progress', 'wpvdb'); ?></strong>
+        </p>
+        <p>
+            <?php echo esc_html(sprintf(
+                /* translators: 1: job id, 2: status, 3: provider, 4: model, 5: scanned count, 6: queued count, 7: skipped count, 8: updated_at timestamp */
+                __('Job #%1$d (%2$s) for %3$s / %4$s. Scanned: %5$d. Queued: %6$d. Skipped: %7$d. Updated: %8$s.', 'wpvdb'),
+                (int) $active_reindex_job['job_id'],
+                $active_reindex_job['status'],
+                $active_reindex_job['provider'],
+                $active_reindex_job['model'],
+                (int) $active_reindex_job['scanned_count'],
+                (int) $active_reindex_job['queued_count'],
+                (int) $active_reindex_job['skipped_count'],
+                $active_reindex_job_updated_at
+            )); ?>
+        </p>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin: 0 12px 12px;">
+            <input type="hidden" name="action" value="wpvdb_cancel_reindex_job">
+            <input type="hidden" name="job_id" value="<?php echo esc_attr((int) $active_reindex_job['job_id']); ?>">
+            <?php wp_nonce_field('wpvdb-admin'); ?>
+            <input type="submit" class="button" value="<?php esc_attr_e('Cancel job', 'wpvdb'); ?>" onclick="return confirm('<?php echo esc_js(__('Cancel the running re-embed job? Posts already re-embedded keep their new-model rows; remaining posts stay on the old model until you start a new job.', 'wpvdb')); ?>');">
+        </form>
     </div>
     <?php endif; ?>
     
@@ -357,7 +395,7 @@ if (!array_key_exists($current_section, $sections)) {
                             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;">
                                 <input type="hidden" name="action" value="wpvdb_apply_provider_change">
                                 <?php wp_nonce_field('wpvdb-admin'); ?>
-                                <input type="submit" id="wpvdb-apply-provider-change-direct" class="button button-primary" value="<?php esc_attr_e('Apply Change', 'wpvdb'); ?>" onclick="return confirm('This will delete all existing embeddings and activate the new provider. Are you sure you want to continue?');">
+                                <input type="submit" id="wpvdb-apply-provider-change-direct" class="button button-primary" value="<?php esc_attr_e('Apply Change', 'wpvdb'); ?>" onclick="return confirm('<?php echo esc_js(__('This will activate the new provider and start a background re-embed job for posts on the old model. Existing rows for the old model stay in place until each post is re-processed. Continue?', 'wpvdb')); ?>');">
                             </form>
                             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block; margin-left:10px;">
                                 <input type="hidden" name="action" value="wpvdb_cancel_provider_change">
@@ -374,7 +412,7 @@ if (!array_key_exists($current_section, $sections)) {
                             </button>
                         </div>
                         <p class="description">
-                            <?php _e('Applying the change will delete all existing embeddings and require re-indexing content.', 'wpvdb'); ?>
+                            <?php _e('Applying the change activates the new provider and queues a background re-embed for posts on the old model. Existing rows are not truncated; per-post replacement happens as the job drains.', 'wpvdb'); ?>
                         </p>
                     </td>
                 </tr>
@@ -432,6 +470,12 @@ if (!array_key_exists($current_section, $sections)) {
     
     <!-- Tools Section -->
     <div class="wpvdb-status-section" <?php echo $current_section !== 'tools' ? 'style="display: none;"' : ''; ?>>
+        <?php if (!apply_filters('wpvdb_render_status_tools_ui', true)) : ?>
+            <div class="wpvdb-card">
+                <h3><?php esc_html_e('Demo mode', 'wpvdb'); ?></h3>
+                <p><?php esc_html_e('Maintenance tools are hidden for this demo site.', 'wpvdb'); ?></p>
+            </div>
+        <?php else : ?>
         <div class="wpvdb-card">
             <h3><?php _e('Database Tables', 'wpvdb'); ?></h3>
             <p><?php _e('If you are experiencing issues with embeddings, you can recreate the database tables.', 'wpvdb'); ?></p>
@@ -467,7 +511,7 @@ if (!array_key_exists($current_section, $sections)) {
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;">
                     <input type="hidden" name="action" value="wpvdb_apply_provider_change">
                     <?php wp_nonce_field('wpvdb-admin'); ?>
-                    <input type="submit" id="wpvdb-apply-provider-change-direct-tool" class="button button-primary" value="<?php esc_attr_e('Apply Change', 'wpvdb'); ?>" onclick="return confirm('This will delete all existing embeddings and activate the new provider. Are you sure you want to continue?');">
+                    <input type="submit" id="wpvdb-apply-provider-change-direct-tool" class="button button-primary" value="<?php esc_attr_e('Apply Change', 'wpvdb'); ?>" onclick="return confirm('<?php echo esc_js(__('This will activate the new provider and start a background re-embed job for posts on the old model. Existing rows for the old model stay in place until each post is re-processed. Continue?', 'wpvdb')); ?>');">
                 </form>
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block; margin-left:10px;">
                     <input type="hidden" name="action" value="wpvdb_cancel_provider_change">
@@ -484,7 +528,7 @@ if (!array_key_exists($current_section, $sections)) {
                 </button>
             </div>
             <p class="description">
-                <?php _e('Applying the change will delete all existing embeddings.', 'wpvdb'); ?>
+                <?php _e('Applying the change activates the new provider and queues a background re-embed for posts on the old model.', 'wpvdb'); ?>
             </p>
         </div>
         <?php endif; ?>
@@ -505,10 +549,14 @@ if (!array_key_exists($current_section, $sections)) {
                 ?>
                 <div class="wpvdb-diagnostics-results <?php echo isset($diagnostics['error']) ? 'has-error' : ''; ?>">
                     <h4><?php esc_html_e('Diagnostic Results', 'wpvdb'); ?></h4>
-                    
+
+                    <?php if (!empty($diagnostics['note'])): ?>
+                        <p class="description"><?php echo esc_html($diagnostics['note']); ?></p>
+                    <?php endif; ?>
+
                     <ul>
                         <li><strong><?php esc_html_e('Database Type:', 'wpvdb'); ?></strong> <?php echo esc_html(ucfirst($diagnostics['db_type'])); ?></li>
-                        <li><strong><?php esc_html_e('Database Version:', 'wpvdb'); ?></strong> <?php echo esc_html($diagnostics['db_version']); ?></li>
+                        <li><strong><?php esc_html_e('Database Version:', 'wpvdb'); ?></strong> <?php echo esc_html(isset($diagnostics['db_version']) ? $diagnostics['db_version'] : ''); ?></li>
                         <li><strong><?php esc_html_e('Vector Support:', 'wpvdb'); ?></strong> 
                             <?php if ($diagnostics['has_vector_support']): ?>
                                 <span style="color:green;">✓</span>
@@ -575,74 +623,77 @@ if (!array_key_exists($current_section, $sections)) {
             }
             ?>
         </div>
+        <?php endif; ?>
         
-        <div class="wpvdb-card">
-            <h3><?php _e('Test Embedding Generation', 'wpvdb'); ?></h3>
-            <p><?php _e('Test text embedding generation with your current provider.', 'wpvdb'); ?></p>
-            <p>
-                <button id="wpvdb-test-embedding-button" class="button button-primary">
-                    <?php _e('Test Embedding', 'wpvdb'); ?>
-                </button>
-            </p>
-        </div>
-        
-        <!-- Test Embedding Modal -->
-        <div id="wpvdb-test-embedding-modal" class="wpvdb-modal" style="display: none;">
-            <div class="wpvdb-modal-content">
-                <span class="wpvdb-modal-close">&times;</span>
-                <h2><?php _e('Test Text Embedding', 'wpvdb'); ?></h2>
-                
-                <form id="wpvdb-test-embedding-form">
-                    <div class="wpvdb-form-group">
-                        <label for="wpvdb-test-provider"><?php _e('Provider', 'wpvdb'); ?></label>
-                        <select id="wpvdb-test-provider" name="provider">
-                            <?php 
-                            $providers = \WPVDB\Providers::get_available_providers();
-                            foreach ($providers as $provider_id => $provider_data) {
-                                $selected = ($provider_id === $active_provider) ? 'selected' : '';
-                                echo '<option value="' . esc_attr($provider_id) . '" ' . $selected . '>' . esc_html($provider_data['label']) . '</option>';
-                            }
-                            ?>
-                        </select>
-                    </div>
-                    
-                    <div class="wpvdb-form-group">
-                        <label for="wpvdb-test-model"><?php _e('Model', 'wpvdb'); ?></label>
-                        <select id="wpvdb-test-model" name="model">
-                            <?php 
-                            $models = \WPVDB\Models::get_available_models();
-                            // Models are organized by provider, so we need to iterate through each provider's models
-                            foreach ($models as $provider_id => $provider_models) {
-                                echo '<optgroup label="' . esc_attr(ucfirst($provider_id)) . '">';
-                                foreach ($provider_models as $model_id => $model_data) {
-                                    $selected = ($model_id === $active_model) ? 'selected' : '';
-                                    echo '<option value="' . esc_attr($model_id) . '" ' . $selected . ' data-provider="' . esc_attr($provider_id) . '">' 
-                                        . esc_html($model_data['label']) . '</option>';
+        <?php if (apply_filters('wpvdb_render_test_embedding_ui', true)) : ?>
+            <div class="wpvdb-card">
+                <h3><?php _e('Test Embedding Generation', 'wpvdb'); ?></h3>
+                <p><?php _e('Test text embedding generation with your current provider.', 'wpvdb'); ?></p>
+                <p>
+                    <button id="wpvdb-test-embedding-button" class="button button-primary">
+                        <?php _e('Test Embedding', 'wpvdb'); ?>
+                    </button>
+                </p>
+            </div>
+
+            <!-- Test Embedding Modal -->
+            <div id="wpvdb-test-embedding-modal" class="wpvdb-modal" style="display: none;">
+                <div class="wpvdb-modal-content">
+                    <span class="wpvdb-modal-close">&times;</span>
+                    <h2><?php _e('Test Text Embedding', 'wpvdb'); ?></h2>
+
+                    <form id="wpvdb-test-embedding-form">
+                        <div class="wpvdb-form-group">
+                            <label for="wpvdb-test-provider"><?php _e('Provider', 'wpvdb'); ?></label>
+                            <select id="wpvdb-test-provider" name="provider">
+                                <?php
+                                $providers = \WPVDB\Providers::get_available_providers();
+                                foreach ($providers as $provider_id => $provider_data) {
+                                    $selected = ($provider_id === $active_provider) ? 'selected' : '';
+                                    echo '<option value="' . esc_attr($provider_id) . '" ' . $selected . '>' . esc_html($provider_data['label']) . '</option>';
                                 }
-                                echo '</optgroup>';
-                            }
-                            ?>
-                        </select>
+                                ?>
+                            </select>
+                        </div>
+
+                        <div class="wpvdb-form-group">
+                            <label for="wpvdb-test-model"><?php _e('Model', 'wpvdb'); ?></label>
+                            <select id="wpvdb-test-model" name="model">
+                                <?php
+                                $models = \WPVDB\Models::get_selectable_models();
+                                // Models are organized by provider, so we need to iterate through each provider's models
+                                foreach ($models as $provider_id => $provider_models) {
+                                    echo '<optgroup label="' . esc_attr(ucfirst($provider_id)) . '">';
+                                    foreach ($provider_models as $model_id => $model_data) {
+                                        $selected = ($model_id === $active_model) ? 'selected' : '';
+                                        echo '<option value="' . esc_attr($model_id) . '" ' . $selected . ' data-provider="' . esc_attr($provider_id) . '">'
+                                            . esc_html($model_data['label']) . '</option>';
+                                    }
+                                    echo '</optgroup>';
+                                }
+                                ?>
+                            </select>
+                        </div>
+
+                        <div class="wpvdb-form-group">
+                            <label for="wpvdb-test-text"><?php _e('Text to Embed', 'wpvdb'); ?></label>
+                            <textarea id="wpvdb-test-text" name="text" rows="5" placeholder="<?php esc_attr_e('Enter text to generate an embedding for...', 'wpvdb'); ?>"></textarea>
+                        </div>
+
+                        <div class="wpvdb-form-actions">
+                            <button type="submit" class="button button-primary"><?php _e('Generate Embedding', 'wpvdb'); ?></button>
+                            <button type="button" class="button wpvdb-modal-cancel"><?php _e('Cancel', 'wpvdb'); ?></button>
+                        </div>
+                    </form>
+
+                    <div id="wpvdb-test-embedding-results" style="display: none; margin-top: 20px;">
+                        <h3><?php _e('Results', 'wpvdb'); ?></h3>
+                        <div class="wpvdb-status-message"></div>
+                        <div class="wpvdb-embedding-info"></div>
                     </div>
-                    
-                    <div class="wpvdb-form-group">
-                        <label for="wpvdb-test-text"><?php _e('Text to Embed', 'wpvdb'); ?></label>
-                        <textarea id="wpvdb-test-text" name="text" rows="5" placeholder="<?php esc_attr_e('Enter text to generate an embedding for...', 'wpvdb'); ?>"></textarea>
-                    </div>
-                    
-                    <div class="wpvdb-form-actions">
-                        <button type="submit" class="button button-primary"><?php _e('Generate Embedding', 'wpvdb'); ?></button>
-                        <button type="button" class="button wpvdb-modal-cancel"><?php _e('Cancel', 'wpvdb'); ?></button>
-                    </div>
-                </form>
-                
-                <div id="wpvdb-test-embedding-results" style="display: none; margin-top: 20px;">
-                    <h3><?php _e('Results', 'wpvdb'); ?></h3>
-                    <div class="wpvdb-status-message"></div>
-                    <div class="wpvdb-embedding-info"></div>
                 </div>
             </div>
-        </div>
+        <?php endif; ?>
         
         <?php if ($database->get_db_type() === 'mariadb' && $database->has_native_vector_support()): ?>
         <div class="wpvdb-card">
@@ -703,6 +754,7 @@ if (!array_key_exists($current_section, $sections)) {
 </div>
 </div><!-- .wrap --> 
 
+<?php if ($has_pending_change || apply_filters('wpvdb_render_test_embedding_ui', true)) : ?>
 <script type="text/javascript">
 jQuery(document).ready(function($) {
     console.log('WPVDB CRITICAL FIX: Direct inline JavaScript loaded');
@@ -713,6 +765,11 @@ jQuery(document).ready(function($) {
     
     // CRITICAL FIX: Create a test function to check if event handlers already exist
     function checkIfHandlersExist() {
+        if ($('#wpvdb-test-embedding-button').length === 0) {
+            attachCriticalFixHandlers();
+            return;
+        }
+
         // Set up a flag to track if the original handlers are working
         $('#wpvdb-test-embedding-button').one('click', function() {
             testButtonClicked = true;
@@ -762,7 +819,7 @@ jQuery(document).ready(function($) {
                 e.stopPropagation(); // Prevent multiple handlers
                 console.log('WPVDB CRITICAL: Apply provider change button clicked directly');
                 
-                if (!confirm('This will delete all existing embeddings and activate the new provider. Are you sure you want to continue?')) {
+                if (!confirm('This will activate the new provider and start a background re-embed job for posts on the old model. Existing rows for the old model stay in place until each post is re-processed. Continue?')) {
                     return;
                 }
                 
@@ -950,20 +1007,19 @@ jQuery(document).ready(function($) {
     // Run check to see if we need to add our handlers
     checkIfHandlersExist();
 
-    // Check if we came from a settings update
+    // Strip the settings-updated and cache-bust params from the URL so a
+    // subsequent refresh does not re-trigger them. Uses replaceState rather
+    // than a full reload so admin notices rendered from the settings_errors
+    // transient (consumed on first render) remain visible.
     if (window.location.href.indexOf('settings-updated=1') > -1) {
-        console.log('WPVDB CRITICAL: Detected settings-updated parameter, forcing page reload in 1 second');
-        // Force reload once without the parameter to ensure fresh data
-        setTimeout(function() {
-            var cleanUrl = window.location.href.replace(/([&?])settings-updated=1(&|$)/, '$1');
-            cleanUrl = cleanUrl.replace(/([&?])cache-bust=[0-9]+(&|$)/, '$1');
-            // Remove trailing ? or & if present
-            cleanUrl = cleanUrl.replace(/[?&]$/, '');
-            window.location.href = cleanUrl;
-        }, 1000);
+        var cleanUrl = window.location.href.replace(/([&?])settings-updated=1(&|$)/, '$1');
+        cleanUrl = cleanUrl.replace(/([&?])cache-bust=[0-9]+(&|$)/, '$1');
+        cleanUrl = cleanUrl.replace(/[?&]$/, '');
+        window.history.replaceState(null, '', cleanUrl);
     }
 });
 </script>
+<?php endif; ?>
 
 <style type="text/css">
 /* Critical fix for modal styling */
@@ -1062,4 +1118,4 @@ optgroup {
     pointer-events: none;
     opacity: 0.8;
 }
-</style> 
+</style>

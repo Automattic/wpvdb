@@ -10,6 +10,7 @@ docker-compose.override.yml
 *.log
 logs/
 debug.log
+.phpunit.result.cache
 
 # Environment files
 .env

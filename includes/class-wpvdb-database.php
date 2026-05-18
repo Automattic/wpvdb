@@ -58,6 +58,12 @@ class Database {
     public function get_db_type() {
         try {
             if (null === $this->db_type) {
+                if (\wpvdb_is_sqlite()) {
+                    $this->db_type = 'sqlite';
+                    Logger::info('Database type determined', ['type' => $this->db_type]);
+                    return $this->db_type;
+                }
+
                 global $wpdb;
                 $version = $wpdb->get_var('SELECT VERSION()');
                 Logger::debug('Database version detected', ['version' => $version]);
@@ -69,6 +75,27 @@ class Database {
         } catch (\Exception $e) {
             Logger::log_exception($e, 'Failed to detect database type');
             return 'unknown';
+        }
+    }
+
+    /**
+     * Get a displayable database version string.
+     *
+     * @return string
+     */
+    public function get_db_version() {
+        global $wpdb;
+
+        try {
+            if (\wpvdb_is_sqlite()) {
+                $sqlite_version = (string) $wpdb->get_var('SELECT sqlite_version()');
+                return $sqlite_version !== '' ? sprintf('SQLite %s', $sqlite_version) : 'SQLite';
+            }
+
+            return (string) $wpdb->get_var('SELECT VERSION()');
+        } catch (\Exception $e) {
+            Logger::log_exception($e, 'Failed to detect database version');
+            return '';
         }
     }
 
@@ -98,6 +125,11 @@ class Database {
         global $wpdb;
 
         try {
+            if (\wpvdb_is_sqlite()) {
+                $this->has_vector_support = false;
+                return false;
+            }
+
             // If we've already determined vector support, return cached result
             if (isset($this->has_vector_support)) {
                 return $this->has_vector_support;
@@ -112,7 +144,7 @@ class Database {
                 // Check for MariaDB version with vector support
                 try {
                     $version = $wpdb->get_var("SELECT VERSION()");
-                    error_log('[WPVDB] Database version: ' . $version);
+                    if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Database version: ' . $version); }
                     
                     if (stripos($version, 'MariaDB') !== false) {
                         // Extract version number
@@ -133,7 +165,7 @@ class Database {
                         }
                     }
                 } catch (\Exception $e) {
-                    error_log('[WPVDB] Error checking database version: ' . $e->getMessage());
+                    if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Error checking database version: ' . $e->getMessage()); }
                     return false;
                 }
                 
@@ -144,11 +176,11 @@ class Database {
                         $check = $wpdb->get_var("SELECT COUNT(*) FROM information_schema.columns WHERE column_type LIKE 'VECTOR%' LIMIT 1");
                         if ($check === null && $wpdb->last_error) {
                             // Failed to query for VECTOR type, might not be supported
-                            error_log('[WPVDB] Vector type check failed: ' . $wpdb->last_error);
+                            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Vector type check failed: ' . $wpdb->last_error); }
                             $this->has_vector_support = false;
                         }
                     } catch (\Exception $e) {
-                        error_log('[WPVDB] Error checking vector support: ' . $e->getMessage());
+                        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Error checking vector support: ' . $e->getMessage()); }
                         $this->has_vector_support = false;
                     }
                 }
@@ -174,7 +206,7 @@ class Database {
                         }
                     }
                 } catch (\Exception $e) {
-                    error_log('[WPVDB] Error checking database version: ' . $e->getMessage());
+                    if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Error checking database version: ' . $e->getMessage()); }
                     return false;
                 }
             }
@@ -270,14 +302,19 @@ class Database {
      */
     public function get_vector_from_string_function($json_string) {
         $db_type = $this->get_db_type();
-        
+
         if ($this->has_native_vector_support()) {
+            // The JSON must be single-quoted inside the SQL function call so it
+            // parses as a string literal; callers pass raw JSON (e.g. "[0.1,0.2]").
+            $quoted = "'" . esc_sql($json_string) . "'";
             if ($db_type === 'mariadb') {
-                // MariaDB uses JSON_VALUE to extract array elements
-                return "VECTOR_FROM_JSON($json_string)";
+                // MariaDB 11.7+ parses a JSON array with VEC_FromText().
+                return "VEC_FromText($quoted)";
             } else {
-                // MySQL uses JSON_EXTRACT
-                return "VECTOR_FROM_JSON($json_string)";
+                // MySQL 9+ has its own ingest path. VECTOR_FROM_JSON is a
+                // placeholder kept for parity; callers targeting MySQL
+                // should confirm the actual function name for their version.
+                return "VECTOR_FROM_JSON($quoted)";
             }
         } else {
             // Fallback - just return the JSON string
@@ -385,6 +422,24 @@ class Database {
      */
     public function run_diagnostics() {
         global $wpdb;
+
+        if (\wpvdb_is_sqlite()) {
+            $sqlite_version = '';
+            try {
+                $sqlite_version = (string) $wpdb->get_var('SELECT sqlite_version()');
+            } catch (\Exception $e) {
+                $sqlite_version = '';
+            }
+
+            return [
+                'db_type'            => 'sqlite',
+                'db_version'         => $sqlite_version !== '' ? sprintf('SQLite %s', $sqlite_version) : 'SQLite',
+                'has_vector_support' => false,
+                'fallbacks_enabled'  => $this->are_fallbacks_enabled(),
+                'playground'         => \wpvdb_is_playground_runtime(),
+                'note'               => __('Running on SQLite. Native VECTOR is unavailable; embeddings use the LONGTEXT JSON fallback.', 'wpvdb'),
+            ];
+        }
         
         $diagnostics = [];
         
@@ -489,14 +544,27 @@ class Database {
         
         if ($table_exists) {
             // Delete all embeddings for this post
-            $wpdb->delete(
+            $deleted = $wpdb->delete(
                 $table_name,
                 ['doc_id' => $post_id],
                 ['%d']
             );
-            
+
+            // Invalidate query cache so subsequent /query calls don't return
+            // results referencing the just-deleted document.
+            if ($deleted !== false && $deleted > 0) {
+                Cache::invalidate_query_cache();
+            }
+
+            // wp_trash_post does not auto-clear post meta (unlike delete_post),
+            // so trashed-then-restored posts would otherwise show stale meta.
+            delete_post_meta($post_id, '_wpvdb_embedded');
+            delete_post_meta($post_id, '_wpvdb_chunks_count');
+            delete_post_meta($post_id, '_wpvdb_embedded_date');
+            delete_post_meta($post_id, '_wpvdb_embedded_model');
+
             // Log the deletion
-            error_log("[WPVDB] Deleted embeddings for post ID: $post_id");
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log("[WPVDB] Deleted embeddings for post ID: $post_id"); }
         }
     }
 
@@ -540,7 +608,7 @@ class Database {
             
             return $result !== false;
         } catch (\Exception $e) {
-            error_log('[WPVDB ERROR] Failed to add vector index: ' . $e->getMessage());
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Failed to add vector index: ' . $e->getMessage()); }
             return false;
         }
     }
@@ -590,7 +658,7 @@ class Database {
             
             return true;
         } catch (\Exception $e) {
-            error_log('[WPVDB ERROR] Failed to optimize vector performance: ' . $e->getMessage());
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Failed to optimize vector performance: ' . $e->getMessage()); }
             return false;
         }
     }

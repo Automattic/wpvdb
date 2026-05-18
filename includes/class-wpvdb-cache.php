@@ -54,27 +54,29 @@ class Cache {
     /**
      * Get cached query result
      *
-     * @param string $query_text Query text
-     * @param string $model Model used
-     * @param int $limit Result limit
+     * @param string      $query_text        Query text.
+     * @param string      $model             Model used.
+     * @param int         $limit             Result limit.
+     * @param string|null $key_seed_override Optional non-text cache seed.
      * @return array|false Query results or false if not cached
      */
-    public static function get_query_result($query_text, $model, $limit) {
-        $cache_key = self::get_query_cache_key($query_text, $model, $limit);
+    public static function get_query_result($query_text, $model, $limit, $key_seed_override = null) {
+        $cache_key = self::get_query_cache_key($query_text, $model, $limit, $key_seed_override);
         return wp_cache_get($cache_key, self::CACHE_GROUP);
     }
     
     /**
      * Cache a query result
      *
-     * @param string $query_text Query text
-     * @param string $model Model used
-     * @param int $limit Result limit
-     * @param array $results Query results
+     * @param string      $query_text        Query text.
+     * @param string      $model             Model used.
+     * @param int         $limit             Result limit.
+     * @param array       $results           Query results.
+     * @param string|null $key_seed_override Optional non-text cache seed.
      * @return bool Success
      */
-    public static function set_query_result($query_text, $model, $limit, $results) {
-        $cache_key = self::get_query_cache_key($query_text, $model, $limit);
+    public static function set_query_result($query_text, $model, $limit, $results, $key_seed_override = null) {
+        $cache_key = self::get_query_cache_key($query_text, $model, $limit, $key_seed_override);
         $expiration = self::EXPIRATION_TIMES['query_result'];
         
         return wp_cache_set($cache_key, $results, self::CACHE_GROUP, $expiration);
@@ -106,16 +108,57 @@ class Cache {
      * @param int $doc_id Document ID that was updated
      */
     public static function invalidate_document_cache($doc_id) {
-        // Invalidate query results since document embeddings changed
-        self::flush_cache_group('query_');
-        
+        // Invalidate query results since document embeddings changed.
+        // flush_cache_group('query_') used to write an unread marker; replaced
+        // by a real version-bump that orphans every prior cache key.
+        self::invalidate_query_cache();
+
         // Invalidate database stats
         wp_cache_delete('db_stats', self::CACHE_GROUP);
-        
+
         // Log cache invalidation
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log("[WPVDB CACHE] Invalidated cache for document {$doc_id}");
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log("[WPVDB CACHE] Invalidated cache for document {$doc_id}"); }
         }
+    }
+
+    /**
+     * Bump the query cache version, orphaning all prior query result keys.
+     *
+     * Cache keys include the version as a prefix (see get_query_cache_key()).
+     * Bumping makes every previously stored key unreachable; the entries will
+     * expire on their own via the EXPIRATION_TIMES['query_result'] TTL.
+     *
+     * Stored in an option (persistent) AND cached (fast). The option is the
+     * source of truth so the version survives object cache flushes.
+     */
+    public static function invalidate_query_cache() {
+        $v = (int) get_option('wpvdb_query_cache_version', 1) + 1;
+        if ($v < 1) {
+            $v = 1;
+        }
+        update_option('wpvdb_query_cache_version', $v, false);
+        wp_cache_set('wpvdb_query_cache_version', $v, self::CACHE_GROUP);
+        wp_cache_delete('db_stats', self::CACHE_GROUP);
+    }
+
+    /**
+     * Current query cache version. Used as part of the cache key so a
+     * version bump orphans every prior entry without iterating keys.
+     *
+     * @return int
+     */
+    private static function get_query_cache_version() {
+        $cached = wp_cache_get('wpvdb_query_cache_version', self::CACHE_GROUP);
+        if ($cached !== false) {
+            return (int) $cached;
+        }
+        $stored = (int) get_option('wpvdb_query_cache_version', 1);
+        if ($stored < 1) {
+            $stored = 1;
+        }
+        wp_cache_set('wpvdb_query_cache_version', $stored, self::CACHE_GROUP);
+        return $stored;
     }
     
     /**
@@ -139,10 +182,20 @@ class Cache {
      * @param int $limit Result limit
      * @return string Cache key
      */
-    private static function get_query_cache_key($query_text, $model, $limit) {
-        // Use hash to avoid very long cache keys
-        $query_hash = hash('sha256', $query_text);
-        return "query_{$model}_{$query_hash}_{$limit}";
+    private static function get_query_cache_key($query_text, $model, $limit, $key_seed_override = null) {
+        if ($key_seed_override !== null && $key_seed_override !== '') {
+            $query_hash = (string) $key_seed_override;
+            if (strlen($query_hash) > 128) {
+                $query_hash = hash('sha256', $query_hash);
+            }
+        } else {
+            // Use hash to avoid very long cache keys
+            $query_hash = hash('sha256', (string) $query_text);
+        }
+        // Prefix with the current cache version so invalidate_query_cache()
+        // orphans prior entries without needing to enumerate keys.
+        $v = self::get_query_cache_version();
+        return "query_v{$v}_{$model}_{$query_hash}_{$limit}";
     }
     
     /**
@@ -167,9 +220,11 @@ class Cache {
         // WordPress doesn't have wp_cache_flush_group, so we'll use invalidation timestamps
         $timestamp = time();
         wp_cache_set('cache_invalidation_timestamp', $timestamp, self::CACHE_GROUP, DAY_IN_SECONDS);
+        self::invalidate_query_cache();
+        wp_cache_delete('db_stats', self::CACHE_GROUP);
         
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('[WPVDB CACHE] Flushed all caches');
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB CACHE] Flushed all caches'); }
         }
     }
     
@@ -255,7 +310,7 @@ class Cache {
         }
         
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log("[WPVDB CACHE] Preloaded {$preloaded} embeddings");
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log("[WPVDB CACHE] Preloaded {$preloaded} embeddings"); }
         }
         
         return $preloaded;

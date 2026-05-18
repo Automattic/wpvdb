@@ -52,7 +52,7 @@ class Query {
             return;
         }
 
-        error_log('[WPVDB DEBUG] maybe_vector_search triggered with query: ' . $vdb_query);
+        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] maybe_vector_search triggered with query: ' . $vdb_query); }
 
         // For simplicity, embed and do a fallback search. Then get the doc_ids, presumably post_id was stored as doc_id.
         global $wpdb;
@@ -65,39 +65,39 @@ class Query {
         }
         if (!$api_key) {
             // If there's no stored key, we can't generate embeddings. We skip.
-            error_log('[WPVDB ERROR] No API key found, skipping vector search');
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] No API key found, skipping vector search'); }
             return;
         }
 
         // Make sure we have a valid model name
         $model = Settings::get_default_model();
         if (empty($model)) {
-            $model = 'text-embedding-3-small'; // Default fallback
+            $model = Models::get_default_model_for_provider('openai');
         }
-        error_log('[WPVDB DEBUG] Using embedding model: ' . $model);
+        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Using embedding model: ' . $model); }
         
         // Get API base URL with fallback
         $api_base = Settings::get_api_base();
         if (empty($api_base)) {
             $api_base = 'https://api.openai.com/v1/';
         }
-        error_log('[WPVDB DEBUG] Using API base: ' . $api_base);
+        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Using API base: ' . $api_base); }
 
         try {
             $embedding_result = Core::get_embedding($vdb_query, $model, $api_base, $api_key);
             if (is_wp_error($embedding_result)) {
-                error_log('[WPVDB ERROR] Error generating embedding: ' . $embedding_result->get_error_message());
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Error generating embedding: ' . $embedding_result->get_error_message()); }
                 return; // skip
             }
 
-            error_log('[WPVDB DEBUG] Embedding generated successfully, dimensions: ' . count($embedding_result));
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Embedding generated successfully, dimensions: ' . count($embedding_result)); }
             
             $embedding = $embedding_result;
             $has_vector = self::$database->has_native_vector_support();
-            error_log('[WPVDB DEBUG] Vector support detected: ' . ($has_vector ? 'Yes' : 'No'));
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Vector support detected: ' . ($has_vector ? 'Yes' : 'No')); }
 
             $limit = $query->get('posts_per_page') ?: 10;
-            error_log('[WPVDB DEBUG] Posts per page limit: ' . $limit);
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Posts per page limit: ' . $limit); }
 
             $doc_ids = [];
 
@@ -108,54 +108,59 @@ class Query {
                     
                     // Use Database class to get the appropriate vector function
                     $vector_function = self::$database->get_vector_from_string_function($embedding_json);
-                    error_log('[WPVDB DEBUG] Using vector function: ' . $vector_function);
+                    if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Using vector function: ' . $vector_function); }
                     
                     // Use Database class to get the appropriate distance function
                     $distance_function = self::$database->get_vector_distance_function('embedding', $vector_function, 'cosine');
-                    error_log('[WPVDB DEBUG] Using distance function: ' . $distance_function);
+                    if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Using distance function: ' . $distance_function); }
                     
                     // Set an appropriate similarity threshold - we discovered this is critical for performance
                     // Lower values (0.2-0.3) are more strict but faster, higher values (0.4-0.6) give more results
                     $similarity_threshold = apply_filters('wpvdb_similarity_threshold', 0.35);
                     
-                    // Optimized query that uses the vector index with a distance threshold
-                    // The threshold + ORDER BY + LIMIT pattern is what maximizes vector index usage
+                    // Optimized query that uses the vector index with a distance threshold.
+                    // The threshold + ORDER BY + LIMIT pattern is what maximizes vector index usage.
                     $sql = $wpdb->prepare("
                         SELECT doc_id,
                             $distance_function AS distance
                         FROM $table_name
                         WHERE $distance_function < %f
+                          AND model = %s
                         ORDER BY distance
                         LIMIT %d
-                    ", 
+                    ",
                     $similarity_threshold,
+                    $model,
                     $limit * 3 // fetch more candidates than needed
                     );
                     
-                    error_log('[WPVDB DEBUG] Vector search SQL: ' . $sql);
+                    if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Vector search SQL: ' . $sql); }
                     
                     $rows = $wpdb->get_results($sql, ARRAY_A);
                     
                     if ($wpdb->last_error) {
-                        error_log('[WPVDB ERROR] Database error in vector search: ' . $wpdb->last_error);
+                        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Database error in vector search: ' . $wpdb->last_error); }
                     }
                     
                     if ($rows) {
-                        error_log('[WPVDB DEBUG] Found ' . count($rows) . ' results from vector search');
+                        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Found ' . count($rows) . ' results from vector search'); }
                         foreach ($rows as $r) {
                             $doc_ids[] = (int) $r['doc_id'];
-                            error_log('[WPVDB DEBUG] Added doc_id: ' . $r['doc_id'] . ' with distance: ' . $r['distance']);
+                            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] Added doc_id: ' . $r['doc_id'] . ' with distance: ' . $r['distance']); }
                         }
                     } else {
-                        error_log('[WPVDB DEBUG] No results found from vector search');
+                        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] No results found from vector search'); }
                     }
                 } catch (\Exception $e) {
-                    error_log('[WPVDB ERROR] Exception in vector search: ' . $e->getMessage());
+                    if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Exception in vector search: ' . $e->getMessage()); }
                 }
             } else {
-                error_log('[WPVDB DEBUG] No vector support, using PHP fallback search');
-                // Fallback: do in PHP
-                $all_rows = $wpdb->get_results("SELECT doc_id, embedding FROM $table_name", ARRAY_A);
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB DEBUG] No vector support, using PHP fallback search'); }
+                // Fallback: do in PHP.
+                $all_rows = $wpdb->get_results(
+                    $wpdb->prepare("SELECT doc_id, embedding FROM $table_name WHERE model = %s", $model),
+                    ARRAY_A
+                );
                 $distances = [];
                 foreach ($all_rows as $r) {
                     $stored_emb = json_decode($r['embedding'], true);
@@ -184,7 +189,7 @@ class Query {
             $query->set('post__in', $doc_ids);
             $query->set('orderby', 'post__in');
         } catch (\Exception $e) {
-            error_log('[WPVDB ERROR] Unhandled exception in maybe_vector_search: ' . $e->getMessage());
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB ERROR] Unhandled exception in maybe_vector_search: ' . $e->getMessage()); }
         }
     }
 

@@ -6,7 +6,7 @@
     "require": {
         "php": ">=7.4",
         "woocommerce/action-scheduler": "^3.9",
-        "wordpress/php-ai-client": "dev-add/embeddings-support as 0.3.1",
+        "wordpress/php-ai-client": "dev-add/embeddings-support#d0f83c0fa596137e570220c4161d646b50bee7fc as 0.3.1",
         "wordpress/wp-ai-client": "^0.2.1"
     },
     "require-dev": {

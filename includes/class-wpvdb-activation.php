@@ -55,7 +55,7 @@ class Activation {
             update_option('wpvdb_incompatible_db', true);
             
             // Log the incompatible activation
-            error_log('[WPVDB] Activated on incompatible database. Vector features require MySQL 8.0.32+ or MariaDB 11.7+.');
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Activated on incompatible database. Vector features require MySQL 8.0.32+ or MariaDB 11.7+.'); }
             
             // Restore error reporting and return early (we'll show the warning later)
             error_reporting($old_error_reporting);
@@ -145,15 +145,56 @@ class Activation {
             KEY doc_type_idx (doc_type),
             KEY embedding_date_idx (embedding_date),
             KEY chunk_id_idx (chunk_id),
-            KEY compound_search_idx (doc_type, model, embedding_date)
+            KEY compound_search_idx (doc_type, model, embedding_date),
+            KEY doc_id_doc_type_model_idx (doc_id, doc_type, model)
         ) $collate;\n";
 
         if (!$has_meta_column) {
             // Add meta column if it doesn't exist (for upgrade from older versions)
             $sql .= "ALTER TABLE {$table_name} ADD COLUMN meta longtext DEFAULT NULL;\n";
         }
-        
+
+        $jobs_table = $wpdb->prefix . 'wpvdb_reindex_jobs';
+        $sql .= "CREATE TABLE {$jobs_table} (
+            job_id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            status varchar(20) NOT NULL DEFAULT 'pending',
+            provider varchar(64) NOT NULL DEFAULT '',
+            model varchar(64) NOT NULL DEFAULT '',
+            scope_args longtext NOT NULL,
+            fingerprint char(64) NOT NULL DEFAULT '',
+            last_seen_id bigint(20) unsigned NOT NULL DEFAULT 0,
+            upper_bound_id bigint(20) unsigned NOT NULL DEFAULT 0,
+            scanned_count bigint(20) unsigned NOT NULL DEFAULT 0,
+            queued_count bigint(20) unsigned NOT NULL DEFAULT 0,
+            skipped_count bigint(20) unsigned NOT NULL DEFAULT 0,
+            lock_until datetime DEFAULT NULL,
+            lock_token varchar(36) DEFAULT NULL,
+            last_error text DEFAULT NULL,
+            created_at datetime DEFAULT NULL,
+            updated_at datetime DEFAULT NULL,
+            PRIMARY KEY  (job_id),
+            KEY fingerprint_status_idx (fingerprint, status),
+            KEY status_idx (status)
+        ) $collate;\n";
+
         return $sql;
+    }
+
+    /**
+     * Run schema migrations idempotently for sites that already have the
+     * plugin installed at an older version.
+     */
+    public static function upgrade_schema() {
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        self::init_database();
+
+        if (!self::$database->has_native_vector_support() && !self::$database->are_fallbacks_enabled()) {
+            return false;
+        }
+
+        dbDelta(self::get_schema_sql());
+        self::add_vector_index_to_existing_table();
+        return true;
     }
     
     /**
@@ -161,13 +202,17 @@ class Activation {
      */
     public static function add_vector_index_to_existing_table() {
         global $wpdb;
+
+        if (\wpvdb_is_sqlite()) {
+            return false;
+        }
         
         try {
             self::init_database();
             
             // Only proceed if database is ready and we've initialized properly
             if (!self::$database) {
-                error_log('[WPVDB] Database not initialized, skipping vector index creation');
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Database not initialized, skipping vector index creation'); }
                 return false;
             }
             
@@ -177,7 +222,7 @@ class Activation {
             try {
                 $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_name'") === $table_name;
             } catch (\Exception $e) {
-                error_log('[WPVDB] Error checking if table exists: ' . $e->getMessage());
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Error checking if table exists: ' . $e->getMessage()); }
                 return false;
             }
             
@@ -189,7 +234,7 @@ class Activation {
                 $is_mariadb = self::$database->get_db_type() === 'mariadb';
                 $has_vector_support = $is_mariadb && self::$database->has_native_vector_support();
             } catch (\Exception $e) {
-                error_log('[WPVDB] Error checking database type or vector support: ' . $e->getMessage());
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Error checking database type or vector support: ' . $e->getMessage()); }
                 return false;
             }
             
@@ -201,7 +246,7 @@ class Activation {
                         $index_check = $wpdb->get_results("SHOW INDEX FROM $table_name WHERE Key_name = 'embedding_idx'");
                         $index_exists = !empty($index_check);
                     } catch (\Exception $e) {
-                        error_log('[WPVDB] Error checking for existing index: ' . $e->getMessage());
+                        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Error checking for existing index: ' . $e->getMessage()); }
                     }
                     
                     if (!$index_exists) {
@@ -212,7 +257,7 @@ class Activation {
                         ");
                         
                         if ($result === false) {
-                            error_log('[WPVDB] Failed to add vector index using new syntax: ' . $wpdb->last_error);
+                            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Failed to add vector index using new syntax: ' . $wpdb->last_error); }
                             
                             // Try with simpler syntax as fallback
                             $result = $wpdb->query("
@@ -221,15 +266,15 @@ class Activation {
                             ");
                             
                             if ($result !== false) {
-                                error_log('[WPVDB] Added vector index with simplified syntax');
+                                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Added vector index with simplified syntax'); }
                             } else {
-                                error_log('[WPVDB] Failed to add vector index with simplified syntax: ' . $wpdb->last_error);
+                                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Failed to add vector index with simplified syntax: ' . $wpdb->last_error); }
                             }
                         } else {
-                            error_log('[WPVDB] Added optimized vector index to embeddings table');
+                            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Added optimized vector index to embeddings table'); }
                         }
                     } else {
-                        error_log('[WPVDB] Vector index already exists, skipping creation');
+                        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Vector index already exists, skipping creation'); }
                     }
                     
                     // After creating the main vector index, add supporting indexes if needed
@@ -248,23 +293,23 @@ class Activation {
                                 }
                             } catch (\Exception $e) {
                                 // Ignore errors for supporting indexes, they're not critical
-                                error_log("[WPVDB] Error creating supporting index $index_name: " . $e->getMessage());
+                                if (defined('WP_DEBUG') && WP_DEBUG) { error_log("[WPVDB] Error creating supporting index $index_name: " . $e->getMessage()); }
                             }
                         }
                     } catch (\Exception $e) {
                         // Ignore errors for supporting indexes, they're not critical
-                        error_log('[WPVDB] Error creating supporting indexes: ' . $e->getMessage());
+                        if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Error creating supporting indexes: ' . $e->getMessage()); }
                     }
                 } catch (\Exception $e) {
                     // Log error but don't let it crash the activation
-                    error_log('[WPVDB] Error adding vector index: ' . $e->getMessage());
+                    if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Error adding vector index: ' . $e->getMessage()); }
                 }
             }
             
             return true;
         } catch (\Exception $e) {
             // Catch all exceptions to prevent activation failure
-            error_log('[WPVDB] Fatal error in add_vector_index_to_existing_table: ' . $e->getMessage());
+            if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Fatal error in add_vector_index_to_existing_table: ' . $e->getMessage()); }
             return false;
         }
     }
@@ -280,10 +325,13 @@ class Activation {
         
         // Drop the existing table
         $wpdb->query("DROP TABLE IF EXISTS $table_name");
-        
+
         // Create the table with the current schema
         self::activate();
-        
+
+        // Invalidate query cache after the destructive schema change.
+        Cache::invalidate_query_cache();
+
         // Add vector index with optimized parameters for MariaDB
         if (self::$database->get_db_type() === 'mariadb') {
             try {
@@ -303,11 +351,11 @@ class Activation {
                     // Update table statistics for optimal query planning
                     $wpdb->query("ANALYZE TABLE $table_name");
                     
-                    error_log('[WPVDB] Added optimized vector index and supporting indexes to embeddings table');
+                    if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Added optimized vector index and supporting indexes to embeddings table'); }
                 }
             } catch (\Exception $e) {
                 // Ignore errors
-                error_log('[WPVDB] Error adding vector index during recreation: ' . $e->getMessage());
+                if (defined('WP_DEBUG') && WP_DEBUG) { error_log('[WPVDB] Error adding vector index during recreation: ' . $e->getMessage()); }
             }
         }
         
