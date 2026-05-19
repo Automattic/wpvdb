@@ -9,6 +9,8 @@
 
 defined( 'ABSPATH' ) || exit;
 
+global $wpdb;
+
 // Get the database instance.
 $database = $wpvdb_plugin->get_database();
 
@@ -21,7 +23,6 @@ $vector_index_status = array(
 
 // Check if vector index exists (only for MariaDB).
 if ( $database->get_db_type() === 'mariadb' && $database->has_native_vector_support() ) {
-	global $wpdb;
 	$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
 	// Check if the table exists first.

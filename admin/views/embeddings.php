@@ -8,6 +8,8 @@
 ?><div class="wrap wpvdb-embeddings">
 
 	<?php
+	global $wpdb;
+
 	// Display debug information if needed.
 	$show_debug = isset( $_GET['debug'] );
 
@@ -26,8 +28,6 @@
 
 	if ( $show_debug ) {
 		// Get and display settings information.
-		global $wpdb;
-
 		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
 		// Create a database instance instead of using static methods.
