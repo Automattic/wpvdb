@@ -260,7 +260,7 @@ class REST {
 		// Ensure text is a string.
 		if ( ! is_string( $text ) ) {
 			if ( is_array( $text ) || is_object( $text ) ) {
-				$text = json_encode( $text );
+				$text = wp_json_encode( $text );
 			} else {
 				$text = strval( $text );
 			}
@@ -439,9 +439,7 @@ class REST {
 
 		self::init_database();
 
-		if ( \wpvdb_should_log_to_error_log( 'debug', 'handle_query called' ) ) {
-			error_log( '[WPVDB DEBUG] handle_query called' );
-		}
+		Logger::debug( 'handle_query called' );
 		$data = $request->get_json_params();
 		if ( ! is_array( $data ) ) {
 			$data = array();
@@ -915,17 +913,15 @@ class REST {
 	 */
 	public static function insert_embedding_row( $doc_id, $chunk_id, $chunk_content, $summary, $embedding, $model = '', $doc_type = 'post', $chunk_index = null ) {
 		// Detect callers using the legacy 5/6/7-arg signature; fall back to 0 for backward
-		// compatibility but emit a debug-only warning so the regression is visible.
+		// compatibility but emit a warning so the regression is visible.
 		if ( null === $chunk_index ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( '[WPVDB WARN] insert_embedding_row called without chunk_index; defaulting to 0' ); }
+			Logger::warning( 'insert_embedding_row called without chunk_index; defaulting to 0' );
 			$chunk_index = 0;
 		}
 		$chunk_index = (int) $chunk_index;
 
 		if ( ! Core::is_valid_embedding( $embedding ) ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( '[WPVDB ERROR] insert_embedding_row rejected invalid embedding for doc_id=' . $doc_id . ' chunk_index=' . $chunk_index ); }
+			Logger::error( 'insert_embedding_row rejected invalid embedding for doc_id=' . $doc_id . ' chunk_index=' . $chunk_index );
 			return new \WP_Error(
 				'embedding_invalid',
 				'Refused to store an embedding that is empty, non-finite, or zero-magnitude.',
@@ -944,8 +940,7 @@ class REST {
 
 		// First, check if the table exists.
 		if ( $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) !== $table_name ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( '[WPVDB ERROR] Embeddings table does not exist' ); }
+			Logger::error( 'Embeddings table does not exist' );
 			return new \WP_Error(
 				'embedding_table_missing',
 				'The wpvdb embeddings table does not exist. Run plugin activation or the schema migration.',
@@ -958,18 +953,16 @@ class REST {
 
 		// Check for vector support and handle storage differently.
 		$has_vector = self::$database->has_native_vector_support();
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( '[WPVDB DEBUG] Vector support detected: ' . ( $has_vector ? 'Yes' : 'No' ) ); }
+		Logger::debug( 'Vector support detected: ' . ( $has_vector ? 'Yes' : 'No' ) );
 
 		if ( $has_vector ) {
 			try {
 				// Convert the embedding array to a JSON string.
-				$embedding_json = json_encode( $embedding );
+				$embedding_json = wp_json_encode( $embedding );
 
 				// Use the Database class to determine the vector function to use.
 				$vector_function = self::$database->get_vector_from_string_function( $embedding_json );
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( '[WPVDB DEBUG] Vector function: ' . $vector_function ); }
+				Logger::debug( 'Vector function: ' . $vector_function );
 
 				// For MySQL, the prepare statement handles the quoting properly
 				// For MariaDB, we need to make sure the vector function is inserted as-is.
@@ -1009,8 +1002,7 @@ class REST {
 					);
 				}
 			} catch ( \Exception $e ) {
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( '[WPVDB ERROR] Exception in insert_embedding_row: ' . $e->getMessage() ); }
+				Logger::log_exception( $e, 'Exception in insert_embedding_row' );
 				$result = false;
 			}
 		} else {
@@ -1025,7 +1017,7 @@ class REST {
 					$chunk_id,
 					$chunk_content,
 					$summary,
-					json_encode( $embedding ),
+					wp_json_encode( $embedding ),
 					$model,
 					$doc_type,
 					$chunk_index
@@ -1034,8 +1026,7 @@ class REST {
 		}
 
 		if ( false === $result ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( '[WPVDB ERROR] Failed to insert embedding row: ' . $wpdb->last_error ); }
+			Logger::error( 'Failed to insert embedding row: ' . $wpdb->last_error );
 			return new \WP_Error(
 				'embedding_insert_failed',
 				'Database insert failed: ' . $wpdb->last_error,
@@ -1123,7 +1114,7 @@ class REST {
 		if ( count( $vec2 ) != $length ) {
 			// Either truncate or pad vec2 to match vec1's length.
 			$vec2 = array_slice( $vec2, 0, $length );
-			while ( count( $vec2 ) < $length ) {
+			for ( $vec2_length = count( $vec2 ); $vec2_length < $length; $vec2_length++ ) {
 				$vec2[] = 0.0;
 			}
 		}

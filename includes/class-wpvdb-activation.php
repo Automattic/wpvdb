@@ -64,8 +64,7 @@ class Activation {
 			update_option( 'wpvdb_incompatible_db', true );
 
 			// Log the incompatible activation.
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( '[WPVDB] Activated on incompatible database. Vector features require MySQL 8.0.32+ or MariaDB 11.7+.' ); }
+			Logger::warning( 'Activated on incompatible database. Vector features require MySQL 8.0.32+ or MariaDB 11.7+.' );
 
 			// Restore error reporting and return early (we'll show the warning later).
 			error_reporting( $old_error_reporting );
@@ -222,8 +221,7 @@ class Activation {
 
 			// Only proceed if database is ready and we've initialized properly.
 			if ( ! self::$database ) {
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( '[WPVDB] Database not initialized, skipping vector index creation' ); }
+				Logger::warning( 'Database not initialized, skipping vector index creation' );
 				return false;
 			}
 
@@ -233,8 +231,7 @@ class Activation {
 			try {
 				$table_exists = $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) === $table_name;
 			} catch ( \Exception $e ) {
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( '[WPVDB] Error checking if table exists: ' . $e->getMessage() ); }
+				Logger::error( 'Error checking if table exists: ' . $e->getMessage() );
 				return false;
 			}
 
@@ -246,8 +243,7 @@ class Activation {
 				$is_mariadb         = self::$database->get_db_type() === 'mariadb';
 				$has_vector_support = $is_mariadb && self::$database->has_native_vector_support();
 			} catch ( \Exception $e ) {
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( '[WPVDB] Error checking database type or vector support: ' . $e->getMessage() ); }
+				Logger::error( 'Error checking database type or vector support: ' . $e->getMessage() );
 				return false;
 			}
 
@@ -259,8 +255,7 @@ class Activation {
 						$index_check  = $wpdb->get_results( "SHOW INDEX FROM $table_name WHERE Key_name = 'embedding_idx'" );
 						$index_exists = ! empty( $index_check );
 					} catch ( \Exception $e ) {
-						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-							error_log( '[WPVDB] Error checking for existing index: ' . $e->getMessage() ); }
+						Logger::warning( 'Error checking for existing index: ' . $e->getMessage() );
 					}
 
 					if ( ! $index_exists ) {
@@ -273,8 +268,7 @@ class Activation {
 						);
 
 						if ( false === $result ) {
-							if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-								error_log( '[WPVDB] Failed to add vector index using new syntax: ' . $wpdb->last_error ); }
+							Logger::warning( 'Failed to add vector index using new syntax: ' . $wpdb->last_error );
 
 							// Try with simpler syntax as fallback.
 							$result = $wpdb->query(
@@ -285,16 +279,15 @@ class Activation {
 							);
 
 							if ( false !== $result ) {
-								if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-									error_log( '[WPVDB] Added vector index with simplified syntax' ); }
-							} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-								error_log( '[WPVDB] Failed to add vector index with simplified syntax: ' . $wpdb->last_error );
+								Logger::debug( 'Added vector index with simplified syntax' );
+							} else {
+								Logger::error( 'Failed to add vector index with simplified syntax: ' . $wpdb->last_error );
 							}
-						} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-							error_log( '[WPVDB] Added optimized vector index to embeddings table' );
+						} else {
+							Logger::debug( 'Added optimized vector index to embeddings table' );
 						}
-					} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( '[WPVDB] Vector index already exists, skipping creation' );
+					} else {
+						Logger::debug( 'Vector index already exists, skipping creation' );
 					}
 
 					// After creating the main vector index, add supporting indexes if needed.
@@ -313,27 +306,23 @@ class Activation {
 								}
 							} catch ( \Exception $e ) {
 								// Ignore errors for supporting indexes, they're not critical.
-								if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-									error_log( "[WPVDB] Error creating supporting index $index_name: " . $e->getMessage() ); }
+								Logger::warning( "Error creating supporting index $index_name: " . $e->getMessage() );
 							}
 						}
 					} catch ( \Exception $e ) {
 						// Ignore errors for supporting indexes, they're not critical.
-						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-							error_log( '[WPVDB] Error creating supporting indexes: ' . $e->getMessage() ); }
+						Logger::warning( 'Error creating supporting indexes: ' . $e->getMessage() );
 					}
 				} catch ( \Exception $e ) {
 					// Log error but don't let it crash the activation.
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( '[WPVDB] Error adding vector index: ' . $e->getMessage() ); }
+					Logger::error( 'Error adding vector index: ' . $e->getMessage() );
 				}
 			}
 
 			return true;
 		} catch ( \Exception $e ) {
 			// Catch all exceptions to prevent activation failure.
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( '[WPVDB] Fatal error in add_vector_index_to_existing_table: ' . $e->getMessage() ); }
+			Logger::critical( 'Fatal error in add_vector_index_to_existing_table: ' . $e->getMessage() );
 			return false;
 		}
 	}
@@ -377,13 +366,11 @@ class Activation {
 					// Update table statistics for optimal query planning.
 					$wpdb->query( "ANALYZE TABLE $table_name" );
 
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( '[WPVDB] Added optimized vector index and supporting indexes to embeddings table' ); }
+					Logger::debug( 'Added optimized vector index and supporting indexes to embeddings table' );
 				}
 			} catch ( \Exception $e ) {
 				// Ignore errors.
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( '[WPVDB] Error adding vector index during recreation: ' . $e->getMessage() ); }
+				Logger::error( 'Error adding vector index during recreation: ' . $e->getMessage() );
 			}
 		}
 

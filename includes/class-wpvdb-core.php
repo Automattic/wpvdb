@@ -73,7 +73,7 @@ class Core {
 		// Ensure text is a string.
 		if ( ! is_string( $text ) ) {
 			if ( is_array( $text ) || is_object( $text ) ) {
-				$text = json_encode( $text );
+				$text = wp_json_encode( $text );
 			} else {
 				$text = strval( $text );
 			}
@@ -119,7 +119,7 @@ class Core {
 		// Ensure text is a string.
 		if ( ! is_string( $text ) ) {
 			if ( is_array( $text ) || is_object( $text ) ) {
-				$text = json_encode( $text );
+				$text = wp_json_encode( $text );
 			} else {
 				$text = strval( $text );
 			}
@@ -542,7 +542,7 @@ class Core {
 		// Ensure text is a string.
 		if ( ! is_string( $text ) ) {
 			if ( is_array( $text ) || is_object( $text ) ) {
-				$text = json_encode( $text );
+				$text = wp_json_encode( $text );
 			} else {
 				$text = strval( $text );
 			}

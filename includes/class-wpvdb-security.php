@@ -179,10 +179,7 @@ class Security {
 			'data'       => $data,
 		);
 
-		// Log to WordPress error log if debug is enabled.
-		if ( \wpvdb_should_log_to_error_log( 'debug', 'security_event', $log_data ) ) {
-			error_log( '[WPVDB SECURITY] ' . wp_json_encode( $log_data ) );
-		}
+		Logger::debug( 'Security event', $log_data );
 
 		// Allow plugins to hook into security logging.
 		do_action( 'wpvdb_security_event', $event, $log_data );

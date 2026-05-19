@@ -144,8 +144,7 @@ class Database {
 				// Check for MariaDB version with vector support.
 				try {
 					$version = $wpdb->get_var( 'SELECT VERSION()' );
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( '[WPVDB] Database version: ' . $version ); }
+					Logger::debug( 'Database version: ' . $version );
 
 					if ( stripos( $version, 'MariaDB' ) !== false ) {
 						// Extract version number.
@@ -166,8 +165,7 @@ class Database {
 						}
 					}
 				} catch ( \Exception $e ) {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( '[WPVDB] Error checking database version: ' . $e->getMessage() ); }
+					Logger::warning( 'Error checking database version: ' . $e->getMessage() );
 					return false;
 				}
 
@@ -178,13 +176,11 @@ class Database {
 						$check = $wpdb->get_var( "SELECT COUNT(*) FROM information_schema.columns WHERE column_type LIKE 'VECTOR%' LIMIT 1" );
 						if ( null === $check && $wpdb->last_error ) {
 							// Failed to query for VECTOR type, might not be supported.
-							if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-								error_log( '[WPVDB] Vector type check failed: ' . $wpdb->last_error ); }
+							Logger::warning( 'Vector type check failed: ' . $wpdb->last_error );
 							$this->has_vector_support = false;
 						}
 					} catch ( \Exception $e ) {
-						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-							error_log( '[WPVDB] Error checking vector support: ' . $e->getMessage() ); }
+						Logger::warning( 'Error checking vector support: ' . $e->getMessage() );
 						$this->has_vector_support = false;
 					}
 				}
@@ -210,8 +206,7 @@ class Database {
 						}
 					}
 				} catch ( \Exception $e ) {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( '[WPVDB] Error checking database version: ' . $e->getMessage() ); }
+					Logger::warning( 'Error checking database version: ' . $e->getMessage() );
 					return false;
 				}
 			}
@@ -219,7 +214,7 @@ class Database {
 			Logger::info( 'Vector support determination completed', array( 'has_support' => $this->has_vector_support ) );
 			return $this->has_vector_support;
 		} catch ( \Exception $e ) {
-			Logger::log_exception( $e, 'Fatal error checking vector support' );
+			Logger::log_exception( $e, 'Error checking vector support' );
 			return false;
 		}
 	}
@@ -571,8 +566,7 @@ class Database {
 			delete_post_meta( $post_id, '_wpvdb_embedded_model' );
 
 			// Log the deletion.
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( "[WPVDB] Deleted embeddings for post ID: $post_id" ); }
+			Logger::debug( "Deleted embeddings for post ID: $post_id" );
 		}
 	}
 
@@ -616,8 +610,7 @@ class Database {
 
 			return false !== $result;
 		} catch ( \Exception $e ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( '[WPVDB ERROR] Failed to add vector index: ' . $e->getMessage() ); }
+			Logger::error( 'Failed to add vector index: ' . $e->getMessage() );
 			return false;
 		}
 	}
@@ -667,8 +660,7 @@ class Database {
 
 			return true;
 		} catch ( \Exception $e ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( '[WPVDB ERROR] Failed to optimize vector performance: ' . $e->getMessage() ); }
+			Logger::error( 'Failed to optimize vector performance: ' . $e->getMessage() );
 			return false;
 		}
 	}

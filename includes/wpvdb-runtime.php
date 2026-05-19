@@ -74,8 +74,8 @@ add_filter(
 			return $args;
 		}
 
-		$host                      = parse_url( $url, PHP_URL_HOST );
-		$path                      = (string) parse_url( $url, PHP_URL_PATH );
+		$host                      = wp_parse_url( $url, PHP_URL_HOST );
+		$path                      = (string) wp_parse_url( $url, PHP_URL_PATH );
 		$is_allowed_openai         = 'api.openai.com' === $host;
 		$is_allowed_wpcom_ai_proxy = 'public-api.wordpress.com' === $host
 		&& strpos( $path, '/wpcom/v2/ai-api-proxy/' ) === 0;

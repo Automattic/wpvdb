@@ -101,35 +101,35 @@
 		$db_type            = $database->get_db_type();
 		$has_vector_support = $database->has_native_vector_support() ? 'Yes' : 'No';
 
-		error_log( '[WPVDB DEBUG] Performing semantic search for query: ' . $search_query );
-		error_log( '[WPVDB DEBUG] API Key exists: ' . ( ! empty( $api_key ) ? 'Yes' : 'No' ) );
-		error_log( '[WPVDB DEBUG] Model: ' . $model );
-		error_log( '[WPVDB DEBUG] API Base: ' . $api_base );
+		\WPVDB\Logger::debug( 'Performing semantic search for query: ' . $search_query );
+		\WPVDB\Logger::debug( 'API key exists: ' . ( ! empty( $api_key ) ? 'Yes' : 'No' ) );
+		\WPVDB\Logger::debug( 'Model: ' . $model );
+		\WPVDB\Logger::debug( 'API base: ' . $api_base );
 
 		if ( $api_key && $model ) {
 			try {
 				$embedding_result = \WPVDB\Core::get_embedding( $search_query, $model, $api_base, $api_key );
 
 				if ( is_wp_error( $embedding_result ) ) {
-					error_log( '[WPVDB ERROR] Error getting embedding: ' . $embedding_result->get_error_message() );
+					\WPVDB\Logger::error( 'Error getting embedding: ' . $embedding_result->get_error_message() );
 				} else {
-					error_log( '[WPVDB DEBUG] Successfully generated embedding with dimensions: ' . count( $embedding_result ) );
+					\WPVDB\Logger::debug( 'Successfully generated embedding with dimensions: ' . count( $embedding_result ) );
 
 					$embedding  = $embedding_result;
 					$has_vector = $database->has_native_vector_support();
-					error_log( '[WPVDB DEBUG] Database has native vector support: ' . ( $has_vector ? 'Yes' : 'No' ) );
+					\WPVDB\Logger::debug( 'Database has native vector support: ' . ( $has_vector ? 'Yes' : 'No' ) );
 
 					if ( $has_vector ) {
 						// Convert the embedding array to JSON.
-						$embedding_json = json_encode( $embedding );
+						$embedding_json = wp_json_encode( $embedding );
 
 						// Use Database class to get the appropriate vector function.
 						$vector_function = $database->get_vector_from_string_function( $embedding_json );
-						error_log( '[WPVDB DEBUG] Using vector function: ' . $vector_function );
+						\WPVDB\Logger::debug( 'Using vector function: ' . $vector_function );
 
 						// Get total count of vectors.
 						$total_vectors_searched = $wpdb->get_var( "SELECT COUNT(*) FROM $table_name" );
-						error_log( '[WPVDB DEBUG] Total vectors searched: ' . $total_vectors_searched );
+						\WPVDB\Logger::debug( 'Total vectors searched: ' . $total_vectors_searched );
 
 						// Use Database class to get the appropriate distance function with both vectors.
 						$db_type = $database->get_db_type();
@@ -138,7 +138,7 @@
 						} else {
 							$distance_function = "DISTANCE(e.embedding, $vector_function, 'COSINE')";
 						}
-						error_log( '[WPVDB DEBUG] Using distance function: ' . $distance_function );
+						\WPVDB\Logger::debug( 'Using distance function: ' . $distance_function );
 
 						// Optimized query that will use the vector index.
 						// The ORDER BY + LIMIT pattern is what triggers the vector index usage.
@@ -153,34 +153,34 @@
 							20 // Show top 20 matches.
 						);
 
-						error_log( '[WPVDB DEBUG] Executing SQL query: ' . $sql );
+						\WPVDB\Logger::debug( 'Executing SQL query: ' . $sql );
 
 						$search_results = $wpdb->get_results( $sql );
 
 						if ( $wpdb->last_error ) {
-							error_log( '[WPVDB ERROR] SQL error: ' . $wpdb->last_error );
+							\WPVDB\Logger::error( 'SQL error: ' . $wpdb->last_error );
 
 							// Try executing a simpler query to test database connection.
 							$test_query  = "SELECT COUNT(*) FROM $table_name";
 							$test_result = $wpdb->get_var( $test_query );
 
 							if ( $wpdb->last_error ) {
-								error_log( '[WPVDB ERROR] Even simple query failed: ' . $wpdb->last_error );
+								\WPVDB\Logger::error( 'Even simple query failed: ' . $wpdb->last_error );
 							} else {
-								error_log( '[WPVDB DEBUG] Simple query succeeded, embedding count: ' . $test_result );
+								\WPVDB\Logger::debug( 'Simple query succeeded, embedding count: ' . $test_result );
 
 								// Try a direct query without the vector function to see if that's the issue.
 								$basic_query   = "SELECT e.* FROM $table_name e LIMIT 20";
 								$basic_results = $wpdb->get_results( $basic_query );
 
 								if ( $wpdb->last_error ) {
-									error_log( '[WPVDB ERROR] Basic query failed: ' . $wpdb->last_error );
+									\WPVDB\Logger::error( 'Basic query failed: ' . $wpdb->last_error );
 								} else {
-									error_log( '[WPVDB DEBUG] Basic query succeeded, returned ' . count( $basic_results ) . ' results' );
-									error_log( '[WPVDB DEBUG] Issue is likely with the vector function: ' . $distance_function );
+									\WPVDB\Logger::debug( 'Basic query succeeded, returned ' . count( $basic_results ) . ' results' );
+									\WPVDB\Logger::debug( 'Issue is likely with the vector function: ' . $distance_function );
 
 									// Fall back to PHP-based distance calculation.
-									error_log( '[WPVDB DEBUG] Falling back to PHP-based distance calculation' );
+									\WPVDB\Logger::debug( 'Falling back to PHP-based distance calculation' );
 									$all_rows  = $wpdb->get_results(
 										$wpdb->prepare( "SELECT * FROM $table_name WHERE model = %s", $model ),
 										ARRAY_A
@@ -205,16 +205,16 @@
 									);
 
 									$search_results = array_slice( $distances, 0, 20 );
-									$search_results = json_decode( json_encode( $search_results ) ); // Convert to objects.
+									$search_results = json_decode( wp_json_encode( $search_results ) ); // Convert to objects.
 
-									error_log( '[WPVDB DEBUG] PHP fallback found ' . count( $search_results ) . ' results' );
+									\WPVDB\Logger::debug( 'PHP fallback found ' . count( $search_results ) . ' results' );
 								}
 							}
 						} else {
-							error_log( '[WPVDB DEBUG] Found ' . count( $search_results ) . ' results' );
+							\WPVDB\Logger::debug( 'Found ' . count( $search_results ) . ' results' );
 							if ( count( $search_results ) > 0 ) {
-								error_log(
-									'[WPVDB DEBUG] First result distance: ' .
+								\WPVDB\Logger::debug(
+									'First result distance: ' .
 									( isset( $search_results[0]->distance ) ?
 									$search_results[0]->distance : 'Not set' )
 								);
@@ -222,20 +222,20 @@
 						}
 					} else {
 						// Fallback: do in PHP.
-						error_log( '[WPVDB DEBUG] Using PHP fallback search' );
+						\WPVDB\Logger::debug( 'Using PHP fallback search' );
 						$all_rows               = $wpdb->get_results(
 							$wpdb->prepare( "SELECT * FROM $table_name WHERE model = %s", $model ),
 							ARRAY_A
 						);
 						$total_vectors_searched = count( $all_rows );
-						error_log( '[WPVDB DEBUG] Total vectors searched: ' . $total_vectors_searched );
+						\WPVDB\Logger::debug( 'Total vectors searched: ' . $total_vectors_searched );
 
 						$distances = array();
 
 						foreach ( $all_rows as $r ) {
 							$stored_emb = json_decode( $r['embedding'], true );
 							if ( ! is_array( $stored_emb ) ) {
-								error_log( '[WPVDB DEBUG] Invalid embedding in row: ' . $r['id'] );
+								\WPVDB\Logger::debug( 'Invalid embedding in row: ' . $r['id'] );
 								continue;
 							}
 							$similarity_score = \WPVDB\REST::cosine_distance( $embedding, $stored_emb );
@@ -251,12 +251,12 @@
 						);
 
 						$search_results = array_slice( $distances, 0, 20 );
-						$search_results = json_decode( json_encode( $search_results ) ); // Convert to objects.
+						$search_results = json_decode( wp_json_encode( $search_results ) ); // Convert to objects.
 
-						error_log( '[WPVDB DEBUG] PHP fallback found ' . count( $search_results ) . ' results' );
+						\WPVDB\Logger::debug( 'PHP fallback found ' . count( $search_results ) . ' results' );
 						if ( count( $search_results ) > 0 ) {
-							error_log(
-								'[WPVDB DEBUG] First result similarity score: ' .
+							\WPVDB\Logger::debug(
+								'First result similarity score: ' .
 								( isset( $search_results[0]->distance ) ?
 								$search_results[0]->distance : 'Not set' )
 							);
@@ -271,11 +271,11 @@
 				}
 			} catch ( \Exception $e ) {
 				// Handle errors.
-				error_log( '[WPVDB ERROR] Exception: ' . $e->getMessage() );
+				\WPVDB\Logger::error( 'Exception: ' . $e->getMessage() );
 				echo '<div class="notice notice-error"><p>' . esc_html__( 'Error performing semantic search: ', 'wpvdb' ) . esc_html( $e->getMessage() ) . '</p></div>';
 			}
 		} else {
-			error_log( '[WPVDB ERROR] API key or model not configured' );
+			\WPVDB\Logger::error( 'API key or model not configured' );
 			echo '<div class="notice notice-warning"><p>' . esc_html__( 'API key or model not configured. Please check your settings.', 'wpvdb' ) . '</p></div>';
 		}
 	}
@@ -323,7 +323,7 @@
 		if ( $total_embeddings > 0 ) {
 			$embeddings_query = "SELECT * FROM $table_name ORDER BY id DESC LIMIT 20";
 			$embeddings       = $wpdb->get_results( $embeddings_query );
-			error_log( '[WPVDB DEBUG] Loaded ' . count( $embeddings ) . ' embeddings for display' );
+			\WPVDB\Logger::debug( 'Loaded ' . count( $embeddings ) . ' embeddings for display' );
 		}
 	}
 	?>
@@ -410,7 +410,7 @@
 							} else {
 								// If no distance property, check what properties are available.
 								$props = array_keys( get_object_vars( $embedding ) );
-								error_log( '[WPVDB DEBUG] Properties available: ' . print_r( $props, true ) );
+								\WPVDB\Logger::debug( 'Properties available: ' . wp_json_encode( $props ) );
 
 								echo esc_html__( 'No similarity data available', 'wpvdb' );
 							}
