@@ -456,9 +456,7 @@ class WPVDB_Queue {
 		$existing_count = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $table_name WHERE doc_id = %d", $post->ID ) );
 
 		if ( $existing_count > 0 ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				Logger::debug( "Deleting {$existing_count} existing embeddings for post {$post->ID} before creating new ones." );
-			}
+			Logger::debug( "Deleting {$existing_count} existing embeddings for post {$post->ID} before creating new ones." );
 			$wpdb->delete( $table_name, array( 'doc_id' => $post->ID ), array( '%d' ) );
 			// Bust here so cache invalidates even if no inserts succeed below.
 			Cache::invalidate_query_cache();

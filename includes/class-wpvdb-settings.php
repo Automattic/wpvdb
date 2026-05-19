@@ -716,16 +716,12 @@ class Settings {
 		$settings = get_option( 'wpvdb_settings', array() );
 
 		if ( ! is_array( $settings ) ) {
-			if ( \wpvdb_should_log_to_error_log( 'debug', 'invalid_settings_format' ) ) {
-				Logger::critical( 'Invalid settings format - not an array' );
-			}
+			Logger::critical( 'Invalid settings format - not an array' );
 			return false;
 		}
 
 		$has_pending = ( ! empty( $settings['pending_provider'] ) || ! empty( $settings['pending_model'] ) );
-		if ( \wpvdb_should_log_to_error_log( 'debug', 'has_pending_provider_change' ) ) {
-			Logger::critical( 'Has pending provider change: ' . ( $has_pending ? 'YES' : 'NO' ) );
-		}
+		Logger::debug( 'Has pending provider change: ' . ( $has_pending ? 'YES' : 'NO' ) );
 
 		return $has_pending;
 	}

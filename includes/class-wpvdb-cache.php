@@ -123,9 +123,7 @@ class Cache {
 		wp_cache_delete( 'db_stats', self::CACHE_GROUP );
 
 		// Log cache invalidation.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			Logger::debug( "Invalidated cache for document {$doc_id}" );
-		}
+		Logger::debug( "Invalidated cache for document {$doc_id}" );
 	}
 
 	/**
@@ -230,9 +228,7 @@ class Cache {
 		self::invalidate_query_cache();
 		wp_cache_delete( 'db_stats', self::CACHE_GROUP );
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			Logger::debug( 'Flushed all caches' );
-		}
+		Logger::debug( 'Flushed all caches' );
 	}
 
 	/**
@@ -316,9 +312,7 @@ class Cache {
 			}
 		}
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			Logger::debug( "Preloaded {$preloaded} embeddings" );
-		}
+		Logger::debug( "Preloaded {$preloaded} embeddings" );
 
 		return $preloaded;
 	}

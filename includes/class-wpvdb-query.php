@@ -77,7 +77,7 @@ class Query {
 		}
 		if ( ! $api_key ) {
 			// If there's no stored key, we can't generate embeddings. We skip.
-			Logger::debug( 'No API key found, skipping vector search' );
+			Logger::error( 'No API key found, skipping vector search' );
 			return;
 		}
 
@@ -98,7 +98,7 @@ class Query {
 		try {
 			$embedding_result = Core::get_embedding( $vdb_query, $model, $api_base, $api_key );
 			if ( is_wp_error( $embedding_result ) ) {
-				Logger::debug( 'Error generating embedding: ' . $embedding_result->get_error_message() );
+				Logger::error( 'Error generating embedding: ' . $embedding_result->get_error_message() );
 				return; // skip.
 			}
 
@@ -153,7 +153,7 @@ class Query {
 					$rows = $wpdb->get_results( $sql, ARRAY_A );
 
 					if ( $wpdb->last_error ) {
-						Logger::debug( 'Database error in vector search: ' . $wpdb->last_error );
+						Logger::error( 'Database error in vector search: ' . $wpdb->last_error );
 					}
 
 					if ( $rows ) {
@@ -166,7 +166,7 @@ class Query {
 						Logger::debug( 'No results found from vector search' );
 					}
 				} catch ( \Exception $e ) {
-					Logger::debug( 'Exception in vector search: ' . $e->getMessage() );
+					Logger::error( 'Exception in vector search: ' . $e->getMessage() );
 				}
 			} else {
 				Logger::debug( 'No vector support, using PHP fallback search' );
@@ -208,7 +208,7 @@ class Query {
 			$query->set( 'post__in', $doc_ids );
 			$query->set( 'orderby', 'post__in' );
 		} catch ( \Exception $e ) {
-			Logger::debug( 'Unhandled exception in maybe_vector_search: ' . $e->getMessage() );
+			Logger::error( 'Unhandled exception in maybe_vector_search: ' . $e->getMessage() );
 		}
 	}
 
