@@ -464,7 +464,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 					$debug_settings['automattic']['api_key'] = '********' . substr( $debug_settings['automattic']['api_key'], -4 );
 				}
 
-					echo esc_html( print_r( $debug_settings, true ) );
+					echo esc_html( wp_json_encode( $debug_settings, JSON_PRETTY_PRINT ) );
 				?>
 				</pre>
 
@@ -480,7 +480,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 						'embedding_table_exists'    => $embedding_table_exists,
 						'embedding_count'           => $system_info['embedding_count'],
 					);
-					echo esc_html( print_r( $db_info, true ) );
+					echo esc_html( wp_json_encode( $db_info, JSON_PRETTY_PRINT ) );
 					?>
 				</pre>
 

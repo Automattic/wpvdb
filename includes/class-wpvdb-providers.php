@@ -102,7 +102,7 @@ class Providers {
 			return false;
 		}
 
-		$parts = parse_url( $url );
+		$parts = wp_parse_url( $url );
 		if ( ! is_array( $parts ) || empty( $parts['host'] ) || empty( $parts['path'] ) ) {
 			return false;
 		}

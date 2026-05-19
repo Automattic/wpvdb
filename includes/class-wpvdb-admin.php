@@ -1843,7 +1843,7 @@ class Admin {
 
 		// Get sample of embedding values (first 5).
 		$sample      = array_slice( $embedding, 0, 5 );
-		$sample_json = json_encode( $sample, JSON_PRETTY_PRINT );
+		$sample_json = wp_json_encode( $sample, JSON_PRETTY_PRINT );
 
 		wp_send_json_success(
 			array(

@@ -139,7 +139,8 @@ class Utils {
 
 		$units = array( 'B', 'KB', 'MB', 'GB', 'TB', 'PB' );
 
-		for ( $i = 0; $bytes > 1024 && $i < count( $units ) - 1; $i++ ) {
+		$unit_count = count( $units );
+		for ( $i = 0; $bytes > 1024 && $i < $unit_count - 1; $i++ ) {
 			$bytes /= 1024;
 		}
 

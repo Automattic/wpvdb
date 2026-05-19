@@ -121,7 +121,7 @@
 
 					if ( $has_vector ) {
 						// Convert the embedding array to JSON.
-						$embedding_json = json_encode( $embedding );
+						$embedding_json = wp_json_encode( $embedding );
 
 						// Use Database class to get the appropriate vector function.
 						$vector_function = $database->get_vector_from_string_function( $embedding_json );
@@ -205,7 +205,7 @@
 									);
 
 									$search_results = array_slice( $distances, 0, 20 );
-									$search_results = json_decode( json_encode( $search_results ) ); // Convert to objects.
+									$search_results = json_decode( wp_json_encode( $search_results ) ); // Convert to objects.
 
 									error_log( '[WPVDB DEBUG] PHP fallback found ' . count( $search_results ) . ' results' );
 								}
@@ -251,7 +251,7 @@
 						);
 
 						$search_results = array_slice( $distances, 0, 20 );
-						$search_results = json_decode( json_encode( $search_results ) ); // Convert to objects.
+						$search_results = json_decode( wp_json_encode( $search_results ) ); // Convert to objects.
 
 						error_log( '[WPVDB DEBUG] PHP fallback found ' . count( $search_results ) . ' results' );
 						if ( count( $search_results ) > 0 ) {
@@ -410,7 +410,7 @@
 							} else {
 								// If no distance property, check what properties are available.
 								$props = array_keys( get_object_vars( $embedding ) );
-								error_log( '[WPVDB DEBUG] Properties available: ' . print_r( $props, true ) );
+								error_log( '[WPVDB DEBUG] Properties available: ' . wp_json_encode( $props ) );
 
 								echo esc_html__( 'No similarity data available', 'wpvdb' );
 							}

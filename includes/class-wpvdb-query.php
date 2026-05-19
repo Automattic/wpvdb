@@ -125,7 +125,7 @@ class Query {
 			if ( $has_vector ) {
 				try {
 					// Convert the embedding array to JSON.
-					$embedding_json = json_encode( $embedding );
+				$embedding_json = wp_json_encode( $embedding );
 
 					// Use Database class to get the appropriate vector function.
 					$vector_function = self::$database->get_vector_from_string_function( $embedding_json );

@@ -260,7 +260,7 @@ class REST {
 		// Ensure text is a string.
 		if ( ! is_string( $text ) ) {
 			if ( is_array( $text ) || is_object( $text ) ) {
-				$text = json_encode( $text );
+				$text = wp_json_encode( $text );
 			} else {
 				$text = strval( $text );
 			}
@@ -964,7 +964,7 @@ class REST {
 		if ( $has_vector ) {
 			try {
 				// Convert the embedding array to a JSON string.
-				$embedding_json = json_encode( $embedding );
+			$embedding_json = wp_json_encode( $embedding );
 
 				// Use the Database class to determine the vector function to use.
 				$vector_function = self::$database->get_vector_from_string_function( $embedding_json );
@@ -1025,7 +1025,7 @@ class REST {
 					$chunk_id,
 					$chunk_content,
 					$summary,
-					json_encode( $embedding ),
+					wp_json_encode( $embedding ),
 					$model,
 					$doc_type,
 					$chunk_index
@@ -1123,7 +1123,7 @@ class REST {
 		if ( count( $vec2 ) != $length ) {
 			// Either truncate or pad vec2 to match vec1's length.
 			$vec2 = array_slice( $vec2, 0, $length );
-			while ( count( $vec2 ) < $length ) {
+			for ( $vec2_length = count( $vec2 ); $vec2_length < $length; $vec2_length++ ) {
 				$vec2[] = 0.0;
 			}
 		}
