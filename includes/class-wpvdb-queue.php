@@ -389,10 +389,7 @@ class WPVDB_Queue {
 	 * Build a queue item for a single post.
 	 *
 	 * @param int|string $post_id Post ID to embed, cast to int.
-	 * @param array      $opts {.
-	 *     @type string $provider Override the active provider.
-	 *     @type string $model    Override the resolved model.
-	 * }
+	 * @param array      $opts    Queue item options. Supports string `provider` and `model` overrides.
 	 * @return array { post_id, model, provider } for push_to_queue.
 	 */
 	public static function build_item( $post_id, $opts = array() ) {

@@ -124,8 +124,7 @@ class Cache {
 
 		// Log cache invalidation.
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( "[WPVDB CACHE] Invalidated cache for document {$doc_id}" ); }
+			error_log( "[WPVDB CACHE] Invalidated cache for document {$doc_id}" );
 		}
 	}
 

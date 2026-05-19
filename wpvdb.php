@@ -39,10 +39,12 @@ if ( ! defined( 'WPVDB_DEFAULT_EMBED_DIM' ) ) {
 // Runtime detection and compatibility hooks must load before optional services.
 require_once WPVDB_PLUGIN_DIR . 'includes/wpvdb-runtime.php';
 
-// API Keys can be defined in wp-config.php for better security and environment-specific configuration
-// Example:
-// define('WPVDB_OPENAI_API_KEY', 'your-openai-api-key');
-// define('WPVDB_AUTOMATTIC_API_KEY', 'your-automattic-api-key');.
+/*
+ * API keys can be defined in wp-config.php for better security and environment-specific configuration.
+ * Example:
+ * define( 'WPVDB_OPENAI_API_KEY', 'your-openai-api-key' );
+ * define( 'WPVDB_AUTOMATTIC_API_KEY', 'your-automattic-api-key' );
+ */
 
 // Include the Composer autoloader.
 if ( file_exists( WPVDB_PLUGIN_DIR . 'vendor/autoload.php' ) ) {

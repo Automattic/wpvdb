@@ -256,7 +256,14 @@ class Core {
 				$code             = $response->getStatusCode();
 				$data             = $response->getData();
 				$used_transporter = true;
-			} catch ( \Throwable ) {
+			} catch ( \Throwable $e ) {
+				Logger::debug(
+					'AI Client transporter failed, falling back to HTTP request.',
+					array(
+						'error' => $e->getMessage(),
+						'model' => $model,
+					)
+				);
 				$used_transporter = false;
 			}
 		}
