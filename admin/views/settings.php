@@ -1,15 +1,21 @@
 <?php
-// Get current settings
+/**
+ * Settings admin view.
+ *
+ * @package WPVDB
+ */
+
+// Get current settings.
 $settings = get_option( 'wpvdb_settings', array() );
 $provider = isset( $settings['active_provider'] ) ? $settings['active_provider'] : 'openai';
 
-// Get available providers from the registry class
+// Get available providers from the registry class.
 $available_providers = \WPVDB\Providers::get_available_providers();
 
-// Check if there's a pending provider change
+// Check if there's a pending provider change.
 $has_pending_change = \WPVDB\Settings::has_pending_provider_change();
 
-// Get other settings
+// Get other settings.
 $auto_embed_post_types  = isset( $settings['post_types'] ) ? $settings['post_types'] : array( 'post' );
 $chunk_size             = isset( $settings['chunk_size'] ) ? $settings['chunk_size'] : 1000;
 $chunk_overlap          = isset( $settings['chunk_overlap'] ) ? $settings['chunk_overlap'] : 20;
@@ -23,7 +29,7 @@ $include_custom_fields  = isset( $settings['include_custom_fields'] ) ? $setting
 $exclude_taxonomies     = isset( $settings['exclude_taxonomies'] ) ? $settings['exclude_taxonomies'] : array();
 $exclude_custom_fields  = isset( $settings['exclude_custom_fields'] ) ? $settings['exclude_custom_fields'] : array();
 
-// Current model and provider settings
+// Current model and provider settings.
 $active_model         = isset( $settings['active_model'] ) ? $settings['active_model'] : '';
 $openai_api_key       = isset( $settings['openai']['api_key'] ) ? $settings['openai']['api_key'] : '';
 $openai_organization  = isset( $settings['openai']['organization'] ) ? $settings['openai']['organization'] : '';
@@ -47,7 +53,7 @@ $specter_model        = $provider_model( 'specter' );
 
 <div class="wrap wpvdb-settings">
 	<?php
-	// Show WordPress settings updated notice
+	// Show WordPress settings updated notice.
 	if ( isset( $_GET['settings-updated'] ) && $_GET['settings-updated'] ) {
 		add_settings_error( 'wpvdb_settings', 'wpvdb_settings_updated', __( 'Settings saved.', 'wpvdb' ), 'success' );
 	}
@@ -73,22 +79,22 @@ $specter_model        = $provider_model( 'specter' );
 	<!-- <h1><?php esc_html_e( 'Vector Database Settings', 'wpvdb' ); ?></h1> -->
 
 	<?php
-	// Define available sections
+	// Define available sections.
 	$sections = array(
 		'api'       => __( 'API Configuration', 'wpvdb' ),
 		'content'   => __( 'Content Settings', 'wpvdb' ),
 		'inclusion' => __( 'Content Inclusion', 'wpvdb' ),
 	);
 
-	// Get the current section from URL or default to 'api'
+	// Get the current section from URL or default to 'api'.
 	$current_section = isset( $_GET['section'] ) ? sanitize_key( $_GET['section'] ) : 'api';
 
-	// Ensure we have a valid section
+	// Ensure we have a valid section.
 	if ( ! array_key_exists( $current_section, $sections ) ) {
 		$current_section = 'api';
 	}
 
-	// Generate the section navigation using the same structure as status page
+	// Generate the section navigation using the same structure as status page.
 	echo '<div class="wpvdb-section-nav">';
 	$i = 0;
 	foreach ( $sections as $section_id => $section_label ) {
@@ -119,7 +125,7 @@ $specter_model        = $provider_model( 'specter' );
 
 	<form method="post" action="options.php" id="wpvdb-settings-form">
 		<?php settings_fields( 'wpvdb_settings' ); ?>
-		<?php if ( $current_section !== 'api' ) : ?>
+		<?php if ( 'api' !== $current_section ) : ?>
 			<input type="hidden" name="_wp_http_referer" value="
 			<?php
 			echo esc_attr(
@@ -136,7 +142,7 @@ $specter_model        = $provider_model( 'specter' );
 		<?php endif; ?>
 
 		<!-- API Configuration Section -->
-		<div class="wpvdb-settings-section" <?php echo $current_section !== 'api' ? 'style="display: none;"' : ''; ?>>
+		<div class="wpvdb-settings-section" <?php echo 'api' !== $current_section ? 'style="display: none;"' : ''; ?>>
 			<h2><?php esc_html_e( 'API Configuration', 'wpvdb' ); ?></h2>
 
 			<table class="form-table">
@@ -175,7 +181,7 @@ $specter_model        = $provider_model( 'specter' );
 					</td>
 				</tr>
 
-				<tr id="openai_api_key_field" class="api-key-field" <?php echo $provider !== 'openai' ? 'style="display: none;"' : ''; ?>>
+				<tr id="openai_api_key_field" class="api-key-field" <?php echo 'openai' !== $provider ? 'style="display: none;"' : ''; ?>>
 					<th scope="row">
 						<label for="wpvdb_openai_api_key"><?php esc_html_e( 'OpenAI API Key', 'wpvdb' ); ?></label>
 					</th>
@@ -192,7 +198,7 @@ $specter_model        = $provider_model( 'specter' );
 					</td>
 				</tr>
 
-				<tr id="openai_model_field" class="model-field" <?php echo $provider !== 'openai' ? 'style="display: none;"' : ''; ?>>
+				<tr id="openai_model_field" class="model-field" <?php echo 'openai' !== $provider ? 'style="display: none;"' : ''; ?>>
 					<th scope="row">
 						<label for="wpvdb_openai_model"><?php esc_html_e( 'OpenAI Embedding Model', 'wpvdb' ); ?></label>
 					</th>
@@ -211,7 +217,7 @@ $specter_model        = $provider_model( 'specter' );
 					</td>
 				</tr>
 
-				<tr class="provider-specific-field" data-provider="openai" <?php echo $provider !== 'openai' ? 'style="display: none;"' : ''; ?>>
+				<tr class="provider-specific-field" data-provider="openai" <?php echo 'openai' !== $provider ? 'style="display: none;"' : ''; ?>>
 					<th scope="row">
 						<label for="wpvdb_openai_organization"><?php esc_html_e( 'OpenAI Organization ID', 'wpvdb' ); ?></label>
 					</th>
@@ -227,7 +233,7 @@ $specter_model        = $provider_model( 'specter' );
 					</td>
 				</tr>
 
-				<tr class="provider-specific-field" data-provider="openai" <?php echo $provider !== 'openai' ? 'style="display: none;"' : ''; ?>>
+				<tr class="provider-specific-field" data-provider="openai" <?php echo 'openai' !== $provider ? 'style="display: none;"' : ''; ?>>
 					<th scope="row">
 						<label for="wpvdb_openai_api_version"><?php esc_html_e( 'OpenAI API Version', 'wpvdb' ); ?></label>
 					</th>
@@ -244,7 +250,7 @@ $specter_model        = $provider_model( 'specter' );
 					</td>
 				</tr>
 
-				<tr id="automattic_api_key_field" class="api-key-field" <?php echo $provider !== 'automattic' ? 'style="display: none;"' : ''; ?>>
+				<tr id="automattic_api_key_field" class="api-key-field" <?php echo 'automattic' !== $provider ? 'style="display: none;"' : ''; ?>>
 					<th scope="row">
 						<label for="wpvdb_automattic_api_key"><?php esc_html_e( 'Automattic AI API Key', 'wpvdb' ); ?></label>
 					</th>
@@ -261,7 +267,7 @@ $specter_model        = $provider_model( 'specter' );
 					</td>
 				</tr>
 
-				<tr id="automattic_model_field" class="model-field" <?php echo $provider !== 'automattic' ? 'style="display: none;"' : ''; ?>>
+				<tr id="automattic_model_field" class="model-field" <?php echo 'automattic' !== $provider ? 'style="display: none;"' : ''; ?>>
 					<th scope="row">
 						<label for="wpvdb_automattic_model"><?php esc_html_e( 'Automattic AI Embedding Model', 'wpvdb' ); ?></label>
 					</th>
@@ -279,7 +285,7 @@ $specter_model        = $provider_model( 'specter' );
 					</td>
 				</tr>
 
-				<tr class="provider-specific-field" data-provider="automattic" <?php echo $provider !== 'automattic' ? 'style="display: none;"' : ''; ?>>
+				<tr class="provider-specific-field" data-provider="automattic" <?php echo 'automattic' !== $provider ? 'style="display: none;"' : ''; ?>>
 					<th scope="row">
 						<label for="wpvdb_automattic_endpoint"><?php esc_html_e( 'Automattic API Endpoint', 'wpvdb' ); ?></label>
 					</th>
@@ -296,7 +302,7 @@ $specter_model        = $provider_model( 'specter' );
 				</tr>
 
 				<!-- SPECTER Provider Fields -->
-				<tr id="specter_api_key_field" class="api-key-field" <?php echo $provider !== 'specter' ? 'style="display: none;"' : ''; ?>>
+				<tr id="specter_api_key_field" class="api-key-field" <?php echo 'specter' !== $provider ? 'style="display: none;"' : ''; ?>>
 					<th scope="row">
 						<label><?php esc_html_e( 'SPECTER Configuration', 'wpvdb' ); ?></label>
 					</th>
@@ -307,7 +313,7 @@ $specter_model        = $provider_model( 'specter' );
 					</td>
 				</tr>
 
-				<tr id="specter_model_field" class="model-field" <?php echo $provider !== 'specter' ? 'style="display: none;"' : ''; ?>>
+				<tr id="specter_model_field" class="model-field" <?php echo 'specter' !== $provider ? 'style="display: none;"' : ''; ?>>
 					<th scope="row">
 						<label for="wpvdb_specter_model"><?php esc_html_e( 'SPECTER Embedding Model', 'wpvdb' ); ?></label>
 					</th>
@@ -325,7 +331,7 @@ $specter_model        = $provider_model( 'specter' );
 					</td>
 				</tr>
 
-				<tr class="provider-specific-field" data-provider="specter" <?php echo $provider !== 'specter' ? 'style="display: none;"' : ''; ?>>
+				<tr class="provider-specific-field" data-provider="specter" <?php echo 'specter' !== $provider ? 'style="display: none;"' : ''; ?>>
 					<th scope="row">
 						<label for="wpvdb_specter_endpoint"><?php esc_html_e( 'SPECTER API Endpoint', 'wpvdb' ); ?></label>
 					</th>
@@ -396,7 +402,7 @@ $specter_model        = $provider_model( 'specter' );
 		</script>
 
 		<!-- Content Settings Section -->
-		<div class="wpvdb-settings-section" <?php echo $current_section !== 'content' ? 'style="display: none;"' : ''; ?>>
+		<div class="wpvdb-settings-section" <?php echo 'content' !== $current_section ? 'style="display: none;"' : ''; ?>>
 			<h2><?php esc_html_e( 'Content Settings', 'wpvdb' ); ?></h2>
 
 			<table class="form-table">
@@ -498,7 +504,7 @@ $specter_model        = $provider_model( 'specter' );
 		</div>
 
 		<!-- Content Inclusion Section -->
-		<div class="wpvdb-settings-section" <?php echo $current_section !== 'inclusion' ? 'style="display: none;"' : ''; ?>>
+		<div class="wpvdb-settings-section" <?php echo 'inclusion' !== $current_section ? 'style="display: none;"' : ''; ?>>
 			<h2><?php esc_html_e( 'Content Inclusion Settings', 'wpvdb' ); ?></h2>
 
 			<table class="form-table">

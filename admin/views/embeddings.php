@@ -1,10 +1,19 @@
-<div class="wrap wpvdb-embeddings">
+<?php
+/**
+ * Embeddings admin view.
+ *
+ * @package WPVDB
+ */
+
+?><div class="wrap wpvdb-embeddings">
 
 	<?php
-	// Display debug information if needed
+	global $wpdb;
+
+	// Display debug information if needed.
 	$show_debug = isset( $_GET['debug'] );
 
-	// Also check for debug constant if defined
+	// Also check for debug constant if defined.
 	if ( defined( 'WPVDB_DEBUG' ) ) {
 		$show_debug = $show_debug || ( constant( 'WPVDB_DEBUG' ) === true );
 	}
@@ -18,15 +27,13 @@
 	}
 
 	if ( $show_debug ) {
-		// Get and display settings information
-		global $wpdb;
-
+		// Get and display settings information.
 		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-		// Create a database instance instead of using static methods
+		// Create a database instance instead of using static methods.
 		$database = new \WPVDB\Database();
 
-		// Get plugin settings
+		// Get plugin settings.
 		$api_key            = \WPVDB\Settings::get_api_key();
 		$model              = \WPVDB\Settings::get_default_model();
 		$api_base           = \WPVDB\Settings::get_api_base();
@@ -38,9 +45,9 @@
 		echo '<ul>';
 		echo '<li><strong>Active Provider:</strong> ' . esc_html( $active_provider ) . '</li>';
 		echo '<li><strong>API Key Set:</strong> ' . ( empty( $api_key ) ? 'No' : 'Yes' ) . '</li>';
-		echo '<li><strong>Default Model:</strong> ' . esc_html( $model ?: 'Not set' ) . '</li>';
-		echo '<li><strong>API Base URL:</strong> ' . esc_html( $api_base ?: 'Not set' ) . '</li>';
-		echo '<li><strong>Database Type:</strong> ' . esc_html( $db_type ?: 'Unknown' ) . '</li>';
+		echo '<li><strong>Default Model:</strong> ' . esc_html( $model ? $model : 'Not set' ) . '</li>';
+		echo '<li><strong>API Base URL:</strong> ' . esc_html( $api_base ? $api_base : 'Not set' ) . '</li>';
+		echo '<li><strong>Database Type:</strong> ' . esc_html( $db_type ? $db_type : 'Unknown' ) . '</li>';
 		echo '<li><strong>Native Vector Support:</strong> ' . esc_html( $has_vector_support ) . '</li>';
 		echo '</ul>';
 		echo '</div>';
@@ -75,21 +82,20 @@
 	</div>
 
 	<?php
-	// If we have a search query, use the semantic search
+	// If we have a search query, use the semantic search.
 	$search_results = array();
 	if ( ! empty( $search_query ) ) {
-		global $wpdb;
 		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-		// Initialize timing for search performance tracking
+		// Initialize timing for search performance tracking.
 		$search_start_time      = microtime( true );
 		$search_time_result     = 0;
 		$total_vectors_searched = 0;
 
-		// Create a database instance instead of using static methods
+		// Create a database instance instead of using static methods.
 		$database = new \WPVDB\Database();
 
-		// Get plugin settings
+		// Get plugin settings.
 		$model              = \WPVDB\Settings::get_default_model();
 		$api_base           = \WPVDB\Settings::get_api_base();
 		$db_type            = $database->get_db_type();
@@ -114,20 +120,20 @@
 					error_log( '[WPVDB DEBUG] Database has native vector support: ' . ( $has_vector ? 'Yes' : 'No' ) );
 
 					if ( $has_vector ) {
-						// Convert the embedding array to JSON
+						// Convert the embedding array to JSON.
 						$embedding_json = json_encode( $embedding );
 
-						// Use Database class to get the appropriate vector function
+						// Use Database class to get the appropriate vector function.
 						$vector_function = $database->get_vector_from_string_function( $embedding_json );
 						error_log( '[WPVDB DEBUG] Using vector function: ' . $vector_function );
 
-						// Get total count of vectors
+						// Get total count of vectors.
 						$total_vectors_searched = $wpdb->get_var( "SELECT COUNT(*) FROM $table_name" );
 						error_log( '[WPVDB DEBUG] Total vectors searched: ' . $total_vectors_searched );
 
-						// Use Database class to get the appropriate distance function with both vectors
+						// Use Database class to get the appropriate distance function with both vectors.
 						$db_type = $database->get_db_type();
-						if ( $db_type === 'mariadb' ) {
+						if ( 'mariadb' === $db_type ) {
 							$distance_function = "VEC_DISTANCE_COSINE(e.embedding, $vector_function)";
 						} else {
 							$distance_function = "DISTANCE(e.embedding, $vector_function, 'COSINE')";
@@ -144,7 +150,7 @@
                             ORDER BY distance
                             LIMIT %d",
 							$model,
-							20 // Show top 20 matches
+							20 // Show top 20 matches.
 						);
 
 						error_log( '[WPVDB DEBUG] Executing SQL query: ' . $sql );
@@ -154,7 +160,7 @@
 						if ( $wpdb->last_error ) {
 							error_log( '[WPVDB ERROR] SQL error: ' . $wpdb->last_error );
 
-							// Try executing a simpler query to test database connection
+							// Try executing a simpler query to test database connection.
 							$test_query  = "SELECT COUNT(*) FROM $table_name";
 							$test_result = $wpdb->get_var( $test_query );
 
@@ -163,7 +169,7 @@
 							} else {
 								error_log( '[WPVDB DEBUG] Simple query succeeded, embedding count: ' . $test_result );
 
-								// Try a direct query without the vector function to see if that's the issue
+								// Try a direct query without the vector function to see if that's the issue.
 								$basic_query   = "SELECT e.* FROM $table_name e LIMIT 20";
 								$basic_results = $wpdb->get_results( $basic_query );
 
@@ -173,7 +179,7 @@
 									error_log( '[WPVDB DEBUG] Basic query succeeded, returned ' . count( $basic_results ) . ' results' );
 									error_log( '[WPVDB DEBUG] Issue is likely with the vector function: ' . $distance_function );
 
-									// Fall back to PHP-based distance calculation
+									// Fall back to PHP-based distance calculation.
 									error_log( '[WPVDB DEBUG] Falling back to PHP-based distance calculation' );
 									$all_rows  = $wpdb->get_results(
 										$wpdb->prepare( "SELECT * FROM $table_name WHERE model = %s", $model ),
@@ -199,7 +205,7 @@
 									);
 
 									$search_results = array_slice( $distances, 0, 20 );
-									$search_results = json_decode( json_encode( $search_results ) ); // Convert to objects
+									$search_results = json_decode( json_encode( $search_results ) ); // Convert to objects.
 
 									error_log( '[WPVDB DEBUG] PHP fallback found ' . count( $search_results ) . ' results' );
 								}
@@ -215,7 +221,7 @@
 							}
 						}
 					} else {
-						// Fallback: do in PHP
+						// Fallback: do in PHP.
 						error_log( '[WPVDB DEBUG] Using PHP fallback search' );
 						$all_rows               = $wpdb->get_results(
 							$wpdb->prepare( "SELECT * FROM $table_name WHERE model = %s", $model ),
@@ -245,7 +251,7 @@
 						);
 
 						$search_results = array_slice( $distances, 0, 20 );
-						$search_results = json_decode( json_encode( $search_results ) ); // Convert to objects
+						$search_results = json_decode( json_encode( $search_results ) ); // Convert to objects.
 
 						error_log( '[WPVDB DEBUG] PHP fallback found ' . count( $search_results ) . ' results' );
 						if ( count( $search_results ) > 0 ) {
@@ -257,14 +263,14 @@
 						}
 					}
 
-					// Use search results instead of regular embeddings
+					// Use search results instead of regular embeddings.
 					$embeddings = $search_results;
 
-					// Calculate and record the search time
+					// Calculate and record the search time.
 					$search_time_result = microtime( true ) - $search_start_time;
 				}
 			} catch ( \Exception $e ) {
-				// Handle errors
+				// Handle errors.
 				error_log( '[WPVDB ERROR] Exception: ' . $e->getMessage() );
 				echo '<div class="notice notice-error"><p>' . esc_html__( 'Error performing semantic search: ', 'wpvdb' ) . esc_html( $e->getMessage() ) . '</p></div>';
 			}
@@ -284,7 +290,7 @@
 				esc_html( $search_query )
 			);
 
-												// Display total vectors searched if available
+												// Display total vectors searched if available.
 		if ( isset( $total_vectors_searched ) && $total_vectors_searched > 0 ) {
 			echo ' <span class="wpvdb-vector-count">' .
 				sprintf(
@@ -294,7 +300,7 @@
 				'</span>';
 		}
 
-												// Display search time if available
+												// Display search time if available.
 		if ( isset( $search_time_result ) && $search_time_result > 0 ) {
 			echo ' <span class="wpvdb-search-time">' .
 				sprintf(
@@ -308,9 +314,9 @@
 	<?php endif; ?>
 
 	<?php
-	// If no embeddings are loaded yet (not searching), load the first 20 embeddings
+	// If no embeddings are loaded yet (not searching), load the first 20 embeddings.
 	if ( empty( $embeddings ) && empty( $search_query ) ) {
-		// Load the latest embeddings (up to 20)
+		// Load the latest embeddings (up to 20).
 		$count_query      = "SELECT COUNT(*) FROM $table_name";
 		$total_embeddings = $wpdb->get_var( $count_query );
 
@@ -354,11 +360,11 @@
 						<td class="column-document">
 							<?php if ( $post_edit_link ) : ?>
 								<a href="<?php echo esc_url( $post_edit_link ); ?>" target="_blank">
-									<?php echo esc_html( $post_title ?: __( '(No title)', 'wpvdb' ) ); ?>
+									<?php echo esc_html( $post_title ? $post_title : __( '(No title)', 'wpvdb' ) ); ?>
 									<span class="dashicons dashicons-external"></span>
 								</a>
 							<?php else : ?>
-								<?php echo esc_html( $post_title ?: __( '(No title)', 'wpvdb' ) ); ?>
+								<?php echo esc_html( $post_title ? $post_title : __( '(No title)', 'wpvdb' ) ); ?>
 							<?php endif; ?>
 							<div class="row-actions">
 								<span class="id"><?php printf( __( 'Post ID: %d', 'wpvdb' ), $embedding->doc_id ); ?></span>
@@ -368,7 +374,7 @@
 						<td class="column-preview">
 							<div class="wpvdb-preview">
 								<?php
-								// Create a shorter preview (max 150 chars)
+								// Create a shorter preview (max 150 chars).
 								$preview_text  = isset( $embedding->chunk_content ) ? $embedding->chunk_content : $embedding->preview;
 								$short_preview = wp_trim_words( $preview_text, 15, '...' );
 								echo esc_html( $short_preview );
@@ -384,11 +390,11 @@
 						<?php if ( ! empty( $search_query ) ) : ?>
 						<td class="column-similarity">
 							<?php
-							// Check if the distance property exists
+							// Check if the distance property exists.
 							if ( isset( $embedding->distance ) ) {
-								// Lower is better for cosine distance, so convert to percentage (1 - distance)
+								// Lower is better for cosine distance, so convert to percentage (1 - distance).
 								$similarity_percentage = ( 1 - floatval( $embedding->distance ) ) * 100;
-								// Ensure the percentage is between 0 and 100
+								// Ensure the percentage is between 0 and 100.
 								$similarity_percentage = max( 0, min( 100, $similarity_percentage ) );
 
 								echo '<div class="similarity-score">' .
@@ -396,13 +402,13 @@
 									'<span>' . number_format( $similarity_percentage, 1 ) . '%</span>' .
 									'</div>';
 
-								// Show the raw distance value as well
+								// Show the raw distance value as well.
 								echo '<div class="distance-value">' .
 									esc_html__( 'Distance: ', 'wpvdb' ) .
 									number_format( $embedding->distance, 4 ) .
 									'</div>';
 							} else {
-								// If no distance property, check what properties are available
+								// If no distance property, check what properties are available.
 								$props = array_keys( get_object_vars( $embedding ) );
 								error_log( '[WPVDB DEBUG] Properties available: ' . print_r( $props, true ) );
 
@@ -495,7 +501,7 @@
 					<label for="wpvdb-model"><?php esc_html_e( 'Model', 'wpvdb' ); ?></label>
 					<select id="wpvdb-model" name="model">
 						<?php
-						// Get models for the first provider
+						// Get models for the first provider.
 						$first_provider    = reset( $providers );
 						$first_provider_id = key( $providers );
 						$provider_models   = \WPVDB\Models::get_selectable_provider_models( $first_provider_id );

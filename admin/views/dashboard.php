@@ -1,4 +1,11 @@
-<div class="wrap wpvdb-dashboard">
+<?php
+/**
+ * Dashboard admin view.
+ *
+ * @package WPVDB
+ */
+
+?><div class="wrap wpvdb-dashboard">
 	<h1><?php esc_html_e( 'Vector Database Dashboard', 'wpvdb' ); ?></h1>
 
 	<div class="postbox-container" style="width: 100%;">

@@ -7,16 +7,16 @@
 
 defined( 'ABSPATH' ) || exit;
 
-// Get the database instance
+// Get the database instance.
 $database = $plugin->get_database();
 
-// Get the detected database info
+// Get the detected database info.
 $db_type        = $database->get_db_type();
 $version        = '';
 $version_string = $database->get_db_version();
 
-// Extract version number
-if ( $db_type === 'mariadb' ) {
+// Extract version number.
+if ( 'mariadb' === $db_type ) {
 	preg_match( '/(\d+\.\d+\.\d+)/', $version_string, $matches );
 	if ( ! empty( $matches[1] ) ) {
 		$version = $matches[1];
@@ -33,17 +33,17 @@ $min_mariadb_version = '11.7';
 
 $upgrade_steps = array();
 
-if ( $db_type === 'mysql' ) {
+if ( 'mysql' === $db_type ) {
 	if ( version_compare( $version, $min_mysql_version, '<' ) ) {
 		$upgrade_steps[] = sprintf( __( 'Upgrade MySQL from version %1$s to version %2$s or newer', 'wpvdb' ), $version, $min_mysql_version );
 	}
-} elseif ( $db_type === 'mariadb' ) {
+} elseif ( 'mariadb' === $db_type ) {
 	if ( version_compare( $version, $min_mariadb_version, '<' ) ) {
 		$upgrade_steps[] = sprintf( __( 'Upgrade MariaDB from version %1$s to version %2$s or newer', 'wpvdb' ), $version, $min_mariadb_version );
 	}
 }
 
-// Docker setup steps
+// Docker setup steps.
 $docker_steps = array(
 	__( 'Use our provided Docker setup by following these steps:', 'wpvdb' ),
 	__( '1. Copy the docker-compose.yml file from our plugin directory to your project', 'wpvdb' ),
@@ -51,7 +51,7 @@ $docker_steps = array(
 	__( '3. Configure your WordPress to use one of these containers', 'wpvdb' ),
 );
 
-// Manual enable fallbacks
+// Manual enable fallbacks.
 $enable_fallbacks = array(
 	__( 'For development or testing purposes only, you can add this code to your wp-config.php file:', 'wpvdb' ),
 	'<pre><code>// Enable WPVDB fallbacks for incompatible databases (NOT RECOMMENDED FOR PRODUCTION)
@@ -72,8 +72,8 @@ add_filter(\'wpvdb_enable_fallbacks\', \'__return_true\');</code></pre>',
 				__( 'You are using %1$s version %2$s. Vector Database features require %3$s version %4$s or newer.', 'wpvdb' ),
 				esc_html( ucfirst( $db_type ) ),
 				esc_html( $version ),
-				esc_html( $db_type === 'mysql' ? 'MySQL' : 'MariaDB' ),
-				esc_html( $db_type === 'mysql' ? $min_mysql_version : $min_mariadb_version )
+				esc_html( 'mysql' === $db_type ? 'MySQL' : 'MariaDB' ),
+				esc_html( 'mysql' === $db_type ? $min_mysql_version : $min_mariadb_version )
 			);
 			?>
 		</p>

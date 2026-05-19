@@ -1,4 +1,10 @@
 <?php
+/**
+ * Queue handling for WPVDB embedding jobs.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 defined( 'ABSPATH' ) || exit;
@@ -32,26 +38,26 @@ class WPVDB_Queue {
 	/**
 	 * Add item to queue
 	 *
-	 * @param mixed $data Data to add to queue
-	 * @param bool  $batch Whether to use batch processing
+	 * @param mixed $data Data to add to queue.
+	 * @param bool  $batch Whether to use batch processing.
 	 * @return $this
 	 */
-	public function push_to_queue( $data, $batch = false ) {
+	public function push_to_queue( $data, $batch = false ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		if ( \wpvdb_is_playground_runtime() ) {
 			return $this;
 		}
 
-		// Use Action Scheduler if available
+		// Use Action Scheduler if available.
 		if ( function_exists( 'wpvdb_has_action_scheduler' ) && wpvdb_has_action_scheduler() ) {
-			// Note: we use the global function, not namespaced
+			// Note: we use the global function, not namespaced.
 			as_schedule_single_action(
-				time(), // Run as soon as possible
+				time(), // Run as soon as possible.
 				self::PROCESS_SINGLE_ACTION,
 				array( $data ),
-				'wpvdb' // Group name
+				'wpvdb' // Group name.
 			);
 		} else {
-			// Fallback to WP Cron
+			// Fallback to WP Cron.
 			$this->add_to_fallback_queue( $data );
 		}
 
@@ -61,7 +67,7 @@ class WPVDB_Queue {
 	/**
 	 * Add multiple items to queue for batch processing
 	 *
-	 * @param array $items Array of items to add to queue
+	 * @param array $items Array of items to add to queue.
 	 * @return $this
 	 */
 	public function push_batch_to_queue( $items ) {
@@ -73,24 +79,24 @@ class WPVDB_Queue {
 			return $this;
 		}
 
-		// Use Action Scheduler if available
+		// Use Action Scheduler if available.
 		if ( function_exists( 'wpvdb_has_action_scheduler' ) && wpvdb_has_action_scheduler() ) {
-			// Get batch size from settings or use default
+			// Get batch size from settings or use default.
 			$batch_size = self::get_batch_size();
 
-			// Split items into batches
+			// Split items into batches.
 			$batches = array_chunk( $items, $batch_size );
 
 			foreach ( $batches as $index => $batch ) {
 				as_schedule_single_action(
-					time() + $index, // Stagger slightly to avoid conflicts
+					time() + $index, // Stagger slightly to avoid conflicts.
 					self::PROCESS_BATCH_ACTION,
 					array( $batch ),
-					'wpvdb' // Group name
+					'wpvdb' // Group name.
 				);
 			}
 		} else {
-			// Fallback to WP Cron - add each item individually
+			// Fallback to WP Cron - add each item individually.
 			foreach ( $items as $data ) {
 				$this->add_to_fallback_queue( $data );
 			}
@@ -102,7 +108,7 @@ class WPVDB_Queue {
 	/**
 	 * Add item to fallback queue
 	 *
-	 * @param mixed $data Data to add to queue
+	 * @param mixed $data Data to add to queue.
 	 * @return void
 	 */
 	private function add_to_fallback_queue( $data ) {
@@ -114,7 +120,7 @@ class WPVDB_Queue {
 		$queue[] = $data;
 		update_option( self::FALLBACK_QUEUE_OPTION, $queue );
 
-		// Make sure we have a cron event scheduled
+		// Make sure we have a cron event scheduled.
 		if ( ! wp_next_scheduled( 'wpvdb_process_fallback_queue' ) ) {
 			wp_schedule_event( time(), 'hourly', 'wpvdb_process_fallback_queue' );
 		}
@@ -123,7 +129,7 @@ class WPVDB_Queue {
 	/**
 	 * Process items in the fallback queue
 	 *
-	 * @param int $limit Number of items to process
+	 * @param int $limit Number of items to process.
 	 * @return void
 	 */
 	public function process_fallback_queue( $limit = 5 ) {
@@ -133,7 +139,7 @@ class WPVDB_Queue {
 
 		$queue = get_option( self::FALLBACK_QUEUE_OPTION, array() );
 
-		// Nothing to do
+		// Nothing to do.
 		if ( empty( $queue ) ) {
 			return;
 		}
@@ -148,15 +154,15 @@ class WPVDB_Queue {
 
 			self::process_item( $item );
 
-			// Remove from queue
+			// Remove from queue.
 			unset( $updated_queue[ $key ] );
 			++$processed;
 		}
 
-		// Reindex array
+		// Reindex array.
 		$updated_queue = array_values( $updated_queue );
 
-		// Update queue in database
+		// Update queue in database.
 		update_option( self::FALLBACK_QUEUE_OPTION, $updated_queue );
 	}
 
@@ -181,12 +187,12 @@ class WPVDB_Queue {
 			return $this;
 		}
 
-		// For development environments, force run the scheduler immediately
+		// For development environments, force run the scheduler immediately.
 		if ( function_exists( 'as_has_scheduled_action' ) &&
 			( as_has_scheduled_action( self::PROCESS_SINGLE_ACTION, null, 'wpvdb' ) ||
 			as_has_scheduled_action( self::PROCESS_BATCH_ACTION, null, 'wpvdb' ) ) ) {
 
-			// If we're in the admin and actions are pending, try to run immediately
+			// If we're in the admin and actions are pending, try to run immediately.
 			if ( is_admin() && class_exists( '\ActionScheduler_QueueRunner' ) ) {
 				\ActionScheduler_QueueRunner::instance()->run();
 			}
@@ -198,7 +204,7 @@ class WPVDB_Queue {
 	/**
 	 * Process a single queue item (called by Action Scheduler or fallback)
 	 *
-	 * @param array $item Queue item
+	 * @param array $item Queue item.
 	 * @return bool Success status
 	 */
 	public static function process_item( $item ) {
@@ -206,7 +212,7 @@ class WPVDB_Queue {
 			return false;
 		}
 
-		// Extract data from item
+		// Extract data from item.
 		$post_id  = isset( $item['post_id'] ) ? absint( $item['post_id'] ) : 0;
 		$model    = isset( $item['model'] ) ? sanitize_text_field( $item['model'] ) : Settings::get_default_model();
 		$provider = isset( $item['provider'] ) ? sanitize_text_field( $item['provider'] ) : '';
@@ -216,7 +222,7 @@ class WPVDB_Queue {
 			return false;
 		}
 
-		// Get post content
+		// Get post content.
 		$post = get_post( $post_id );
 
 		if ( ! $post || ! is_object( $post ) ) {
@@ -224,7 +230,7 @@ class WPVDB_Queue {
 			return false;
 		}
 
-		// Validate post content
+		// Validate post content.
 		if ( ! isset( $post->post_title ) || ! isset( $post->post_content ) ) {
 			Core::log_error( 'Post missing required fields', array( 'post_id' => $post_id ) );
 			return false;
@@ -233,7 +239,7 @@ class WPVDB_Queue {
 		// Preflight API credentials using the queued provider so a job enqueued
 		// with --provider=automattic does not fail when the active provider was
 		// later switched to something with no key configured.
-		if ( is_string( $provider ) && $provider !== '' ) {
+		if ( is_string( $provider ) && '' !== $provider ) {
 			$api_key = Settings::get_api_key_for_provider( $provider );
 		} else {
 			$api_key = Settings::get_api_key();
@@ -250,25 +256,25 @@ class WPVDB_Queue {
 			return false;
 		}
 
-		// Combine content (title + content)
+		// Combine content (title + content).
 		$title   = ! empty( $post->post_title ) ? $post->post_title : '';
 		$content = ! empty( $post->post_content ) ? wp_strip_all_tags( $post->post_content ) : '';
 		$text    = $title . "\n\n" . $content;
 
-		// Ensure we have actual content to embed
+		// Ensure we have actual content to embed.
 		if ( trim( $text ) === '' ) {
 			Core::log_error( 'Post has no content to embed', array( 'post_id' => $post_id ) );
 			return false;
 		}
 
-		// Generate and store embeddings for the post
+		// Generate and store embeddings for the post.
 		return self::process_post( $post, $model, $provider );
 	}
 
 	/**
 	 * Process a batch of queue items
 	 *
-	 * @param array $items Array of queue items
+	 * @param array $items Array of queue items.
 	 * @return array Results array with post IDs as keys and success status as values
 	 */
 	public static function process_batch( $items ) {
@@ -315,13 +321,13 @@ class WPVDB_Queue {
 				$action = reset( $actions );
 				$args   = $action->get_args();
 
-				// Remove this action from the queue to avoid duplicate processing
+				// Remove this action from the queue to avoid duplicate processing.
 				as_unschedule_action( self::PROCESS_BATCH_ACTION, $args, 'wpvdb' );
 
-				// Process the batch
+				// Process the batch.
 				self::process_batch( $args[0] );
 			} else {
-				// Check for single actions
+				// Check for single actions.
 				self::maybe_process_next_single();
 			}
 		}
@@ -348,21 +354,21 @@ class WPVDB_Queue {
 				foreach ( $actions as $action ) {
 					$args = $action->get_args();
 
-					// Add to our batch
+					// Add to our batch.
 					if ( ! empty( $args[0] ) ) {
 						$batch_items[] = $args[0];
 					}
 
-					// Remove this action from the queue to avoid duplicate processing
+					// Remove this action from the queue to avoid duplicate processing.
 					as_unschedule_action( self::PROCESS_SINGLE_ACTION, $args, 'wpvdb' );
 
-					// If we've reached our batch size, stop
+					// If we've reached our batch size, stop.
 					if ( count( $batch_items ) >= self::get_batch_size() ) {
 						break;
 					}
 				}
 
-				// Process the collected items as a batch
+				// Process the collected items as a batch.
 				if ( ! empty( $batch_items ) ) {
 					self::process_batch( $batch_items );
 				}
@@ -383,28 +389,25 @@ class WPVDB_Queue {
 	 * Build a queue item for a single post.
 	 *
 	 * @param int|string $post_id Post ID to embed, cast to int.
-	 * @param array      $opts {
-	 *     @type string $provider Override the active provider.
-	 *     @type string $model    Override the resolved model.
-	 * }
+	 * @param array      $opts    Queue item options. Supports string `provider` and `model` overrides.
 	 * @return array { post_id, model, provider } for push_to_queue.
 	 */
 	public static function build_item( $post_id, $opts = array() ) {
-		$provider_override = isset( $opts['provider'] ) && is_string( $opts['provider'] ) && $opts['provider'] !== ''
+		$provider_override = isset( $opts['provider'] ) && is_string( $opts['provider'] ) && '' !== $opts['provider']
 			? $opts['provider']
 			: '';
-		$model_override    = isset( $opts['model'] ) && is_string( $opts['model'] ) && $opts['model'] !== ''
+		$model_override    = isset( $opts['model'] ) && is_string( $opts['model'] ) && '' !== $opts['model']
 			? $opts['model']
 			: '';
 
-		$provider = $provider_override !== '' ? $provider_override : Settings::get_active_provider();
+		$provider = '' !== $provider_override ? $provider_override : Settings::get_active_provider();
 		if ( empty( $provider ) ) {
 			$provider = 'openai';
 		}
 
-		if ( $model_override !== '' ) {
+		if ( '' !== $model_override ) {
 			$model = $model_override;
-		} elseif ( $provider_override !== '' ) {
+		} elseif ( '' !== $provider_override ) {
 			$model = Models::get_default_model_for_provider( $provider );
 		} else {
 			$model = Settings::get_default_model();
@@ -420,16 +423,16 @@ class WPVDB_Queue {
 	/**
 	 * Process a post - extract content, chunk, and generate embeddings
 	 *
-	 * @param \WP_Post $post
-	 * @param string   $model
-	 * @param string   $provider
+	 * @param \WP_Post $post     Post to process.
+	 * @param string   $model    Embedding model.
+	 * @param string   $provider Embedding provider.
 	 * @return bool Success status
 	 */
 	private static function process_post( $post, $model, $provider = '' ) {
 		// Resolve API key + base for the explicit provider when one was queued.
 		// This keeps long-draining jobs aligned with the provider snapshot taken
 		// at enqueue time, and lets CLI --provider overrides actually take effect.
-		if ( is_string( $provider ) && $provider !== '' ) {
+		if ( is_string( $provider ) && '' !== $provider ) {
 			$api_key  = Settings::get_api_key_for_provider( $provider );
 			$api_base = Settings::get_api_base_for_provider( $provider );
 		} else {
@@ -465,10 +468,10 @@ class WPVDB_Queue {
 		delete_post_meta( $post->ID, '_wpvdb_embedded_date' );
 		delete_post_meta( $post->ID, '_wpvdb_embedded_model' );
 
-		// Combine content (title + content)
+		// Combine content (title + content).
 		$text = $post->post_title . "\n\n" . wp_strip_all_tags( $post->post_content );
 
-		// Chunk the text
+		// Chunk the text.
 		$chunks = apply_filters( 'wpvdb_chunk_text', array(), $text );
 
 		if ( empty( $chunks ) ) {
@@ -479,13 +482,13 @@ class WPVDB_Queue {
 		$successful_chunks = 0;
 
 		foreach ( $chunks as $index => $chunk ) {
-			// Get summary if enabled
+			// Get summary if enabled.
 			$summary = '';
 			if ( Settings::is_summarization_enabled() ) {
 				$summary = apply_filters( 'wpvdb_ai_summarize_chunk', '', $chunk );
 			}
 
-			// Get embedding
+			// Get embedding.
 			$embedding_result = Core::get_embedding( $chunk, $model, $api_base, $api_key );
 			if ( is_wp_error( $embedding_result ) ) {
 				Core::log_error(
@@ -499,7 +502,7 @@ class WPVDB_Queue {
 				continue;
 			}
 
-			// Call the method correctly as a static method
+			// Call the method correctly as a static method.
 			$result = REST::insert_embedding_row(
 				$post->ID,
 				'chunk-' . $index,
@@ -526,7 +529,7 @@ class WPVDB_Queue {
 			++$successful_chunks;
 		}
 
-		// Update post meta with embedding information
+		// Update post meta with embedding information.
 		update_post_meta( $post->ID, '_wpvdb_embedded', true );
 		update_post_meta( $post->ID, '_wpvdb_chunks_count', $successful_chunks );
 		update_post_meta( $post->ID, '_wpvdb_embedded_date', current_time( 'mysql' ) );

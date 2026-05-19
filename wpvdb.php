@@ -39,17 +39,19 @@ if ( ! defined( 'WPVDB_DEFAULT_EMBED_DIM' ) ) {
 // Runtime detection and compatibility hooks must load before optional services.
 require_once WPVDB_PLUGIN_DIR . 'includes/wpvdb-runtime.php';
 
-// API Keys can be defined in wp-config.php for better security and environment-specific configuration
-// Example:
-// define('WPVDB_OPENAI_API_KEY', 'your-openai-api-key');
-// define('WPVDB_AUTOMATTIC_API_KEY', 'your-automattic-api-key');
+/*
+ * API keys can be defined in wp-config.php for better security and environment-specific configuration.
+ * Example:
+ * define( 'WPVDB_OPENAI_API_KEY', 'your-openai-api-key' );
+ * define( 'WPVDB_AUTOMATTIC_API_KEY', 'your-automattic-api-key' );
+ */
 
-// Include the Composer autoloader
+// Include the Composer autoloader.
 if ( file_exists( WPVDB_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
 	require_once WPVDB_PLUGIN_DIR . 'vendor/autoload.php';
 }
 
-// Initialize Action Scheduler
+// Initialize Action Scheduler.
 if ( ! wpvdb_is_playground_runtime() && file_exists( WPVDB_PLUGIN_DIR . 'vendor/woocommerce/action-scheduler/action-scheduler.php' ) ) {
 	require_once WPVDB_PLUGIN_DIR . 'vendor/woocommerce/action-scheduler/action-scheduler.php';
 }
@@ -76,23 +78,23 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	require_once WPVDB_PLUGIN_DIR . 'includes/cli/class-wpvdb-cli.php';
 }
 
-/**
- * Global helper: whether Action Scheduler is available for scheduling.
- *
- * Must live in the global namespace (not WPVDB\) because WPVDB_Queue checks it
- * via the unqualified function_exists('wpvdb_has_action_scheduler'). If this
- * function is missing or namespaced, push_batch_to_queue falls through to the
- * wp_options fallback queue silently.
- *
- * @return bool
- */
 if ( ! function_exists( 'wpvdb_has_action_scheduler' ) ) {
+	/**
+	 * Global helper: whether Action Scheduler is available for scheduling.
+	 *
+	 * Must live in the global namespace (not WPVDB\) because WPVDB_Queue checks it
+	 * via the unqualified function_exists('wpvdb_has_action_scheduler'). If this
+	 * function is missing or namespaced, push_batch_to_queue falls through to the
+	 * wp_options fallback queue silently.
+	 *
+	 * @return bool
+	 */
 	function wpvdb_has_action_scheduler() {
 		return class_exists( 'ActionScheduler' ) && function_exists( 'as_schedule_single_action' );
 	}
 }
 
-// Get the plugin instance
+// Get the plugin instance.
 $wpvdb_plugin = \WPVDB\Plugin::get_instance();
 
 /**
@@ -110,34 +112,34 @@ register_deactivation_hook( __FILE__, array( $wpvdb_plugin, 'deactivate' ) );
  */
 add_action( 'plugins_loaded', array( $wpvdb_plugin, 'init' ) );
 
-// Add deactivation notice
+// Add deactivation notice.
 add_action( 'admin_notices', array( $wpvdb_plugin, 'deactivated_notice' ) );
 
-// Add deactivation action
+// Add deactivation action.
 add_action( 'wpvdb_maybe_deactivate_plugin', array( $wpvdb_plugin, 'maybe_deactivate_plugin' ) );
 
-// Add action for processing fallback queue
+// Add action for processing fallback queue.
 if ( ! wpvdb_is_playground_runtime() ) {
 	add_action( 'wpvdb_process_fallback_queue', array( $wpvdb_plugin, 'process_fallback_queue' ) );
 
-	// Add action for running action scheduler more frequently in admin
+	// Add action for running action scheduler more frequently in admin.
 	add_action( 'init', array( $wpvdb_plugin, 'maybe_run_action_scheduler' ) );
 }
 
-// Add vector index to existing tables during plugin updates
+// Add vector index to existing tables during plugin updates.
 add_action(
 	'plugins_loaded',
 	function () {
-		// Get current plugin version
+		// Get current plugin version.
 		$current_version = get_option( 'wpvdb_version', '0.0.0' );
 
-		// If version has changed, run update procedures
+		// If version has changed, run update procedures.
 		if ( version_compare( $current_version, WPVDB_VERSION, '<' ) ) {
 			// Schema migrations may be skipped on unsupported databases; settings
 			// migration and the stored version bump should still run once.
 			\WPVDB\Activation::upgrade_schema();
 			\WPVDB\Settings::migrate_stored_settings();
-			// Update stored version
+			// Update stored version.
 			update_option( 'wpvdb_version', WPVDB_VERSION );
 		}
 	}

@@ -9,40 +9,41 @@
 
 defined( 'ABSPATH' ) || exit;
 
-// Get the database instance
+global $wpdb;
+
+// Get the database instance.
 $database = $wpvdb_plugin->get_database();
 
-// Check vector index status
+// Check vector index status.
 $vector_index_status = array(
 	'exists'       => false,
 	'health'       => 'unknown',
 	'optimization' => false,
 );
 
-// Check if vector index exists (only for MariaDB)
+// Check if vector index exists (only for MariaDB).
 if ( $database->get_db_type() === 'mariadb' && $database->has_native_vector_support() ) {
-	global $wpdb;
 	$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-	// Check if the table exists first
+	// Check if the table exists first.
 	$table_exists = $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) === $table_name;
 
 	if ( $table_exists ) {
-		// Check if the index exists
+		// Check if the index exists.
 		$index_exists                  = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'embedding_idx'" ) !== null;
 		$vector_index_status['exists'] = $index_exists;
 
 		if ( $index_exists ) {
-			// Check if other supporting indexes exist for optimal performance
+			// Check if other supporting indexes exist for optimal performance.
 			$has_doc_id_index   = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'doc_id_idx'" ) !== null;
 			$has_doc_type_index = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'doc_type_idx'" ) !== null;
 
 			$vector_index_status['optimization'] = $has_doc_id_index && $has_doc_type_index;
 
-			// Check index health by running EXPLAIN on a simple query
+			// Check index health by running EXPLAIN on a simple query.
 			try {
 				$result                        = $wpdb->get_row( "EXPLAIN SELECT * FROM $table_name ORDER BY COSINE_DISTANCE(embedding, '[1,0,0]') LIMIT 1" );
-				$vector_index_status['health'] = ( isset( $result->key ) && $result->key === 'embedding_idx' ) ? 'good' : 'suboptimal';
+				$vector_index_status['health'] = ( isset( $result->key ) && 'embedding_idx' === $result->key ) ? 'good' : 'suboptimal';
 			} catch ( \Exception $e ) {
 				$vector_index_status['health'] = 'error';
 			}
@@ -50,7 +51,7 @@ if ( $database->get_db_type() === 'mariadb' && $database->has_native_vector_supp
 	}
 }
 
-// Get provider change status - CRITICAL FIX: Force fresh data retrieval
+// Get provider change status - CRITICAL FIX: Force fresh data retrieval.
 wp_cache_delete( 'wpvdb_settings', 'options' );
 $settings           = get_option( 'wpvdb_settings', array() );
 $has_pending_change = \WPVDB\Settings::has_pending_provider_change();
@@ -69,26 +70,27 @@ if ( class_exists( '\\WPVDB\\Embedding_Enqueuer' ) ) {
 
 $active_reindex_job_updated_at = '';
 if ( $active_reindex_job && ! empty( $active_reindex_job['updated_at'] ) ) {
-	$date_format                   = get_option( 'date_format' ) ?: 'Y-m-d';
-	$time_format                   = get_option( 'time_format' ) ?: 'H:i:s';
+	$date_format                   = get_option( 'date_format' );
+	$date_format                   = $date_format ? $date_format : 'Y-m-d';
+	$time_format                   = get_option( 'time_format' );
+	$time_format                   = $time_format ? $time_format : 'H:i:s';
 	$date_time_format              = trim( $date_format . ' ' . $time_format );
 	$active_reindex_job_updated_at = function_exists( 'mysql2date' )
 		? mysql2date( $date_time_format, $active_reindex_job['updated_at'] )
 		: $active_reindex_job['updated_at'];
 }
 
-// Get system information
+// Get system information.
 $system_info                    = array();
 $system_info['php_version']     = phpversion();
 $system_info['wp_version']      = get_bloginfo( 'version' );
 $system_info['wp_memory_limit'] = WP_MEMORY_LIMIT;
 $system_info['wp_debug_mode']   = defined( 'WP_DEBUG' ) && WP_DEBUG ? 'Yes' : 'No';
 
-// Database info
-global $wpdb;
+// Database info.
 $system_info['mysql_version'] = $database->get_db_version();
 
-// Plugin info
+// Plugin info.
 $plugins                = get_plugins();
 $active_plugins         = get_option( 'active_plugins', array() );
 $system_info['plugins'] = array();
@@ -100,12 +102,12 @@ foreach ( $plugins as $plugin_path => $plugin_data ) {
 	);
 }
 
-// WPVDB specific info
+// WPVDB specific info.
 $system_info['db_type']           = $database->get_db_type();
 $system_info['vector_support']    = $database->has_native_vector_support() ? 'Yes' : 'No';
 $system_info['fallbacks_enabled'] = $database->are_fallbacks_enabled() ? 'Yes' : 'No';
 
-// Get embedding tables info
+// Get embedding tables info.
 $embedding_table                       = $wpdb->prefix . 'wpvdb_embeddings';
 $embedding_table_exists                = $wpdb->get_var( "SHOW TABLES LIKE '$embedding_table'" ) === $embedding_table;
 $system_info['embedding_table_exists'] = $embedding_table_exists ? 'Yes' : 'No';
@@ -116,16 +118,16 @@ if ( $embedding_table_exists ) {
 	$system_info['embedding_count'] = '0';
 }
 
-// Define available sections
+// Define available sections.
 $sections = array(
 	'info'  => __( 'System Information', 'wpvdb' ),
 	'tools' => __( 'Tools', 'wpvdb' ),
 );
 
-// Get the current section from URL or default to 'info'
+// Get the current section from URL or default to 'info'.
 $current_section = isset( $_GET['section'] ) ? sanitize_key( $_GET['section'] ) : 'info';
 
-// Ensure we have a valid section
+// Ensure we have a valid section.
 if ( ! array_key_exists( $current_section, $sections ) ) {
 	$current_section = 'info';
 }
@@ -217,7 +219,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 	</div>
 
 	<!-- System Information Section -->
-	<div class="wpvdb-status-section" <?php echo $current_section !== 'info' ? 'style="display: none;"' : ''; ?>>
+	<div class="wpvdb-status-section" <?php echo 'info' !== $current_section ? 'style="display: none;"' : ''; ?>>
 		<table class="widefat" cellspacing="0">
 			<thead>
 				<tr>
@@ -270,7 +272,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				<tr>
 					<th><?php _e( 'Vector Support', 'wpvdb' ); ?></th>
 					<td>
-						<?php if ( $system_info['vector_support'] === 'Yes' ) : ?>
+						<?php if ( 'Yes' === $system_info['vector_support'] ) : ?>
 							<span class="dashicons dashicons-yes" style="color:green;"></span> <?php _e( 'Available', 'wpvdb' ); ?>
 						<?php else : ?>
 							<span class="dashicons dashicons-no" style="color:red;"></span> <?php _e( 'Not Available', 'wpvdb' ); ?>
@@ -280,7 +282,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				<tr>
 					<th><?php _e( 'Fallbacks Enabled', 'wpvdb' ); ?></th>
 					<td>
-						<?php if ( $system_info['fallbacks_enabled'] === 'Yes' ) : ?>
+						<?php if ( 'Yes' === $system_info['fallbacks_enabled'] ) : ?>
 							<span class="dashicons dashicons-yes" style="color:orange;"></span> <?php _e( 'Yes (Performance Impact)', 'wpvdb' ); ?>
 						<?php else : ?>
 							<span class="dashicons dashicons-no"></span> <?php _e( 'No', 'wpvdb' ); ?>
@@ -290,7 +292,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				<tr>
 					<th><?php _e( 'Embeddings Table', 'wpvdb' ); ?></th>
 					<td>
-						<?php if ( $system_info['embedding_table_exists'] === 'Yes' ) : ?>
+						<?php if ( 'Yes' === $system_info['embedding_table_exists'] ) : ?>
 							<span class="dashicons dashicons-yes" style="color:green;"></span>
 							<?php
 							printf(
@@ -312,7 +314,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 							<span class="dashicons dashicons-yes" style="color:green;"></span> <?php _e( 'Available', 'wpvdb' ); ?>
 						<?php else : ?>
 							<span class="dashicons dashicons-no" style="color:red;"></span> <?php _e( 'Not Created', 'wpvdb' ); ?>
-							<?php if ( $system_info['embedding_table_exists'] === 'Yes' ) : ?>
+							<?php if ( 'Yes' === $system_info['embedding_table_exists'] ) : ?>
 							<a href="<?php echo esc_url( admin_url( 'admin.php?page=wpvdb-status&section=tools' ) ); ?>" class="button button-small" style="margin-left: 10px;">
 								<?php _e( 'Create Index', 'wpvdb' ); ?>
 							</a>
@@ -324,14 +326,14 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				<tr>
 					<th><?php _e( 'Vector Index Health', 'wpvdb' ); ?></th>
 					<td>
-						<?php if ( $vector_index_status['health'] === 'good' ) : ?>
+						<?php if ( 'good' === $vector_index_status['health'] ) : ?>
 							<span class="dashicons dashicons-yes" style="color:green;"></span> <?php _e( 'Good', 'wpvdb' ); ?>
-						<?php elseif ( $vector_index_status['health'] === 'suboptimal' ) : ?>
+						<?php elseif ( 'suboptimal' === $vector_index_status['health'] ) : ?>
 							<span class="dashicons dashicons-warning" style="color:orange;"></span> <?php _e( 'Suboptimal', 'wpvdb' ); ?>
 							<span class="description" style="display:block;margin-top:4px">
 								<?php _e( 'Index may not be used for all queries.', 'wpvdb' ); ?>
 							</span>
-						<?php elseif ( $vector_index_status['health'] === 'error' ) : ?>
+						<?php elseif ( 'error' === $vector_index_status['health'] ) : ?>
 							<span class="dashicons dashicons-no" style="color:red;"></span> <?php _e( 'Error', 'wpvdb' ); ?>
 						<?php else : ?>
 							<span class="dashicons dashicons-editor-help"></span> <?php _e( 'Unknown', 'wpvdb' ); ?>
@@ -454,7 +456,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				<?php
 					$debug_settings = $settings;
 
-					// Mask API keys for security
+					// Mask API keys for security.
 				if ( isset( $debug_settings['openai']['api_key'] ) && ! empty( $debug_settings['openai']['api_key'] ) ) {
 					$debug_settings['openai']['api_key'] = '********' . substr( $debug_settings['openai']['api_key'], -4 );
 				}
@@ -492,7 +494,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 	</div>
 
 	<!-- Tools Section -->
-	<div class="wpvdb-status-section" <?php echo $current_section !== 'tools' ? 'style="display: none;"' : ''; ?>>
+	<div class="wpvdb-status-section" <?php echo 'tools' !== $current_section ? 'style="display: none;"' : ''; ?>>
 		<?php if ( ! apply_filters( 'wpvdb_render_status_tools_ui', true ) ) : ?>
 			<div class="wpvdb-card">
 				<h3><?php esc_html_e( 'Demo mode', 'wpvdb' ); ?></h3>
@@ -578,8 +580,8 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 			</p>
 
 			<?php
-			// Display diagnostic results if available
-			if ( isset( $_GET['diagnostics'] ) && $_GET['diagnostics'] === 'run' ) {
+			// Display diagnostic results if available.
+			if ( isset( $_GET['diagnostics'] ) && 'run' === $_GET['diagnostics'] ) {
 				$diagnostics = $database->run_diagnostics();
 				?>
 				<div class="wpvdb-diagnostics-results <?php echo isset( $diagnostics['error'] ) ? 'has-error' : ''; ?>">
@@ -639,7 +641,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 
 						<?php if ( isset( $diagnostics['vector_index'] ) ) : ?>
 							<li><strong><?php esc_html_e( 'Vector Index:', 'wpvdb' ); ?></strong>
-								<?php if ( $diagnostics['vector_index'] === true ) : ?>
+								<?php if ( true === $diagnostics['vector_index'] ) : ?>
 									<span style="color:green;">✓</span>
 								<?php elseif ( is_string( $diagnostics['vector_index'] ) ) : ?>
 									<?php echo esc_html( $diagnostics['vector_index'] ); ?>
@@ -696,7 +698,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 							<select id="wpvdb-test-model" name="model">
 								<?php
 								$models = \WPVDB\Models::get_selectable_models();
-								// Models are organized by provider, so we need to iterate through each provider's models
+								// Models are organized by provider, so we need to iterate through each provider's models.
 								foreach ( $models as $provider_id => $provider_models ) {
 									echo '<optgroup label="' . esc_attr( ucfirst( $provider_id ) ) . '">';
 									foreach ( $provider_models as $model_id => $model_data ) {
@@ -749,11 +751,11 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 			<div class="wpvdb-status-row">
 				<div class="wpvdb-status-label"><?php _e( 'Health:', 'wpvdb' ); ?></div>
 				<div class="wpvdb-status-value">
-					<?php if ( $vector_index_status['health'] === 'good' ) : ?>
+					<?php if ( 'good' === $vector_index_status['health'] ) : ?>
 						<span class="dashicons dashicons-yes"></span> <?php _e( 'Good', 'wpvdb' ); ?>
-					<?php elseif ( $vector_index_status['health'] === 'suboptimal' ) : ?>
+					<?php elseif ( 'suboptimal' === $vector_index_status['health'] ) : ?>
 						<span class="dashicons dashicons-warning"></span> <?php _e( 'Suboptimal', 'wpvdb' ); ?>
-					<?php elseif ( $vector_index_status['health'] === 'error' ) : ?>
+					<?php elseif ( 'error' === $vector_index_status['health'] ) : ?>
 						<span class="dashicons dashicons-no"></span> <?php _e( 'Error', 'wpvdb' ); ?>
 					<?php else : ?>
 						<span class="dashicons dashicons-editor-help"></span> <?php _e( 'Unknown', 'wpvdb' ); ?>

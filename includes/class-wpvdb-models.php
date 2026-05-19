@@ -1,4 +1,10 @@
 <?php
+/**
+ * Embedding model registry for WPVDB.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 defined( 'ABSPATH' ) || exit;
@@ -95,7 +101,7 @@ class Models {
 			),
 		);
 
-		// Allow plugins to register additional models or modify existing ones
+		// Allow plugins to register additional models or modify existing ones.
 		return self::normalize_models( apply_filters( 'wpvdb_available_models', self::normalize_models( $default_models ) ) );
 	}
 
@@ -115,7 +121,7 @@ class Models {
 			$models[ $provider ] = array_filter(
 				$provider_models,
 				static function ( $model ) use ( $target_dim ) {
-					return ( ! isset( $model['selectable'] ) || $model['selectable'] !== false )
+					return ( ! isset( $model['selectable'] ) || false !== $model['selectable'] )
 						&& self::is_model_storage_compatible( $model, $target_dim );
 				}
 			);
@@ -126,8 +132,8 @@ class Models {
 	/**
 	 * Get models for a specific provider
 	 *
-	 * @param string $provider Provider name
-	 * @param bool   $selectable_only Whether to exclude non-selectable internal models
+	 * @param string $provider Provider name.
+	 * @param bool   $selectable_only Whether to exclude non-selectable internal models.
 	 * @return array Models for the provider
 	 */
 	public static function get_provider_models( $provider, $selectable_only = false ) {
@@ -138,7 +144,7 @@ class Models {
 	/**
 	 * Get selectable models for a specific provider.
 	 *
-	 * @param string $provider Provider name
+	 * @param string $provider Provider name.
 	 * @return array Selectable models for the provider
 	 */
 	public static function get_selectable_provider_models( $provider ) {
@@ -148,8 +154,8 @@ class Models {
 	/**
 	 * Get a specific model by provider and name
 	 *
-	 * @param string $provider Provider name
-	 * @param string $model_name Model name
+	 * @param string $provider Provider name.
+	 * @param string $model_name Model name.
 	 * @return array|null Model details or null if not found
 	 */
 	public static function get_model( $provider, $model_name ) {
@@ -160,8 +166,8 @@ class Models {
 	/**
 	 * Get model metadata for a request when only the model and API base are known.
 	 *
-	 * @param string $model_name Model name
-	 * @param string $api_base API base URL
+	 * @param string $model_name Model name.
+	 * @param string $api_base API base URL.
 	 * @return array|null Model details or null if not found
 	 */
 	public static function get_model_for_request( $model_name, $api_base = '' ) {
@@ -186,8 +192,8 @@ class Models {
 	/**
 	 * Get the request format for a model.
 	 *
-	 * @param string $model_name Model name
-	 * @param string $api_base API base URL
+	 * @param string $model_name Model name.
+	 * @param string $api_base API base URL.
 	 * @return string Request format identifier
 	 */
 	public static function get_request_format( $model_name, $api_base = '' ) {
@@ -198,8 +204,8 @@ class Models {
 	/**
 	 * Get the response format for a model.
 	 *
-	 * @param string $model_name Model name
-	 * @param string $api_base API base URL
+	 * @param string $model_name Model name.
+	 * @param string $api_base API base URL.
 	 * @return string Response format identifier
 	 */
 	public static function get_response_format( $model_name, $api_base = '' ) {
@@ -210,8 +216,8 @@ class Models {
 	/**
 	 * Get the relative API endpoint for a model.
 	 *
-	 * @param string $model_name Model name
-	 * @param string $api_base API base URL
+	 * @param string $model_name Model name.
+	 * @param string $api_base API base URL.
 	 * @return string Relative endpoint
 	 */
 	public static function get_endpoint( $model_name, $api_base = '' ) {
@@ -222,8 +228,8 @@ class Models {
 	/**
 	 * Get model-level query args for the embedding request URL.
 	 *
-	 * @param string $model_name Model name
-	 * @param string $api_base API base URL
+	 * @param string $model_name Model name.
+	 * @param string $api_base API base URL.
 	 * @return array Query args
 	 */
 	public static function get_request_query_args( $model_name, $api_base = '' ) {
@@ -243,8 +249,8 @@ class Models {
 	/**
 	 * Check whether a model supports a dimensions request parameter.
 	 *
-	 * @param string $model_name Model name
-	 * @param string $api_base API base URL
+	 * @param string $model_name Model name.
+	 * @param string $api_base API base URL.
 	 * @return bool
 	 */
 	public static function supports_dimensions( $model_name, $api_base = '' ) {
@@ -255,9 +261,9 @@ class Models {
 	/**
 	 * Check whether a model can produce embeddings for the storage dimension.
 	 *
-	 * @param string   $model_name Model name
-	 * @param string   $api_base API base URL
-	 * @param int|null $target_dim Storage dimension, defaults to WPVDB_DEFAULT_EMBED_DIM
+	 * @param string   $model_name Model name.
+	 * @param string   $api_base API base URL.
+	 * @param int|null $target_dim Storage dimension, defaults to WPVDB_DEFAULT_EMBED_DIM.
 	 * @return bool Whether the model can fit the configured embedding column
 	 */
 	public static function is_storage_compatible( $model_name, $api_base = '', $target_dim = null ) {
@@ -271,7 +277,7 @@ class Models {
 	/**
 	 * Get default model for a provider
 	 *
-	 * @param string $provider Provider name
+	 * @param string $provider Provider name.
 	 * @return string Default model name
 	 */
 	public static function get_default_model_for_provider( $provider ) {
@@ -292,7 +298,7 @@ class Models {
 	/**
 	 * Guess provider from a known API base URL.
 	 *
-	 * @param string $api_base API base URL
+	 * @param string $api_base API base URL.
 	 * @return string Provider name or empty string
 	 */
 	private static function guess_provider_from_api_base( $api_base ) {
@@ -314,7 +320,7 @@ class Models {
 	/**
 	 * Get the configured native embedding column dimension.
 	 *
-	 * @param int|null $target_dim Explicit dimension override
+	 * @param int|null $target_dim Explicit dimension override.
 	 * @return int Storage dimension
 	 */
 	private static function get_storage_dimension( $target_dim = null ) {
@@ -327,8 +333,8 @@ class Models {
 	/**
 	 * Check model metadata against the storage dimension.
 	 *
-	 * @param array $model Model metadata
-	 * @param int   $target_dim Storage dimension
+	 * @param array $model Model metadata.
+	 * @param int   $target_dim Storage dimension.
 	 * @return bool Whether the model can fit the configured embedding column
 	 */
 	private static function is_model_storage_compatible( $model, $target_dim ) {
@@ -341,7 +347,7 @@ class Models {
 	/**
 	 * Ensure each model has fields derived from its registry position.
 	 *
-	 * @param array $models Models grouped by provider
+	 * @param array $models Models grouped by provider.
 	 * @return array Normalized models
 	 */
 	private static function normalize_models( $models ) {

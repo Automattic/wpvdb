@@ -1,4 +1,10 @@
 <?php
+/**
+ * Maintenance routines for WPVDB tables.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 defined( 'ABSPATH' ) || exit;
@@ -28,10 +34,10 @@ class Maintenance {
 	public static function init() {
 		self::$database = new Database();
 
-		// Schedule maintenance tasks
+		// Schedule maintenance tasks.
 		self::schedule_maintenance_tasks();
 
-		// Hook into WordPress maintenance actions
+		// Hook into WordPress maintenance actions.
 		add_action( 'wpvdb_daily_maintenance', array( __CLASS__, 'daily_maintenance' ) );
 		add_action( 'wpvdb_weekly_maintenance', array( __CLASS__, 'weekly_maintenance' ) );
 		add_action( 'wpvdb_monthly_maintenance', array( __CLASS__, 'monthly_maintenance' ) );
@@ -47,7 +53,7 @@ class Maintenance {
 			return;
 		}
 
-		// Daily maintenance
+		// Daily maintenance.
 		if ( ! as_has_scheduled_action( 'wpvdb_daily_maintenance' ) ) {
 			as_schedule_recurring_action(
 				strtotime( 'tomorrow 2:00 AM' ),
@@ -58,7 +64,7 @@ class Maintenance {
 			);
 		}
 
-		// Weekly maintenance
+		// Weekly maintenance.
 		if ( ! as_has_scheduled_action( 'wpvdb_weekly_maintenance' ) ) {
 			as_schedule_recurring_action(
 				strtotime( 'next Sunday 3:00 AM' ),
@@ -69,7 +75,7 @@ class Maintenance {
 			);
 		}
 
-		// Monthly maintenance
+		// Monthly maintenance.
 		if ( ! as_has_scheduled_action( 'wpvdb_monthly_maintenance' ) ) {
 			as_schedule_recurring_action(
 				strtotime( 'first day of next month 4:00 AM' ),
@@ -94,16 +100,16 @@ class Maintenance {
 		Logger::info( 'Starting daily maintenance' );
 		$start_time = Logger::start_timer( 'daily_maintenance' );
 
-		// Clean up old logs
+		// Clean up old logs.
 		self::cleanup_old_logs();
 
-		// Update database statistics
+		// Update database statistics.
 		self::update_database_statistics();
 
-		// Check for orphaned embeddings
+		// Check for orphaned embeddings.
 		self::cleanup_orphaned_embeddings();
 
-		// Preload cache if enabled
+		// Preload cache if enabled.
 		if ( apply_filters( 'wpvdb_maintenance_preload_cache', false ) ) {
 			Cache::preload_popular_embeddings();
 		}
@@ -125,18 +131,18 @@ class Maintenance {
 		Logger::info( 'Starting weekly maintenance' );
 		$start_time = Logger::start_timer( 'weekly_maintenance' );
 
-		// Optimize database tables
+		// Optimize database tables.
 		self::optimize_database_tables();
 
-		// Update table statistics
+		// Update table statistics.
 		self::analyze_database_tables();
 
-		// Clean up old cache entries
+		// Clean up old cache entries.
 		if ( apply_filters( 'wpvdb_maintenance_flush_cache', true ) ) {
 			Cache::flush_all();
 		}
 
-		// Check database integrity
+		// Check database integrity.
 		self::check_database_integrity();
 
 		Logger::end_timer( 'weekly_maintenance', $start_time );
@@ -156,16 +162,16 @@ class Maintenance {
 		Logger::info( 'Starting monthly maintenance' );
 		$start_time = Logger::start_timer( 'monthly_maintenance' );
 
-		// Deep database optimization
+		// Deep database optimization.
 		self::deep_optimize_database();
 
-		// Clean up very old data
+		// Clean up very old data.
 		self::cleanup_old_data();
 
-		// Generate performance report
+		// Generate performance report.
 		self::generate_performance_report();
 
-		// Check for database schema updates
+		// Check for database schema updates.
 		self::check_schema_updates();
 
 		Logger::end_timer( 'monthly_maintenance', $start_time );
@@ -253,10 +259,10 @@ class Maintenance {
 
 		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-		// Update table statistics
+		// Update table statistics.
 		$wpdb->query( "ANALYZE TABLE {$table_name}" );
 
-		// Cache database stats
+		// Cache database stats.
 		$stats = array(
 			'total_embeddings'   => $wpdb->get_var( "SELECT COUNT(*) FROM {$table_name}" ),
 			'total_documents'    => $wpdb->get_var( "SELECT COUNT(DISTINCT doc_id) FROM {$table_name}" ),
@@ -290,10 +296,10 @@ class Maintenance {
 
 		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-		// Optimize the embeddings table
+		// Optimize the embeddings table.
 		$wpdb->query( "OPTIMIZE TABLE {$table_name}" );
 
-		// If MariaDB, also optimize vector performance
+		// If MariaDB, also optimize vector performance.
 		if ( self::$database->get_db_type() === 'mariadb' ) {
 			self::$database->optimize_vector_performance();
 		}
@@ -329,7 +335,7 @@ class Maintenance {
 
 		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-		// Check for corrupted embeddings
+		// Check for corrupted embeddings.
 		$corrupted = $wpdb->get_var(
 			"
             SELECT COUNT(*) FROM {$table_name}
@@ -343,7 +349,7 @@ class Maintenance {
 			Logger::warning( 'Found corrupted embedding entries', array( 'count' => $corrupted ) );
 		}
 
-		// Check for missing indexes
+		// Check for missing indexes.
 		self::check_required_indexes();
 	}
 
@@ -372,7 +378,7 @@ class Maintenance {
 
 		foreach ( $required_indexes as $index_name => $column ) {
 			if ( ! in_array( $index_name, $existing_indexes, true ) ) {
-				// Create missing index
+				// Create missing index.
 				$wpdb->query( "CREATE INDEX {$index_name} ON {$table_name} ({$column})" );
 				Logger::notice( 'Created missing database index', array( 'index' => $index_name ) );
 			}
@@ -393,14 +399,14 @@ class Maintenance {
 
 		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
-		// Rebuild table if needed (only if significant fragmentation)
+		// Rebuild table if needed (only if significant fragmentation).
 		$table_status = $wpdb->get_row( "SHOW TABLE STATUS LIKE '{$table_name}'", ARRAY_A );
 
 		if ( $table_status && isset( $table_status['Data_free'] ) ) {
 			$data_free   = intval( $table_status['Data_free'] );
 			$data_length = intval( $table_status['Data_length'] );
 
-			// If more than 25% fragmented, rebuild
+			// If more than 25% fragmented, rebuild.
 			if ( $data_length > 0 && ( $data_free / $data_length ) > 0.25 ) {
 				$wpdb->query( "ALTER TABLE {$table_name} ENGINE=InnoDB" );
 				Logger::info(
@@ -419,10 +425,10 @@ class Maintenance {
 	 * @since 1.0.13
 	 */
 	private static function cleanup_old_data() {
-		// Clean up old transients
+		// Clean up old transients.
 		self::cleanup_old_transients();
 
-		// Clean up old queue items if any
+		// Clean up old queue items if any.
 		self::cleanup_old_queue_items();
 	}
 
@@ -434,7 +440,7 @@ class Maintenance {
 	private static function cleanup_old_transients() {
 		global $wpdb;
 
-		// Clean up expired WPVDB transients
+		// Clean up expired WPVDB transients.
 		$wpdb->query(
 			"
             DELETE FROM {$wpdb->options}
@@ -468,7 +474,7 @@ class Maintenance {
 			return;
 		}
 
-		// Remove queue items older than 24 hours
+		// Remove queue items older than 24 hours.
 		$cutoff        = time() - DAY_IN_SECONDS;
 		$cleaned_queue = array_filter(
 			$queue,
@@ -505,7 +511,7 @@ class Maintenance {
 			),
 		);
 
-		// Store report
+		// Store report.
 		update_option( 'wpvdb_performance_report', $report, false );
 
 		Logger::info( 'Generated performance report' );
@@ -520,7 +526,7 @@ class Maintenance {
 		$current_version = get_option( 'wpvdb_db_version', '0.0.0' );
 
 		if ( version_compare( $current_version, WPVDB_VERSION, '<' ) ) {
-			// Run activation to update schema
+			// Run activation to update schema.
 			Activation::activate();
 			Logger::info(
 				'Updated database schema',
@@ -536,7 +542,7 @@ class Maintenance {
 	 * Run maintenance manually
 	 *
 	 * @since 1.0.13
-	 * @param string $type Type of maintenance (daily, weekly, monthly)
+	 * @param string $type Type of maintenance (daily, weekly, monthly).
 	 * @return bool Success status
 	 */
 	public static function run_maintenance_manually( $type = 'daily' ) {
@@ -595,7 +601,7 @@ class Maintenance {
 					$status['next_run'][ $task ] = $action->get_schedule()->get_next();
 				}
 
-				// Get last completed action
+				// Get last completed action.
 				$completed = as_get_scheduled_actions(
 					array(
 						'hook'     => $task,

@@ -1,4 +1,10 @@
 <?php
+/**
+ * Core embedding and content processing routines.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 use WordPress\AiClient\AiClient;
@@ -10,6 +16,9 @@ use WordPress\AiClient\Providers\Http\HttpTransporterFactory;
 
 defined( 'ABSPATH' ) || exit;
 
+/**
+ * Handles core hooks, embedding requests, and default text processing.
+ */
 class Core {
 
 	/**
@@ -56,12 +65,12 @@ class Core {
 			return $chunks;
 		}
 
-		// Check for null or empty text
-		if ( $text === null || $text === '' ) {
+		// Check for null or empty text.
+		if ( null === $text || '' === $text ) {
 			return array();
 		}
 
-		// Ensure text is a string
+		// Ensure text is a string.
 		if ( ! is_string( $text ) ) {
 			if ( is_array( $text ) || is_object( $text ) ) {
 				$text = json_encode( $text );
@@ -93,8 +102,8 @@ class Core {
 	 * Default summarization approach using OpenAI or does nothing if no API configured.
 	 * Called via filter 'wpvdb_ai_summarize_chunk'.
 	 *
-	 * @param string $summary existing summary if any
-	 * @param string $text    chunk text
+	 * @param string $summary existing summary if any.
+	 * @param string $text    chunk text.
 	 * @return string summarization
 	 */
 	public function default_summary( $summary, $text ) {
@@ -102,12 +111,12 @@ class Core {
 			return $summary;
 		}
 
-		// Check for null or empty text
-		if ( $text === null || $text === '' ) {
+		// Check for null or empty text.
+		if ( null === $text || '' === $text ) {
 			return '';
 		}
 
-		// Ensure text is a string
+		// Ensure text is a string.
 		if ( ! is_string( $text ) ) {
 			if ( is_array( $text ) || is_object( $text ) ) {
 				$text = json_encode( $text );
@@ -127,15 +136,15 @@ class Core {
 	 * Returns array of floats, or WP_Error on failure.
 	 *
 	 * @since 1.0.0
-	 * @param string $text The text to embed.
-	 * @param string $model The embedding model name (e.g. 'text-embedding-3-small').
+	 * @param string $text     The text to embed.
+	 * @param string $model    The embedding model name (e.g. 'text-embedding-3-small').
 	 * @param string $api_base OpenAI-compatible endpoint base URL.
-	 * @param string $api_key Your embedding provider API key.
-	 * @return array|WP_Error Array of float values representing the embedding, or WP_Error on failure.
+	 * @param string $api_key  Your embedding provider API key.
+	 * @return array|\WP_Error Array of float values representing the embedding, or WP_Error on failure.
 	 */
 	public static function get_embedding( $text, $model, $api_base, $api_key ) {
-		// Check for null or empty text
-		if ( $text === null || $text === '' ) {
+		// Check for null or empty text.
+		if ( null === $text || '' === $text ) {
 			return new \WP_Error( 'embedding_error', 'Empty or null text cannot be embedded.' );
 		}
 
@@ -144,7 +153,7 @@ class Core {
 		// Check cache first. A poisoned cache entry falls through to the fresh path,
 		// which will overwrite it on success via Cache::set_embedding().
 		$cached_embedding = Cache::get_embedding( $text, $model );
-		if ( $cached_embedding !== false && is_array( $cached_embedding ) && self::is_valid_embedding( $cached_embedding ) ) {
+		if ( false !== $cached_embedding && is_array( $cached_embedding ) && self::is_valid_embedding( $cached_embedding ) ) {
 			Logger::debug(
 				'Using cached embedding',
 				array(
@@ -155,9 +164,9 @@ class Core {
 			return $cached_embedding;
 		}
 
-		// Allow plugins to provide custom embedding generation
+		// Allow plugins to provide custom embedding generation.
 		$custom_embedding = apply_filters( 'wpvdb_generate_embedding', null, $text, $model, $api_base, $api_key );
-		if ( $custom_embedding !== null ) {
+		if ( null !== $custom_embedding ) {
 			if ( ! is_array( $custom_embedding ) || ! self::is_valid_embedding( $custom_embedding ) ) {
 				return new \WP_Error( 'embedding_error', 'wpvdb_generate_embedding filter returned an invalid embedding.' );
 			}
@@ -177,7 +186,7 @@ class Core {
 			$url = add_query_arg( $query_args, $url );
 		}
 
-		if ( $request_format === 'a8c_nomic_native' ) {
+		if ( 'a8c_nomic_native' === $request_format ) {
 			// Bare list at body root; model routing is described by Models metadata.
 			$body = array( $text );
 		} else {
@@ -188,7 +197,7 @@ class Core {
 			$body = self::merge_custom_options( $body, $custom_options );
 		}
 
-		// Validate required parameters
+		// Validate required parameters.
 		if ( empty( $api_key ) || ! is_string( $api_key ) ) {
 			return new \WP_Error( 'embedding_error', __( 'API key is required for embedding.', 'wpvdb' ) );
 		}
@@ -228,27 +237,38 @@ class Core {
 			$extra_headers['X-WPCOM-AI-Feature'] = apply_filters( 'wpvdb_a8c_ai_feature', 'wpcloud-vector-search', $model, $api_base );
 		}
 
-		// Try AI Client transporter first for consistency with the WP AI stack.
-		try {
-			if ( $skip_sdk ) {
-				throw new \RuntimeException( 'wpvdb Playground runtime uses wp_remote_post for embedding requests.' );
+		$used_transporter = false;
+
+		if ( ! $skip_sdk ) {
+			try {
+				$transporter = HttpTransporterFactory::createTransporter();
+				$request     = new Request(
+					HttpMethodEnum::POST(),
+					$url,
+					array_merge( array( 'Content-Type' => 'application/json' ), $extra_headers ),
+					wp_json_encode( $body )
+				);
+
+				$auth    = new ApiKeyRequestAuthentication( $api_key );
+				$request = $auth->authenticate( $request );
+
+				$response         = $transporter->send( $request );
+				$code             = $response->getStatusCode();
+				$data             = $response->getData();
+				$used_transporter = true;
+			} catch ( \Throwable $e ) {
+				Logger::debug(
+					'AI Client transporter failed, falling back to HTTP request.',
+					array(
+						'error' => $e->getMessage(),
+						'model' => $model,
+					)
+				);
+				$used_transporter = false;
 			}
+		}
 
-			$transporter = HttpTransporterFactory::createTransporter();
-			$request     = new Request(
-				HttpMethodEnum::POST(),
-				$url,
-				array_merge( array( 'Content-Type' => 'application/json' ), $extra_headers ),
-				wp_json_encode( $body )
-			);
-
-			$auth    = new ApiKeyRequestAuthentication( $api_key );
-			$request = $auth->authenticate( $request );
-
-			$response = $transporter->send( $request );
-			$code     = $response->getStatusCode();
-			$data     = $response->getData();
-		} catch ( \Throwable $e ) {
+		if ( ! $used_transporter ) {
 			// Fallback to wp_remote_post if transporter or SDK pieces are unavailable.
 			$args = array(
 				'headers' => array_merge(
@@ -270,15 +290,15 @@ class Core {
 			$data = json_decode( wp_remote_retrieve_body( $response ), true );
 		}
 
-		if ( $code !== 200 ) {
+		if ( 200 !== $code ) {
 			return new \WP_Error( 'embedding_error', 'Failed to get embedding: ' . $code . ' ' . ( is_string( $data ) ? $data : wp_json_encode( $data ) ) );
 		}
 
-		if ( $response_format === 'a8c_nomic_native' ) {
+		if ( 'a8c_nomic_native' === $response_format ) {
 			// Native Nomic. Treat any non-"ok" status (or missing status) as a soft
 			// signal but still try the embeddings array first since Ray Serve has
 			// returned successful payloads without a status field in the past.
-			if ( isset( $data['status'] ) && $data['status'] !== 'ok' ) {
+			if ( isset( $data['status'] ) && 'ok' !== $data['status'] ) {
 				return new \WP_Error( 'embedding_error', 'Nomic upstream returned status: ' . wp_json_encode( $data['status'] ) );
 			}
 			if ( ! isset( $data['embeddings'][0] ) || ! is_array( $data['embeddings'][0] ) ) {
@@ -296,7 +316,7 @@ class Core {
 			return new \WP_Error( 'embedding_error', 'Provider returned an empty or zero-magnitude embedding.' );
 		}
 
-		// Cache the successful embedding
+		// Cache the successful embedding.
 		Cache::set_embedding( $text, $model, $embedding );
 
 		return $embedding;
@@ -340,13 +360,13 @@ class Core {
 	/**
 	 * Get embedding using registered model and provider details
 	 *
-	 * @param string $text The text to embed
-	 * @param string $model_name The model name
-	 * @param string $provider_name The provider name
-	 * @return array|WP_Error Embedding vector or error
+	 * @param string $text          The text to embed.
+	 * @param string $model_name    The model name.
+	 * @param string $provider_name The provider name.
+	 * @return array|\WP_Error Embedding vector or error
 	 */
 	public static function get_embedding_for_model( $text, $model_name, $provider_name ) {
-		// Get provider and model details
+		// Get provider and model details.
 		$provider = Providers::get_provider( $provider_name );
 		$model    = Models::get_model( $provider_name, $model_name );
 
@@ -354,13 +374,13 @@ class Core {
 			return new \WP_Error( 'invalid_model', 'Invalid provider or model specified' );
 		}
 
-		// Get API key
+		// Get API key.
 		$api_key = Settings::get_api_key_for_provider( $provider_name );
 
-		// Get the API base URL
+		// Get the API base URL.
 		$api_base = Providers::get_api_base( $provider_name );
 
-		// Call the embedding function
+		// Call the embedding function.
 		return self::get_embedding( $text, $model_name, $api_base, $api_key );
 	}
 
@@ -370,10 +390,11 @@ class Core {
 	 * Uses the OpenAI provider when the API base matches the default OpenAI endpoint.
 	 * Falls back to null when the SDK is unavailable or when a non-default base is configured.
 	 *
-	 * @param string $text The text to embed.
-	 * @param string $model The model identifier.
-	 * @param string $api_base The API base URL.
-	 * @param string $api_key The API key.
+	 * @param string $text           The text to embed.
+	 * @param string $model          The model identifier.
+	 * @param string $api_base       The API base URL.
+	 * @param string $api_key        The API key.
+	 * @param array  $custom_options Custom request options.
 	 * @return array|\WP_Error|null Embedding vector, error, or null to continue with fallback.
 	 */
 	private static function maybe_get_embedding_via_ai_client( $text, $model, $api_base, $api_key, $custom_options = array() ) {
@@ -415,7 +436,7 @@ class Core {
 	/**
 	 * Normalize and validate custom embedding options.
 	 *
-	 * @param string $model The model identifier.
+	 * @param string $model    The model identifier.
 	 * @param string $api_base The API base URL.
 	 * @return array<string, mixed>
 	 */
@@ -437,7 +458,7 @@ class Core {
 		return array_filter(
 			$options,
 			static function ( $value ) {
-				return $value !== null;
+				return null !== $value;
 			}
 		);
 	}
@@ -445,7 +466,7 @@ class Core {
 	/**
 	 * Merge custom options into the request body without overwriting required keys.
 	 *
-	 * @param array $body Base request payload.
+	 * @param array $body           Base request payload.
 	 * @param array $custom_options Custom options from filters.
 	 * @return array
 	 */
@@ -469,16 +490,16 @@ class Core {
 		$code    = $e->getCode();
 		$message = $e->getMessage();
 
-		if ( $code === 401 ) {
+		if ( 401 === $code ) {
 			return new \WP_Error( 'embedding_auth_error', $message );
 		}
-		if ( $code === 403 ) {
+		if ( 403 === $code ) {
 			return new \WP_Error( 'embedding_forbidden', $message );
 		}
-		if ( $code === 404 ) {
+		if ( 404 === $code ) {
 			return new \WP_Error( 'embedding_model_not_found', $message );
 		}
-		if ( $code === 429 ) {
+		if ( 429 === $code ) {
 			return new \WP_Error( 'embedding_rate_limited', $message );
 		}
 		if ( $code >= 500 && $code < 600 ) {
@@ -488,7 +509,13 @@ class Core {
 		return new \WP_Error( 'embedding_error', $message );
 	}
 
-	// Add a logging function (deprecated - use Logger class directly)
+	/**
+	 * Log an error through the Logger class.
+	 *
+	 * @param string $message Error message.
+	 * @param array  $context Additional context.
+	 * @return void
+	 */
 	public static function log_error( $message, $context = array() ) {
 		Logger::error( $message, $context );
 	}
@@ -496,23 +523,23 @@ class Core {
 	/**
 	 * Enhanced chunking that respects semantic boundaries
 	 *
-	 * @param array  $chunks Existing chunks
-	 * @param string $text Text to chunk
-	 * @param int    $chunk_size Optional chunk size override
+	 * @param array  $chunks     Existing chunks.
+	 * @param string $text       Text to chunk.
+	 * @param int    $chunk_size Optional chunk size override.
 	 * @return array
 	 */
 	public static function enhanced_chunking( $chunks, $text, $chunk_size = null ) {
 		if ( ! empty( $chunks ) ) {
-			// If some other filter added chunks, just return them
+			// If some other filter added chunks, just return them.
 			return $chunks;
 		}
 
-		// Check for null or empty text
-		if ( $text === null || $text === '' ) {
+		// Check for null or empty text.
+		if ( null === $text || '' === $text ) {
 			return array();
 		}
 
-		// Ensure text is a string
+		// Ensure text is a string.
 		if ( ! is_string( $text ) ) {
 			if ( is_array( $text ) || is_object( $text ) ) {
 				$text = json_encode( $text );
@@ -521,44 +548,43 @@ class Core {
 			}
 		}
 
-		// Get chunk size from settings or use default
+		// Get chunk size from settings or use default.
 		if ( null === $chunk_size ) {
 			$chunk_size = Settings::get_chunk_size();
 		}
 
-		// Split into paragraphs first
+		// Split into paragraphs first.
 		$paragraphs    = preg_split( '/\n\s*\n/', $text, -1, PREG_SPLIT_NO_EMPTY );
 		$current_chunk = '';
 		$current_words = 0;
 		$chunks        = array();
 
 		foreach ( $paragraphs as $paragraph ) {
-			// Clean whitespace
+			// Clean whitespace.
 			$paragraph = trim( $paragraph );
 			if ( empty( $paragraph ) ) {
 				continue;
 			}
 
-			// Count words in this paragraph
+			// Count words in this paragraph.
 			$paragraph_words = str_word_count( $paragraph );
 
 			// If adding this paragraph would exceed chunk size and we already have content,
-			// save current chunk and start a new one
+			// save current chunk and start a new one.
 			if ( $current_words > 0 && ( $current_words + $paragraph_words ) > $chunk_size ) {
 				$chunks[]      = $current_chunk;
 				$current_chunk = $paragraph;
 				$current_words = $paragraph_words;
-			}
-			// If this single paragraph exceeds chunk size, we need to split it
-			elseif ( $paragraph_words > $chunk_size ) {
-				// If we have a current chunk, save it first
+			} elseif ( $paragraph_words > $chunk_size ) {
+				// If this single paragraph exceeds chunk size, we need to split it.
+				// If we have a current chunk, save it first.
 				if ( $current_words > 0 ) {
 					$chunks[]      = $current_chunk;
 					$current_chunk = '';
 					$current_words = 0;
 				}
 
-				// Split paragraph into sentences
+				// Split paragraph into sentences.
 				$sentences      = preg_split( '/(?<=[.!?])\s+/', $paragraph, -1, PREG_SPLIT_NO_EMPTY );
 				$sentence_chunk = '';
 				$sentence_words = 0;
@@ -567,13 +593,13 @@ class Core {
 					$sentence_word_count = str_word_count( $sentence );
 
 					// If adding this sentence would exceed chunk size and we have content,
-					// save current sentence chunk and start a new one
+					// save current sentence chunk and start a new one.
 					if ( $sentence_words > 0 && ( $sentence_words + $sentence_word_count ) > $chunk_size ) {
 						$chunks[]       = $sentence_chunk;
 						$sentence_chunk = $sentence;
 						$sentence_words = $sentence_word_count;
 					} else {
-						// Add to current sentence chunk
+						// Add to current sentence chunk.
 						if ( ! empty( $sentence_chunk ) ) {
 							$sentence_chunk .= ' ';
 						}
@@ -582,13 +608,12 @@ class Core {
 					}
 				}
 
-				// Add any remaining sentence chunk
+				// Add any remaining sentence chunk.
 				if ( ! empty( $sentence_chunk ) ) {
 					$chunks[] = $sentence_chunk;
 				}
-			}
-			// Otherwise, add to current chunk
-			else {
+			} else {
+				// Otherwise, add to current chunk.
 				if ( ! empty( $current_chunk ) ) {
 					$current_chunk .= "\n\n";
 				}
@@ -597,7 +622,7 @@ class Core {
 			}
 		}
 
-		// Add any remaining content
+		// Add any remaining content.
 		if ( ! empty( $current_chunk ) ) {
 			$chunks[] = $current_chunk;
 		}
@@ -612,8 +637,8 @@ class Core {
 	 * @param object $post    Post object.
 	 * @param bool   $update  Whether the post is being updated.
 	 */
-	public static function auto_embed_post( $post_id, $post, $update ) {
-		// Validate inputs
+	public static function auto_embed_post( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		// Validate inputs.
 		if ( empty( $post_id ) || ! is_numeric( $post_id ) || ! is_object( $post ) ) {
 			return;
 		}
@@ -623,27 +648,27 @@ class Core {
 			return;
 		}
 
-		// Only process published posts
-		if ( ! isset( $post->post_status ) || $post->post_status !== 'publish' ) {
+		// Only process published posts.
+		if ( ! isset( $post->post_status ) || 'publish' !== $post->post_status ) {
 			return;
 		}
 
-		// Check post type property exists
+		// Check post type property exists.
 		if ( ! isset( $post->post_type ) || empty( $post->post_type ) ) {
 			return;
 		}
 
-		// Check if this post type should be auto-embedded
+		// Check if this post type should be auto-embedded.
 		$auto_embed_types = Settings::get_auto_embed_post_types();
 		if ( ! is_array( $auto_embed_types ) || ! in_array( $post->post_type, $auto_embed_types ) ) {
 			return;
 		}
 
-		// Queue for background processing with validation
+		// Queue for background processing with validation.
 		$queue = new WPVDB_Queue();
 		$queue->push_to_queue( WPVDB_Queue::build_item( $post_id ) );
 
-		// Try to run the queue immediately if we're in the admin
+		// Try to run the queue immediately if we're in the admin.
 		if ( is_admin() && function_exists( 'as_enqueue_async_action' ) ) {
 			as_enqueue_async_action( 'wpvdb_run_queue_now', array(), 'wpvdb' );
 		}

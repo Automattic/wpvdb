@@ -1,4 +1,10 @@
 <?php
+/**
+ * Logging utilities for WPVDB.
+ *
+ * @package WPVDB
+ */
+
 namespace WPVDB;
 
 defined( 'ABSPATH' ) || exit;
@@ -50,8 +56,8 @@ class Logger {
 	/**
 	 * Log an emergency message
 	 *
-	 * @param string $message Log message
-	 * @param array  $context Additional context
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
 	 */
 	public static function emergency( $message, $context = array() ) {
 		self::log( 'emergency', $message, $context );
@@ -60,8 +66,8 @@ class Logger {
 	/**
 	 * Log an alert message
 	 *
-	 * @param string $message Log message
-	 * @param array  $context Additional context
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
 	 */
 	public static function alert( $message, $context = array() ) {
 		self::log( 'alert', $message, $context );
@@ -70,8 +76,8 @@ class Logger {
 	/**
 	 * Log a critical message
 	 *
-	 * @param string $message Log message
-	 * @param array  $context Additional context
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
 	 */
 	public static function critical( $message, $context = array() ) {
 		self::log( 'critical', $message, $context );
@@ -80,8 +86,8 @@ class Logger {
 	/**
 	 * Log an error message
 	 *
-	 * @param string $message Log message
-	 * @param array  $context Additional context
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
 	 */
 	public static function error( $message, $context = array() ) {
 		self::log( 'error', $message, $context );
@@ -90,8 +96,8 @@ class Logger {
 	/**
 	 * Log a warning message
 	 *
-	 * @param string $message Log message
-	 * @param array  $context Additional context
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
 	 */
 	public static function warning( $message, $context = array() ) {
 		self::log( 'warning', $message, $context );
@@ -100,8 +106,8 @@ class Logger {
 	/**
 	 * Log a notice message
 	 *
-	 * @param string $message Log message
-	 * @param array  $context Additional context
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
 	 */
 	public static function notice( $message, $context = array() ) {
 		self::log( 'notice', $message, $context );
@@ -110,8 +116,8 @@ class Logger {
 	/**
 	 * Log an info message
 	 *
-	 * @param string $message Log message
-	 * @param array  $context Additional context
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
 	 */
 	public static function info( $message, $context = array() ) {
 		self::log( 'info', $message, $context );
@@ -120,8 +126,8 @@ class Logger {
 	/**
 	 * Log a debug message
 	 *
-	 * @param string $message Log message
-	 * @param array  $context Additional context
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
 	 */
 	public static function debug( $message, $context = array() ) {
 		self::log( 'debug', $message, $context );
@@ -130,22 +136,22 @@ class Logger {
 	/**
 	 * Main logging method
 	 *
-	 * @param string $level Log level
-	 * @param string $message Log message
-	 * @param array  $context Additional context data
+	 * @param string $level Log level.
+	 * @param string $message Log message.
+	 * @param array  $context Additional context data.
 	 */
 	public static function log( $level, $message, $context = array() ) {
-		// Validate level
+		// Validate level.
 		if ( ! isset( self::LEVELS[ $level ] ) ) {
 			$level = 'info';
 		}
 
-		// Check if we should log this level
+		// Check if we should log this level.
 		if ( ! self::should_log( $level ) ) {
 			return;
 		}
 
-		// Create log entry
+		// Create log entry.
 		$entry = array(
 			'timestamp'    => current_time( 'mysql' ),
 			'level'        => $level,
@@ -168,10 +174,10 @@ class Logger {
 			error_log( $formatted_message );
 		}
 
-		// Store in database for admin viewing
+		// Store in database for admin viewing.
 		self::store_log_entry( $entry );
 
-		// Allow plugins to hook into logging
+		// Allow plugins to hook into logging.
 		do_action( 'wpvdb_log_entry', $level, $message, $context, $entry );
 	}
 
@@ -190,26 +196,26 @@ class Logger {
 	/**
 	 * Check if we should log for this level
 	 *
-	 * @param string $level Log level
+	 * @param string $level Log level.
 	 * @return bool Whether to log
 	 */
 	private static function should_log( $level ) {
-		// Get minimum log level from settings
+		// Get minimum log level from settings.
 		$min_level = get_option( 'wpvdb_log_level', 'error' );
 
-		// Always log in debug mode
+		// Always log in debug mode.
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			return true;
 		}
 
-		// Check if current level is at or above minimum level
+		// Check if current level is at or above minimum level.
 		return self::LEVELS[ $level ] <= self::LEVELS[ $min_level ];
 	}
 
 	/**
 	 * Sanitize context data for logging
 	 *
-	 * @param array $context Context data
+	 * @param array $context Context data.
 	 * @return array Sanitized context
 	 */
 	private static function sanitize_context( $context ) {
@@ -222,7 +228,7 @@ class Logger {
 			$key = sanitize_key( $key );
 
 			if ( is_string( $value ) ) {
-				// Don't log sensitive data
+				// Don't log sensitive data.
 				if ( self::is_sensitive_key( $key ) ) {
 					$value = '[REDACTED]';
 				} else {
@@ -243,7 +249,7 @@ class Logger {
 	/**
 	 * Check if a key contains sensitive data
 	 *
-	 * @param string $key Context key
+	 * @param string $key Context key.
 	 * @return bool Whether key is sensitive
 	 */
 	private static function is_sensitive_key( $key ) {
@@ -286,7 +292,7 @@ class Logger {
 	/**
 	 * Store log entry in database
 	 *
-	 * @param array $entry Log entry
+	 * @param array $entry Log entry.
 	 */
 	private static function store_log_entry( $entry ) {
 		self::$pending_entries[] = $entry;
@@ -323,8 +329,8 @@ class Logger {
 	/**
 	 * Get log entries
 	 *
-	 * @param string $level Optional level filter
-	 * @param int    $limit Number of entries to return
+	 * @param string $level Optional level filter.
+	 * @param int    $limit Number of entries to return.
 	 * @return array Log entries
 	 */
 	public static function get_logs( $level = null, $limit = 100 ) {
@@ -341,7 +347,7 @@ class Logger {
 			$logs = array_merge( array_reverse( self::$pending_entries ), $logs );
 		}
 
-		// Filter by level if specified
+		// Filter by level if specified.
 		if ( $level && isset( self::LEVELS[ $level ] ) ) {
 			$logs = array_filter(
 				$logs,
@@ -351,7 +357,7 @@ class Logger {
 			);
 		}
 
-		// Limit results
+		// Limit results.
 		if ( $limit > 0 ) {
 			$logs = array_slice( $logs, 0, $limit );
 		}
@@ -382,7 +388,7 @@ class Logger {
 			'memory_usage'  => self::get_memory_usage(),
 		);
 
-		// Count by level and recent errors
+		// Count by level and recent errors.
 		$one_hour_ago = strtotime( '-1 hour' );
 		foreach ( $logs as $log ) {
 			$level = isset( $log['level'] ) ? $log['level'] : 'unknown';
@@ -392,7 +398,7 @@ class Logger {
 			}
 			++$stats['by_level'][ $level ];
 
-			// Count recent errors
+			// Count recent errors.
 			if ( in_array( $level, array( 'error', 'critical', 'alert', 'emergency' ) ) ) {
 				$timestamp = isset( $log['timestamp'] ) ? strtotime( $log['timestamp'] ) : 0;
 				if ( $timestamp > $one_hour_ago ) {
@@ -407,9 +413,9 @@ class Logger {
 	/**
 	 * Log a caught exception with full context
 	 *
-	 * @param \Exception|\Throwable $exception Exception to log
-	 * @param string                $context_message Additional context message
-	 * @param array                 $extra_context Additional context data
+	 * @param \Exception|\Throwable $exception Exception to log.
+	 * @param string                $context_message Additional context message.
+	 * @param array                 $extra_context Additional context data.
 	 */
 	public static function log_exception( $exception, $context_message = '', $extra_context = array() ) {
 		$context = array_merge(
@@ -430,9 +436,9 @@ class Logger {
 	/**
 	 * Log performance metrics
 	 *
-	 * @param string $operation Operation name
-	 * @param float  $duration Duration in seconds
-	 * @param array  $context Additional context
+	 * @param string $operation Operation name.
+	 * @param float  $duration Duration in seconds.
+	 * @param array  $context Additional context.
 	 */
 	public static function log_performance( $operation, $duration, $context = array() ) {
 		$context['duration']  = round( $duration, 4 ) . 's';
@@ -451,7 +457,7 @@ class Logger {
 	/**
 	 * Start a performance timer
 	 *
-	 * @param string $operation Operation name
+	 * @param string $operation Operation name.
 	 * @return float Start time
 	 */
 	public static function start_timer( $operation ) {
@@ -467,9 +473,9 @@ class Logger {
 	/**
 	 * End a performance timer and log the result
 	 *
-	 * @param string $operation Operation name
-	 * @param float  $start_time Start time from start_timer()
-	 * @param array  $context Additional context
+	 * @param string $operation Operation name.
+	 * @param float  $start_time Start time from start_timer().
+	 * @param array  $context Additional context.
 	 */
 	public static function end_timer( $operation, $start_time, $context = array() ) {
 		$duration = microtime( true ) - $start_time;
