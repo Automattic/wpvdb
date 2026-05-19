@@ -288,7 +288,8 @@ class Plugin {
 				set_transient( 'wpvdb_was_deactivated', true, 60 * 60 );
 
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( '[WPVDB] Plugin deactivated due to incompatible database.' ); }
+					Logger::debug( 'Plugin deactivated due to incompatible database.' );
+				}
 
 				// If this is running in a CRON or admin context without a screen, we're done.
 				if ( ! function_exists( 'get_current_screen' ) || ! get_current_screen() ) {

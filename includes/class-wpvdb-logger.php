@@ -171,7 +171,7 @@ class Logger {
 				$message,
 				! empty( $context ) ? wp_json_encode( $context ) : ''
 			);
-			error_log( $formatted_message );
+			error_log( $formatted_message ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Centralized log sink.
 		}
 
 		// Store in database for admin viewing.

@@ -1083,7 +1083,8 @@ class Admin {
 			}
 		}
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( 'WPVDB: Cancel flag: ' . ( $cancel ? 'true' : 'false' ) ); }
+			Logger::debug( 'Cancel flag: ' . ( $cancel ? 'true' : 'false' ) );
+		}
 
 		$settings = get_option( 'wpvdb_settings', array() );
 
@@ -1142,7 +1143,8 @@ class Admin {
 			// Mirror of handle_apply_provider_change for the AJAX path.
 			if ( empty( $settings['pending_provider'] ) || empty( $settings['pending_model'] ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( 'WPVDB: No pending provider change found' ); }
+					Logger::debug( 'No pending provider change found' );
+				}
 				wp_send_json_error(
 					array(
 						'message' => __( 'No pending provider change found.', 'wpvdb' ),
@@ -1926,7 +1928,8 @@ class Admin {
 
 			// Log that diagnostics were run.
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( '[WPVDB ADMIN] Running database diagnostics from admin UI' ); }
+				Logger::debug( 'Running database diagnostics from admin UI' );
+			}
 
 			// Redirect back to the page with a parameter to show diagnostics.
 			wp_redirect( add_query_arg( 'diagnostics', 'run', admin_url( 'admin.php?page=wpvdb-status' ) ) );
@@ -2748,7 +2751,8 @@ class Admin {
 		);
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( 'WPVDB CRITICAL: Redirecting to: ' . $redirect_url ); }
+			Logger::critical( 'Redirecting to: ' . $redirect_url );
+		}
 		wp_redirect( $redirect_url );
 		exit;
 	}
