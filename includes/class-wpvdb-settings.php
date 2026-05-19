@@ -337,7 +337,7 @@ class Settings {
 	 * Check if settings are properly configured
 	 *
 	 * @since 1.0.13
-	 * @return bool|WP_Error True if valid, WP_Error with details if not
+	 * @return bool|\WP_Error True if valid, WP_Error with details if not
 	 */
 	public static function validate_configuration() {
 		$settings = self::get_validated_settings();

@@ -33,7 +33,7 @@ class Security {
 	 *
 	 * @param string $endpoint Endpoint name (embed, query, vectors).
 	 * @param int    $limit Custom limit override.
-	 * @return bool|WP_Error True if allowed, WP_Error if rate limited
+	 * @return bool|\WP_Error True if allowed, WP_Error if rate limited
 	 */
 	public static function check_rate_limit( $endpoint, $limit = null ) {
 		$endpoint = sanitize_key( $endpoint );
@@ -137,7 +137,7 @@ class Security {
 	 *
 	 * @param \WP_REST_Request $request REST request.
 	 * @param string           $action Nonce action.
-	 * @return bool|WP_Error
+	 * @return bool|\WP_Error
 	 */
 	public static function verify_nonce( $request, $action = 'wpvdb_nonce' ) {
 		// Skip nonce check for non-admin requests if auth is disabled.
@@ -193,7 +193,7 @@ class Security {
 	 *
 	 * @param array $embedding Raw embedding array.
 	 * @param int   $max_dimensions Maximum allowed dimensions.
-	 * @return array|WP_Error Sanitized embedding or error
+	 * @return array|\WP_Error Sanitized embedding or error
 	 */
 	public static function validate_embedding( $embedding, $max_dimensions = 8192 ) {
 		if ( ! is_array( $embedding ) ) {

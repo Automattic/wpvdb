@@ -140,7 +140,7 @@ class Core {
 	 * @param string $model    The embedding model name (e.g. 'text-embedding-3-small').
 	 * @param string $api_base OpenAI-compatible endpoint base URL.
 	 * @param string $api_key  Your embedding provider API key.
-	 * @return array|WP_Error Array of float values representing the embedding, or WP_Error on failure.
+	 * @return array|\WP_Error Array of float values representing the embedding, or WP_Error on failure.
 	 */
 	public static function get_embedding( $text, $model, $api_base, $api_key ) {
 		// Check for null or empty text.
@@ -237,27 +237,31 @@ class Core {
 			$extra_headers['X-WPCOM-AI-Feature'] = apply_filters( 'wpvdb_a8c_ai_feature', 'wpcloud-vector-search', $model, $api_base );
 		}
 
-		// Try AI Client transporter first for consistency with the WP AI stack.
-		try {
-			if ( $skip_sdk ) {
-				throw new \RuntimeException( 'wpvdb Playground runtime uses wp_remote_post for embedding requests.' );
+		$used_transporter = false;
+
+		if ( ! $skip_sdk ) {
+			try {
+				$transporter = HttpTransporterFactory::createTransporter();
+				$request     = new Request(
+					HttpMethodEnum::POST(),
+					$url,
+					array_merge( array( 'Content-Type' => 'application/json' ), $extra_headers ),
+					wp_json_encode( $body )
+				);
+
+				$auth    = new ApiKeyRequestAuthentication( $api_key );
+				$request = $auth->authenticate( $request );
+
+				$response         = $transporter->send( $request );
+				$code             = $response->getStatusCode();
+				$data             = $response->getData();
+				$used_transporter = true;
+			} catch ( \Throwable ) {
+				$used_transporter = false;
 			}
+		}
 
-			$transporter = HttpTransporterFactory::createTransporter();
-			$request     = new Request(
-				HttpMethodEnum::POST(),
-				$url,
-				array_merge( array( 'Content-Type' => 'application/json' ), $extra_headers ),
-				wp_json_encode( $body )
-			);
-
-			$auth    = new ApiKeyRequestAuthentication( $api_key );
-			$request = $auth->authenticate( $request );
-
-			$response = $transporter->send( $request );
-			$code     = $response->getStatusCode();
-			$data     = $response->getData();
-		} catch ( \Throwable $e ) {
+		if ( ! $used_transporter ) {
 			// Fallback to wp_remote_post if transporter or SDK pieces are unavailable.
 			$args = array(
 				'headers' => array_merge(
@@ -352,7 +356,7 @@ class Core {
 	 * @param string $text          The text to embed.
 	 * @param string $model_name    The model name.
 	 * @param string $provider_name The provider name.
-	 * @return array|WP_Error Embedding vector or error
+	 * @return array|\WP_Error Embedding vector or error
 	 */
 	public static function get_embedding_for_model( $text, $model_name, $provider_name ) {
 		// Get provider and model details.

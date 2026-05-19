@@ -127,7 +127,7 @@ class REST {
 	 * in settings, allows public access with rate limiting.
 	 *
 	 * @since 1.0.0
-	 * @return bool|WP_Error True if allowed, WP_Error if denied.
+	 * @return bool|\WP_Error True if allowed, WP_Error if denied.
 	 */
 	public static function default_permission_check() {
 		// Check if authentication is required (from individual option or from settings array).
@@ -911,7 +911,7 @@ class REST {
 	 *                                so the function can detect callers that forget to pass a value
 	 *                                (the column would otherwise silently get `0`, masking the same
 	 *                                class of bug this signature was widened to fix).
-	 * @return int|WP_Error         Row ID, or WP_Error on validation failure or DB insert failure.
+	 * @return int|\WP_Error        Row ID, or WP_Error on validation failure or DB insert failure.
 	 */
 	public static function insert_embedding_row( $doc_id, $chunk_id, $chunk_content, $summary, $embedding, $model = '', $doc_type = 'post', $chunk_index = null ) {
 		// Detect callers using the legacy 5/6/7-arg signature; fall back to 0 for backward
