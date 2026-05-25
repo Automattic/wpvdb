@@ -11,7 +11,7 @@
 	global $wpdb;
 
 	// Display debug information if needed.
-	$show_debug = isset( $_GET['debug'] );
+	$show_debug = isset( $_GET['debug'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 
 	// Also check for debug constant if defined.
 	if ( defined( 'WPVDB_DEBUG' ) ) {
@@ -20,7 +20,7 @@
 
 	$active_provider = \WPVDB\Settings::get_active_provider();
 	$api_key         = \WPVDB\Settings::get_api_key();
-	$search_query    = isset( $_GET['s'] ) ? sanitize_text_field( $_GET['s'] ) : '';
+	$search_query    = isset( $_GET['s'] ) && is_scalar( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 	$search_enabled  = apply_filters( 'wpvdb_embeddings_search_enabled', true, $search_query );
 	if ( ! $search_enabled ) {
 		$search_query = '';
@@ -128,7 +128,7 @@
 						\WPVDB\Logger::debug( 'Using vector function: ' . $vector_function );
 
 						// Get total count of vectors.
-						$total_vectors_searched = $wpdb->get_var( "SELECT COUNT(*) FROM $table_name" );
+						$total_vectors_searched = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}wpvdb_embeddings" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 						\WPVDB\Logger::debug( 'Total vectors searched: ' . $total_vectors_searched );
 
 						// Use Database class to get the appropriate distance function with both vectors.
@@ -142,27 +142,28 @@
 
 						// Optimized query that will use the vector index.
 						// The ORDER BY + LIMIT pattern is what triggers the vector index usage.
+						// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 						$sql = $wpdb->prepare(
 							"SELECT e.*,
-                            $distance_function as distance
-                            FROM $table_name e
-                            WHERE e.model = %s
-                            ORDER BY distance
-                            LIMIT %d",
+								$distance_function AS distance
+								FROM $table_name e
+								WHERE e.model = %s
+								ORDER BY distance
+								LIMIT %d",
 							$model,
 							20 // Show top 20 matches.
 						);
+						// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 						\WPVDB\Logger::debug( 'Executing SQL query: ' . $sql );
 
-						$search_results = $wpdb->get_results( $sql );
+						$search_results = $wpdb->get_results( $sql ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
 
 						if ( $wpdb->last_error ) {
 							\WPVDB\Logger::error( 'SQL error: ' . $wpdb->last_error );
 
 							// Try executing a simpler query to test database connection.
-							$test_query  = "SELECT COUNT(*) FROM $table_name";
-							$test_result = $wpdb->get_var( $test_query );
+							$test_result = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}wpvdb_embeddings" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 							if ( $wpdb->last_error ) {
 								\WPVDB\Logger::error( 'Even simple query failed: ' . $wpdb->last_error );
@@ -170,8 +171,7 @@
 								\WPVDB\Logger::debug( 'Simple query succeeded, embedding count: ' . $test_result );
 
 								// Try a direct query without the vector function to see if that's the issue.
-								$basic_query   = "SELECT e.* FROM $table_name e LIMIT 20";
-								$basic_results = $wpdb->get_results( $basic_query );
+								$basic_results = $wpdb->get_results( "SELECT e.* FROM {$wpdb->prefix}wpvdb_embeddings e LIMIT 20" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 								if ( $wpdb->last_error ) {
 									\WPVDB\Logger::error( 'Basic query failed: ' . $wpdb->last_error );
@@ -181,8 +181,9 @@
 
 									// Fall back to PHP-based distance calculation.
 									\WPVDB\Logger::debug( 'Falling back to PHP-based distance calculation' );
+									// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 									$all_rows  = $wpdb->get_results(
-										$wpdb->prepare( "SELECT * FROM $table_name WHERE model = %s", $model ),
+										$wpdb->prepare( "SELECT * FROM {$wpdb->prefix}wpvdb_embeddings WHERE model = %s", $model ),
 										ARRAY_A
 									);
 									$distances = array();
@@ -223,8 +224,9 @@
 					} else {
 						// Fallback: do in PHP.
 						\WPVDB\Logger::debug( 'Using PHP fallback search' );
+						// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 						$all_rows               = $wpdb->get_results(
-							$wpdb->prepare( "SELECT * FROM $table_name WHERE model = %s", $model ),
+							$wpdb->prepare( "SELECT * FROM {$wpdb->prefix}wpvdb_embeddings WHERE model = %s", $model ),
 							ARRAY_A
 						);
 						$total_vectors_searched = count( $all_rows );
@@ -282,34 +284,37 @@
 	?>
 
 	<?php if ( ! empty( $search_query ) ) : ?>
-		<p class="description wpvdb-search-note">
-		<?php
-			printf(
-				esc_html__( 'Showing top %1$d semantic search results for "%2$s"', 'wpvdb' ),
-				count( $embeddings ),
-				esc_html( $search_query )
-			);
+			<p class="description wpvdb-search-note">
+				<?php
+				printf(
+					/* translators: 1: Number of search results. 2: Search query. */
+					esc_html__( 'Showing top %1$d semantic search results for "%2$s"', 'wpvdb' ),
+					count( $embeddings ),
+					esc_html( $search_query )
+				);
 
-												// Display total vectors searched if available.
-		if ( isset( $total_vectors_searched ) && $total_vectors_searched > 0 ) {
-			echo ' <span class="wpvdb-vector-count">' .
-				sprintf(
-					esc_html__( '(searched across %s vectors)', 'wpvdb' ),
-					number_format( $total_vectors_searched )
-				) .
-				'</span>';
-		}
+				// Display total vectors searched if available.
+				if ( isset( $total_vectors_searched ) && $total_vectors_searched > 0 ) {
+					echo ' <span class="wpvdb-vector-count">' .
+						sprintf(
+							/* translators: %s: Number of vectors searched. */
+							esc_html__( '(searched across %s vectors)', 'wpvdb' ),
+							esc_html( number_format_i18n( $total_vectors_searched ) )
+						) .
+						'</span>';
+				}
 
-												// Display search time if available.
-		if ( isset( $search_time_result ) && $search_time_result > 0 ) {
-			echo ' <span class="wpvdb-search-time">' .
-				sprintf(
-					esc_html__( '(query completed in %s seconds)', 'wpvdb' ),
-					number_format( $search_time_result, 3 )
-				) .
-				'</span>';
-		}
-		?>
+				// Display search time if available.
+				if ( isset( $search_time_result ) && $search_time_result > 0 ) {
+					echo ' <span class="wpvdb-search-time">' .
+						sprintf(
+							/* translators: %s: Query duration in seconds. */
+							esc_html__( '(query completed in %s seconds)', 'wpvdb' ),
+							esc_html( number_format_i18n( $search_time_result, 3 ) )
+						) .
+					'</span>';
+				}
+				?>
 		</p>
 	<?php endif; ?>
 
@@ -317,12 +322,10 @@
 	// If no embeddings are loaded yet (not searching), load the first 20 embeddings.
 	if ( empty( $embeddings ) && empty( $search_query ) ) {
 		// Load the latest embeddings (up to 20).
-		$count_query      = "SELECT COUNT(*) FROM $table_name";
-		$total_embeddings = $wpdb->get_var( $count_query );
+		$total_embeddings = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}wpvdb_embeddings" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		if ( $total_embeddings > 0 ) {
-			$embeddings_query = "SELECT * FROM $table_name ORDER BY id DESC LIMIT 20";
-			$embeddings       = $wpdb->get_results( $embeddings_query );
+			$embeddings = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}wpvdb_embeddings ORDER BY id DESC LIMIT 20" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			\WPVDB\Logger::debug( 'Loaded ' . count( $embeddings ) . ' embeddings for display' );
 		}
 	}
@@ -363,13 +366,21 @@
 									<?php echo esc_html( $post_title ? $post_title : __( '(No title)', 'wpvdb' ) ); ?>
 									<span class="dashicons dashicons-external"></span>
 								</a>
-							<?php else : ?>
-								<?php echo esc_html( $post_title ? $post_title : __( '(No title)', 'wpvdb' ) ); ?>
-							<?php endif; ?>
-							<div class="row-actions">
-								<span class="id"><?php printf( __( 'Post ID: %d', 'wpvdb' ), $embedding->doc_id ); ?></span>
-							</div>
-						</td>
+								<?php else : ?>
+									<?php echo esc_html( $post_title ? $post_title : __( '(No title)', 'wpvdb' ) ); ?>
+								<?php endif; ?>
+								<div class="row-actions">
+									<span class="id">
+										<?php
+										printf(
+											/* translators: %d: Post ID. */
+											esc_html__( 'Post ID: %d', 'wpvdb' ),
+											absint( $embedding->doc_id )
+										);
+										?>
+									</span>
+								</div>
+							</td>
 						<td class="column-chunk"><?php echo esc_html( $embedding->chunk_id ); ?></td>
 						<td class="column-preview">
 							<div class="wpvdb-preview">
@@ -397,16 +408,16 @@
 								// Ensure the percentage is between 0 and 100.
 								$similarity_percentage = max( 0, min( 100, $similarity_percentage ) );
 
-								echo '<div class="similarity-score">' .
-									'<div class="similarity-bar" style="width: ' . esc_attr( $similarity_percentage ) . '%;"></div>' .
-									'<span>' . number_format( $similarity_percentage, 1 ) . '%</span>' .
-									'</div>';
+									echo '<div class="similarity-score">' .
+										'<div class="similarity-bar" style="width: ' . esc_attr( $similarity_percentage ) . '%;"></div>' .
+										'<span>' . esc_html( number_format_i18n( $similarity_percentage, 1 ) ) . '%</span>' .
+										'</div>';
 
-								// Show the raw distance value as well.
-								echo '<div class="distance-value">' .
-									esc_html__( 'Distance: ', 'wpvdb' ) .
-									number_format( $embedding->distance, 4 ) .
-									'</div>';
+									// Show the raw distance value as well.
+									echo '<div class="distance-value">' .
+										esc_html__( 'Distance: ', 'wpvdb' ) .
+										esc_html( number_format_i18n( $embedding->distance, 4 ) ) .
+										'</div>';
 							} else {
 								// If no distance property, check what properties are available.
 								$props = array_keys( get_object_vars( $embedding ) );
@@ -428,25 +439,27 @@
 			</tbody>
 		</table>
 
-		<?php if ( $total_pages > 1 ) : ?>
-			<div class="wpvdb-pagination tablenav">
-				<div class="tablenav-pages">
-					<?php
-					echo paginate_links(
-						array(
-							'base'      => add_query_arg( 'paged', '%#%' ),
-							'format'    => '',
-							'prev_text' => __( '&laquo; Previous' ),
-							'next_text' => __( 'Next &raquo;' ),
-							'total'     => $total_pages,
-							'current'   => $page,
-							'type'      => 'list',
-						)
-					);
-					?>
+			<?php if ( $total_pages > 1 ) : ?>
+				<div class="wpvdb-pagination tablenav">
+					<div class="tablenav-pages">
+						<?php
+						echo wp_kses_post(
+							paginate_links(
+								array(
+									'base'      => add_query_arg( 'paged', '%#%' ),
+									'format'    => '',
+									'prev_text' => __( '&laquo; Previous', 'wpvdb' ),
+									'next_text' => __( 'Next &raquo;', 'wpvdb' ),
+									'total'     => $total_pages,
+									'current'   => $embedding_page,
+									'type'      => 'list',
+								)
+							)
+						);
+						?>
+					</div>
 				</div>
-			</div>
-		<?php endif; ?>
+			<?php endif; ?>
 	<?php endif; ?>
 
 	<div id="wpvdb-full-content-modal" class="wpvdb-modal" style="display:none;">

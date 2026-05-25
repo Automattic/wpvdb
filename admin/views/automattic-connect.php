@@ -10,9 +10,7 @@ remove_all_actions( 'admin_notices' );
 remove_all_actions( 'all_admin_notices' );
 
 // Check if form was submitted and redirect.
-$settings_updated = isset( $_GET['settings-updated'] ) && is_scalar( $_GET['settings-updated'] )
-	? sanitize_key( wp_unslash( $_GET['settings-updated'] ) )
-	: '';
+$settings_updated = isset( $_GET['settings-updated'] ) && is_scalar( $_GET['settings-updated'] ) ? sanitize_key( wp_unslash( $_GET['settings-updated'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 if ( 'true' === $settings_updated ) {
 	wp_safe_redirect( admin_url( 'admin.php?page=wpvdb-settings' ) );
 	exit;

@@ -9,6 +9,9 @@
 
 defined( 'ABSPATH' ) || exit;
 
+// Admin diagnostics intentionally query WPVDB custom tables directly.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
 global $wpdb;
 
 // Get the database instance.
@@ -26,23 +29,23 @@ if ( $database->get_db_type() === 'mariadb' && $database->has_native_vector_supp
 	$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
 	// Check if the table exists first.
-	$table_exists = $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) === $table_name;
+	$table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table_name ) ) ) === $table_name;
 
 	if ( $table_exists ) {
 		// Check if the index exists.
-		$index_exists                  = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'embedding_idx'" ) !== null;
+		$index_exists                  = $wpdb->get_var( "SHOW INDEX FROM {$wpdb->prefix}wpvdb_embeddings WHERE Key_name = 'embedding_idx'" ) !== null;
 		$vector_index_status['exists'] = $index_exists;
 
 		if ( $index_exists ) {
 			// Check if other supporting indexes exist for optimal performance.
-			$has_doc_id_index   = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'doc_id_idx'" ) !== null;
-			$has_doc_type_index = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'doc_type_idx'" ) !== null;
+			$has_doc_id_index   = $wpdb->get_var( "SHOW INDEX FROM {$wpdb->prefix}wpvdb_embeddings WHERE Key_name = 'doc_id_idx'" ) !== null;
+			$has_doc_type_index = $wpdb->get_var( "SHOW INDEX FROM {$wpdb->prefix}wpvdb_embeddings WHERE Key_name = 'doc_type_idx'" ) !== null;
 
 			$vector_index_status['optimization'] = $has_doc_id_index && $has_doc_type_index;
 
 			// Check index health by running EXPLAIN on a simple query.
 			try {
-				$result                        = $wpdb->get_row( "EXPLAIN SELECT * FROM $table_name ORDER BY COSINE_DISTANCE(embedding, '[1,0,0]') LIMIT 1" );
+				$result                        = $wpdb->get_row( "EXPLAIN SELECT * FROM {$wpdb->prefix}wpvdb_embeddings ORDER BY COSINE_DISTANCE(embedding, '[1,0,0]') LIMIT 1" );
 				$vector_index_status['health'] = ( isset( $result->key ) && 'embedding_idx' === $result->key ) ? 'good' : 'suboptimal';
 			} catch ( \Exception $e ) {
 				$vector_index_status['health'] = 'error';
@@ -91,14 +94,14 @@ $system_info['wp_debug_mode']   = defined( 'WP_DEBUG' ) && WP_DEBUG ? 'Yes' : 'N
 $system_info['mysql_version'] = $database->get_db_version();
 
 // Plugin info.
-$plugins                = get_plugins();
+$installed_plugins      = get_plugins();
 $active_plugins         = get_option( 'active_plugins', array() );
 $system_info['plugins'] = array();
-foreach ( $plugins as $plugin_path => $plugin_data ) {
+foreach ( $installed_plugins as $plugin_path => $plugin_data ) {
 	$system_info['plugins'][] = array(
 		'name'    => $plugin_data['Name'],
 		'version' => $plugin_data['Version'],
-		'active'  => in_array( $plugin_path, $active_plugins ),
+		'active'  => in_array( $plugin_path, $active_plugins, true ),
 	);
 }
 
@@ -109,11 +112,11 @@ $system_info['fallbacks_enabled'] = $database->are_fallbacks_enabled() ? 'Yes' :
 
 // Get embedding tables info.
 $embedding_table                       = $wpdb->prefix . 'wpvdb_embeddings';
-$embedding_table_exists                = $wpdb->get_var( "SHOW TABLES LIKE '$embedding_table'" ) === $embedding_table;
+$embedding_table_exists                = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $embedding_table ) ) ) === $embedding_table;
 $system_info['embedding_table_exists'] = $embedding_table_exists ? 'Yes' : 'No';
 
 if ( $embedding_table_exists ) {
-	$system_info['embedding_count'] = $wpdb->get_var( "SELECT COUNT(*) FROM $embedding_table" );
+	$system_info['embedding_count'] = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}wpvdb_embeddings" );
 } else {
 	$system_info['embedding_count'] = '0';
 }
@@ -125,7 +128,7 @@ $sections = array(
 );
 
 // Get the current section from URL or default to 'info'.
-$current_section = isset( $_GET['section'] ) ? sanitize_key( $_GET['section'] ) : 'info';
+$current_section = isset( $_GET['section'] ) && is_scalar( $_GET['section'] ) ? sanitize_key( wp_unslash( $_GET['section'] ) ) : 'info'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 
 // Ensure we have a valid section.
 if ( ! array_key_exists( $current_section, $sections ) ) {
@@ -160,24 +163,24 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 	<div class="notice notice-info inline">
 		<p>
 			<strong><?php esc_html_e( 'Re-embed job in progress', 'wpvdb' ); ?></strong>
-		</p>
-		<p>
-			<?php
-			echo esc_html(
-				sprintf(
-				/* translators: 1: job id, 2: status, 3: provider, 4: model, 5: scanned count, 6: queued count, 7: skipped count, 8: updated_at timestamp */
-					__( 'Job #%1$d (%2$s) for %3$s / %4$s. Scanned: %5$d. Queued: %6$d. Skipped: %7$d. Updated: %8$s.', 'wpvdb' ),
-					(int) $active_reindex_job['job_id'],
-					$active_reindex_job['status'],
-					$active_reindex_job['provider'],
-					$active_reindex_job['model'],
-					(int) $active_reindex_job['scanned_count'],
-					(int) $active_reindex_job['queued_count'],
-					(int) $active_reindex_job['skipped_count'],
-					$active_reindex_job_updated_at
-				)
-			);
-			?>
+			</p>
+			<p>
+				<?php
+				echo esc_html(
+					sprintf(
+						/* translators: 1: job id, 2: status, 3: provider, 4: model, 5: scanned count, 6: queued count, 7: skipped count, 8: updated_at timestamp */
+						__( 'Job #%1$d (%2$s) for %3$s / %4$s. Scanned: %5$d. Queued: %6$d. Skipped: %7$d. Updated: %8$s.', 'wpvdb' ),
+						(int) $active_reindex_job['job_id'],
+						$active_reindex_job['status'],
+						$active_reindex_job['provider'],
+						$active_reindex_job['model'],
+						(int) $active_reindex_job['scanned_count'],
+						(int) $active_reindex_job['queued_count'],
+						(int) $active_reindex_job['skipped_count'],
+						$active_reindex_job_updated_at
+					)
+				);
+				?>
 		</p>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin: 0 12px 12px;">
 			<input type="hidden" name="action" value="wpvdb_cancel_reindex_job">
@@ -296,8 +299,9 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 							<span class="dashicons dashicons-yes" style="color:green;"></span>
 							<?php
 							printf(
-								_n( 'Exists (%s record)', 'Exists (%s records)', intval( $system_info['embedding_count'] ), 'wpvdb' ),
-								number_format_i18n( intval( $system_info['embedding_count'] ) )
+								/* translators: %s: Number of embedding records. */
+								esc_html( _n( 'Exists (%s record)', 'Exists (%s records)', intval( $system_info['embedding_count'] ), 'wpvdb' ) ),
+								esc_html( number_format_i18n( intval( $system_info['embedding_count'] ) ) )
 							);
 							?>
 						<?php else : ?>
@@ -380,33 +384,35 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				<?php if ( $has_pending_change ) : ?>
 				<tr class="wpvdb-pending-change-row">
 					<th><?php _e( 'Pending Provider Change', 'wpvdb' ); ?></th>
-					<td>
-						<span class="dashicons dashicons-warning" style="color:orange;"></span>
-						<?php
-						echo esc_html(
-							sprintf(
-								__( 'Change from %1$s to %2$s is pending', 'wpvdb' ),
-								ucfirst( $active_provider ),
-								ucfirst( $pending_provider )
-							)
-						);
-						?>
-					</td>
+						<td>
+							<span class="dashicons dashicons-warning" style="color:orange;"></span>
+							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: 1: Current provider. 2: Pending provider. */
+									__( 'Change from %1$s to %2$s is pending', 'wpvdb' ),
+									ucfirst( $active_provider ),
+									ucfirst( $pending_provider )
+								)
+							);
+							?>
+						</td>
 				</tr>
 				<tr class="wpvdb-pending-change-row">
 					<th><?php _e( 'Pending Model Change', 'wpvdb' ); ?></th>
-					<td>
-						<span class="dashicons dashicons-warning" style="color:orange;"></span>
-						<?php
-						echo esc_html(
-							sprintf(
-								__( 'Change from %1$s to %2$s is pending', 'wpvdb' ),
-								$active_model,
-								$pending_model
-							)
-						);
-						?>
-					</td>
+						<td>
+							<span class="dashicons dashicons-warning" style="color:orange;"></span>
+							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: 1: Current model. 2: Pending model. */
+									__( 'Change from %1$s to %2$s is pending', 'wpvdb' ),
+									$active_model,
+									$pending_model
+								)
+							);
+							?>
+						</td>
 				</tr>
 				<tr class="wpvdb-pending-change-row">
 					<th><?php _e( 'Actions', 'wpvdb' ); ?></th>
@@ -517,7 +523,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				?>
 			</p>
 			<p>
-				<a href="<?php echo wp_nonce_url( add_query_arg( array( 'action' => 'wpvdb_recreate_tables' ), admin_url( 'admin.php?page=wpvdb-status' ) ), 'wpvdb_recreate_tables' ); ?>" class="button" onclick="return confirm('<?php esc_attr_e( 'This will delete and recreate all Vector Database tables. Your embeddings will be lost and need to be regenerated. Are you sure?', 'wpvdb' ); ?>');">
+				<a href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'action' => 'wpvdb_recreate_tables' ), admin_url( 'admin.php?page=wpvdb-status' ) ), 'wpvdb_recreate_tables' ) ); ?>" class="button" onclick="return confirm('<?php echo esc_js( __( 'This will delete and recreate all Vector Database tables. Your embeddings will be lost and need to be regenerated. Are you sure?', 'wpvdb' ) ); ?>');">
 					<?php _e( 'Recreate Database Tables', 'wpvdb' ); ?>
 				</a>
 			</p>
@@ -558,33 +564,36 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 		</div>
 		<?php endif; ?>
 
-		<div class="wpvdb-card">
-			<h3><?php _e( 'Run Diagnostics', 'wpvdb' ); ?></h3>
-			<p><?php _e( 'Run database diagnostics to check vector capabilities.', 'wpvdb' ); ?></p>
-			<p>
-				<a href="
+			<div class="wpvdb-card">
+				<h3><?php _e( 'Run Diagnostics', 'wpvdb' ); ?></h3>
+				<p><?php _e( 'Run database diagnostics to check vector capabilities.', 'wpvdb' ); ?></p>
 				<?php
-				echo esc_url(
+				$diagnostics_url = wp_nonce_url(
 					add_query_arg(
 						array(
 							'diagnostics' => 'run',
 							'section'     => 'tools',
 						),
 						admin_url( 'admin.php?page=wpvdb-status' )
-					)
+					),
+					'wpvdb_run_diagnostics'
 				);
 				?>
-							" class="button">
-					<?php _e( 'Run Diagnostics', 'wpvdb' ); ?>
-				</a>
-			</p>
+				<p>
+					<a href="<?php echo esc_url( $diagnostics_url ); ?>" class="button">
+						<?php _e( 'Run Diagnostics', 'wpvdb' ); ?>
+					</a>
+				</p>
 
-			<?php
-			// Display diagnostic results if available.
-			if ( isset( $_GET['diagnostics'] ) && 'run' === $_GET['diagnostics'] ) {
-				$diagnostics = $database->run_diagnostics();
-				?>
-				<div class="wpvdb-diagnostics-results <?php echo isset( $diagnostics['error'] ) ? 'has-error' : ''; ?>">
+				<?php
+				// Display diagnostic results if available.
+				$diagnostics_action = isset( $_GET['diagnostics'] ) && is_scalar( $_GET['diagnostics'] ) ? sanitize_key( wp_unslash( $_GET['diagnostics'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				$diagnostics_nonce  = isset( $_GET['_wpnonce'] ) && is_scalar( $_GET['_wpnonce'] ) ? sanitize_key( wp_unslash( $_GET['_wpnonce'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				$run_diagnostics    = 'run' === $diagnostics_action && wp_verify_nonce( $diagnostics_nonce, 'wpvdb_run_diagnostics' );
+				if ( $run_diagnostics ) {
+					$diagnostics = $database->run_diagnostics();
+					?>
+					<div class="wpvdb-diagnostics-results <?php echo isset( $diagnostics['error'] ) ? 'has-error' : ''; ?>">
 					<h4><?php esc_html_e( 'Diagnostic Results', 'wpvdb' ); ?></h4>
 
 					<?php if ( ! empty( $diagnostics['note'] ) ) : ?>
@@ -656,9 +665,9 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 						<?php endif; ?>
 					</ul>
 				</div>
-				<?php
-			}
-			?>
+					<?php
+				}
+				?>
 		</div>
 		<?php endif; ?>
 
@@ -686,8 +695,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 								<?php
 								$providers = \WPVDB\Providers::get_available_providers();
 								foreach ( $providers as $provider_id => $provider_data ) {
-									$selected = ( $provider_id === $active_provider ) ? 'selected' : '';
-									echo '<option value="' . esc_attr( $provider_id ) . '" ' . $selected . '>' . esc_html( $provider_data['label'] ) . '</option>';
+									echo '<option value="' . esc_attr( $provider_id ) . '" ' . selected( $provider_id, $active_provider, false ) . '>' . esc_html( $provider_data['label'] ) . '</option>';
 								}
 								?>
 							</select>
@@ -702,8 +710,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 								foreach ( $models as $provider_id => $provider_models ) {
 									echo '<optgroup label="' . esc_attr( ucfirst( $provider_id ) ) . '">';
 									foreach ( $provider_models as $model_id => $model_data ) {
-										$selected = ( $model_id === $active_model ) ? 'selected' : '';
-										echo '<option value="' . esc_attr( $model_id ) . '" ' . $selected . ' data-provider="' . esc_attr( $provider_id ) . '">'
+										echo '<option value="' . esc_attr( $model_id ) . '" ' . selected( $model_id, $active_model, false ) . ' data-provider="' . esc_attr( $provider_id ) . '">'
 											. esc_html( $model_data['label'] ) . '</option>';
 									}
 									echo '</optgroup>';
@@ -800,6 +807,10 @@ jQuery(document).ready(function($) {
 	var testEmbeddingHandled = false;
 	var testButtonClicked = false;
 
+	function escapeHtml(value) {
+		return $('<div>').text(value == null ? '' : String(value)).html();
+	}
+
 	// CRITICAL FIX: Create a test function to check if event handlers already exist
 	function checkIfHandlersExist() {
 		if ($('#wpvdb-test-embedding-button').length === 0) {
@@ -864,14 +875,14 @@ jQuery(document).ready(function($) {
 				$(this).addClass('updating-message').prop('disabled', true);
 
 				// Make the AJAX request directly
-				$.ajax({
-					url: ajaxurl, // WordPress global
-					type: 'POST',
-					data: {
-						action: 'wpvdb_confirm_provider_change',
-						nonce: '<?php echo wp_create_nonce( 'wpvdb-admin' ); ?>',
-						cancel: false
-					},
+					$.ajax({
+						url: ajaxurl, // WordPress global
+						type: 'POST',
+						data: {
+							action: 'wpvdb_confirm_provider_change',
+							nonce: '<?php echo esc_js( wp_create_nonce( 'wpvdb-admin' ) ); ?>',
+							cancel: false
+						},
 					success: function(response) {
 						console.log('WPVDB CRITICAL: Provider change response received', response);
 						if (response.success) {
@@ -903,14 +914,14 @@ jQuery(document).ready(function($) {
 				$(this).addClass('updating-message').prop('disabled', true);
 
 				// Make the AJAX request directly
-				$.ajax({
-					url: ajaxurl, // WordPress global
-					type: 'POST',
-					data: {
-						action: 'wpvdb_confirm_provider_change',
-						nonce: '<?php echo wp_create_nonce( 'wpvdb-admin' ); ?>',
-						cancel: true
-					},
+					$.ajax({
+						url: ajaxurl, // WordPress global
+						type: 'POST',
+						data: {
+							action: 'wpvdb_confirm_provider_change',
+							nonce: '<?php echo esc_js( wp_create_nonce( 'wpvdb-admin' ) ); ?>',
+							cancel: true
+						},
 					success: function(response) {
 						console.log('WPVDB CRITICAL: Provider change cancel response received', response);
 						if (response.success) {
@@ -976,7 +987,7 @@ jQuery(document).ready(function($) {
 				type: 'POST',
 				data: {
 					action: 'wpvdb_test_embedding',
-					nonce: '<?php echo wp_create_nonce( 'wpvdb-admin' ); ?>',
+					nonce: '<?php echo esc_js( wp_create_nonce( 'wpvdb-admin' ) ); ?>',
 					provider: provider,
 					model: model,
 					text: text
@@ -988,28 +999,28 @@ jQuery(document).ready(function($) {
 
 						// Display embedding info
 						var html = '<div class="wpvdb-embedding-details">';
-						html += '<p><strong>Provider:</strong> ' + response.data.provider + '</p>';
-						html += '<p><strong>Model:</strong> ' + response.data.model + '</p>';
-						html += '<p><strong>Dimensions:</strong> ' + response.data.dimensions + '</p>';
-						html += '<p><strong>Time:</strong> ' + response.data.time + ' seconds</p>';
+						html += '<p><strong>Provider:</strong> ' + escapeHtml(response.data.provider) + '</p>';
+						html += '<p><strong>Model:</strong> ' + escapeHtml(response.data.model) + '</p>';
+						html += '<p><strong>Dimensions:</strong> ' + escapeHtml(response.data.dimensions) + '</p>';
+						html += '<p><strong>Time:</strong> ' + escapeHtml(response.data.time) + ' seconds</p>';
 
 						// Show a sample of the embedding vector
 						if (response.data.embedding && response.data.embedding.length > 0) {
 							var sampleSize = Math.min(10, response.data.embedding.length);
 							var sample = response.data.embedding.slice(0, sampleSize);
 							html += '<p><strong>Sample (first ' + sampleSize + ' values):</strong></p>';
-							html += '<pre>' + JSON.stringify(sample) + '...</pre>';
+							html += '<pre>' + escapeHtml(JSON.stringify(sample)) + '...</pre>';
 						}
 
 						html += '</div>';
 						$('.wpvdb-embedding-info').html(html);
 					} else {
-						$('.wpvdb-status-message').html('<div class="notice notice-error"><p>Error: ' + (response.data ? response.data.message : 'Unknown error') + '</p></div>');
+						$('.wpvdb-status-message').html('<div class="notice notice-error"><p>Error: ' + escapeHtml(response.data ? response.data.message : 'Unknown error') + '</p></div>');
 					}
 				},
 				error: function(xhr, status, error) {
 					console.error('WPVDB CRITICAL: AJAX error:', xhr.responseText);
-					$('.wpvdb-status-message').html('<div class="notice notice-error"><p>Error connecting to the server: ' + error + '</p></div>');
+					$('.wpvdb-status-message').html('<div class="notice notice-error"><p>Error connecting to the server: ' + escapeHtml(error) + '</p></div>');
 				}
 			});
 		});
