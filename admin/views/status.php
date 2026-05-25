@@ -163,24 +163,24 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 	<div class="notice notice-info inline">
 		<p>
 			<strong><?php esc_html_e( 'Re-embed job in progress', 'wpvdb' ); ?></strong>
-			</p>
-			<p>
-				<?php
-				echo esc_html(
-					sprintf(
-						/* translators: 1: job id, 2: status, 3: provider, 4: model, 5: scanned count, 6: queued count, 7: skipped count, 8: updated_at timestamp */
-						__( 'Job #%1$d (%2$s) for %3$s / %4$s. Scanned: %5$d. Queued: %6$d. Skipped: %7$d. Updated: %8$s.', 'wpvdb' ),
-						(int) $active_reindex_job['job_id'],
-						$active_reindex_job['status'],
-						$active_reindex_job['provider'],
-						$active_reindex_job['model'],
-						(int) $active_reindex_job['scanned_count'],
-						(int) $active_reindex_job['queued_count'],
-						(int) $active_reindex_job['skipped_count'],
-						$active_reindex_job_updated_at
-					)
-				);
-				?>
+		</p>
+		<p>
+			<?php
+			echo esc_html(
+				sprintf(
+					/* translators: 1: job id, 2: status, 3: provider, 4: model, 5: scanned count, 6: queued count, 7: skipped count, 8: updated_at timestamp */
+					__( 'Job #%1$d (%2$s) for %3$s / %4$s. Scanned: %5$d. Queued: %6$d. Skipped: %7$d. Updated: %8$s.', 'wpvdb' ),
+					(int) $active_reindex_job['job_id'],
+					$active_reindex_job['status'],
+					$active_reindex_job['provider'],
+					$active_reindex_job['model'],
+					(int) $active_reindex_job['scanned_count'],
+					(int) $active_reindex_job['queued_count'],
+					(int) $active_reindex_job['skipped_count'],
+					$active_reindex_job_updated_at
+				)
+			);
+			?>
 		</p>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin: 0 12px 12px;">
 			<input type="hidden" name="action" value="wpvdb_cancel_reindex_job">
@@ -240,9 +240,9 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				</tr>
 				<tr>
 					<th>
-					<?php
+						<?php
 						echo esc_html( ucfirst( $system_info['db_type'] ) . ' ' . __( 'Version', 'wpvdb' ) );
-					?>
+						?>
 					</th>
 					<td><?php echo isset( $system_info['mysql_version'] ) ? esc_html( $system_info['mysql_version'] ) : esc_html__( 'Not available', 'wpvdb' ); ?></td>
 				</tr>
@@ -311,53 +311,53 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				</tr>
 
 				<?php if ( $database->get_db_type() === 'mariadb' && $database->has_native_vector_support() ) : ?>
-				<tr>
-					<th><?php _e( 'Vector Index', 'wpvdb' ); ?></th>
-					<td>
-						<?php if ( $vector_index_status['exists'] ) : ?>
-							<span class="dashicons dashicons-yes" style="color:green;"></span> <?php _e( 'Available', 'wpvdb' ); ?>
-						<?php else : ?>
-							<span class="dashicons dashicons-no" style="color:red;"></span> <?php _e( 'Not Created', 'wpvdb' ); ?>
-							<?php if ( 'Yes' === $system_info['embedding_table_exists'] ) : ?>
-							<a href="<?php echo esc_url( admin_url( 'admin.php?page=wpvdb-status&section=tools' ) ); ?>" class="button button-small" style="margin-left: 10px;">
-								<?php _e( 'Create Index', 'wpvdb' ); ?>
-							</a>
+					<tr>
+						<th><?php _e( 'Vector Index', 'wpvdb' ); ?></th>
+						<td>
+							<?php if ( $vector_index_status['exists'] ) : ?>
+								<span class="dashicons dashicons-yes" style="color:green;"></span> <?php _e( 'Available', 'wpvdb' ); ?>
+							<?php else : ?>
+								<span class="dashicons dashicons-no" style="color:red;"></span> <?php _e( 'Not Created', 'wpvdb' ); ?>
+								<?php if ( 'Yes' === $system_info['embedding_table_exists'] ) : ?>
+									<a href="<?php echo esc_url( admin_url( 'admin.php?page=wpvdb-status&section=tools' ) ); ?>" class="button button-small" style="margin-left: 10px;">
+										<?php _e( 'Create Index', 'wpvdb' ); ?>
+									</a>
+								<?php endif; ?>
 							<?php endif; ?>
-						<?php endif; ?>
-					</td>
-				</tr>
+						</td>
+					</tr>
 					<?php if ( $vector_index_status['exists'] ) : ?>
-				<tr>
-					<th><?php _e( 'Vector Index Health', 'wpvdb' ); ?></th>
-					<td>
-						<?php if ( 'good' === $vector_index_status['health'] ) : ?>
-							<span class="dashicons dashicons-yes" style="color:green;"></span> <?php _e( 'Good', 'wpvdb' ); ?>
-						<?php elseif ( 'suboptimal' === $vector_index_status['health'] ) : ?>
-							<span class="dashicons dashicons-warning" style="color:orange;"></span> <?php _e( 'Suboptimal', 'wpvdb' ); ?>
-							<span class="description" style="display:block;margin-top:4px">
-								<?php _e( 'Index may not be used for all queries.', 'wpvdb' ); ?>
-							</span>
-						<?php elseif ( 'error' === $vector_index_status['health'] ) : ?>
-							<span class="dashicons dashicons-no" style="color:red;"></span> <?php _e( 'Error', 'wpvdb' ); ?>
-						<?php else : ?>
-							<span class="dashicons dashicons-editor-help"></span> <?php _e( 'Unknown', 'wpvdb' ); ?>
-						<?php endif; ?>
-					</td>
-				</tr>
-				<tr>
-					<th><?php _e( 'Index Optimization', 'wpvdb' ); ?></th>
-					<td>
-						<?php if ( $vector_index_status['optimization'] ) : ?>
-							<span class="dashicons dashicons-yes" style="color:green;"></span> <?php _e( 'Optimized', 'wpvdb' ); ?>
-						<?php else : ?>
-							<span class="dashicons dashicons-no" style="color:orange;"></span> <?php _e( 'Not Fully Optimized', 'wpvdb' ); ?>
-							<a href="#" id="wpvdb-optimize-vector-index" class="button button-small" style="margin-left: 10px;">
-								<?php _e( 'Optimize Now', 'wpvdb' ); ?>
-							</a>
-						<?php endif; ?>
-					</td>
-				</tr>
-				<?php endif; ?>
+						<tr>
+							<th><?php _e( 'Vector Index Health', 'wpvdb' ); ?></th>
+							<td>
+								<?php if ( 'good' === $vector_index_status['health'] ) : ?>
+									<span class="dashicons dashicons-yes" style="color:green;"></span> <?php _e( 'Good', 'wpvdb' ); ?>
+								<?php elseif ( 'suboptimal' === $vector_index_status['health'] ) : ?>
+									<span class="dashicons dashicons-warning" style="color:orange;"></span> <?php _e( 'Suboptimal', 'wpvdb' ); ?>
+									<span class="description" style="display:block;margin-top:4px">
+										<?php _e( 'Index may not be used for all queries.', 'wpvdb' ); ?>
+									</span>
+								<?php elseif ( 'error' === $vector_index_status['health'] ) : ?>
+									<span class="dashicons dashicons-no" style="color:red;"></span> <?php _e( 'Error', 'wpvdb' ); ?>
+								<?php else : ?>
+									<span class="dashicons dashicons-editor-help"></span> <?php _e( 'Unknown', 'wpvdb' ); ?>
+								<?php endif; ?>
+							</td>
+						</tr>
+						<tr>
+							<th><?php _e( 'Index Optimization', 'wpvdb' ); ?></th>
+							<td>
+								<?php if ( $vector_index_status['optimization'] ) : ?>
+									<span class="dashicons dashicons-yes" style="color:green;"></span> <?php _e( 'Optimized', 'wpvdb' ); ?>
+								<?php else : ?>
+									<span class="dashicons dashicons-no" style="color:orange;"></span> <?php _e( 'Not Fully Optimized', 'wpvdb' ); ?>
+									<a href="#" id="wpvdb-optimize-vector-index" class="button button-small" style="margin-left: 10px;">
+										<?php _e( 'Optimize Now', 'wpvdb' ); ?>
+									</a>
+								<?php endif; ?>
+							</td>
+						</tr>
+					<?php endif; ?>
 				<?php endif; ?>
 			</tbody>
 		</table>
@@ -384,35 +384,35 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				<?php if ( $has_pending_change ) : ?>
 				<tr class="wpvdb-pending-change-row">
 					<th><?php _e( 'Pending Provider Change', 'wpvdb' ); ?></th>
-						<td>
-							<span class="dashicons dashicons-warning" style="color:orange;"></span>
-							<?php
-							echo esc_html(
-								sprintf(
-									/* translators: 1: Current provider. 2: Pending provider. */
-									__( 'Change from %1$s to %2$s is pending', 'wpvdb' ),
-									ucfirst( $active_provider ),
-									ucfirst( $pending_provider )
-								)
-							);
-							?>
-						</td>
+					<td>
+						<span class="dashicons dashicons-warning" style="color:orange;"></span>
+						<?php
+						echo esc_html(
+							sprintf(
+								/* translators: 1: Current provider. 2: Pending provider. */
+								__( 'Change from %1$s to %2$s is pending', 'wpvdb' ),
+								ucfirst( $active_provider ),
+								ucfirst( $pending_provider )
+							)
+						);
+						?>
+					</td>
 				</tr>
 				<tr class="wpvdb-pending-change-row">
 					<th><?php _e( 'Pending Model Change', 'wpvdb' ); ?></th>
-						<td>
-							<span class="dashicons dashicons-warning" style="color:orange;"></span>
-							<?php
-							echo esc_html(
-								sprintf(
-									/* translators: 1: Current model. 2: Pending model. */
-									__( 'Change from %1$s to %2$s is pending', 'wpvdb' ),
-									$active_model,
-									$pending_model
-								)
-							);
-							?>
-						</td>
+					<td>
+						<span class="dashicons dashicons-warning" style="color:orange;"></span>
+						<?php
+						echo esc_html(
+							sprintf(
+								/* translators: 1: Current model. 2: Pending model. */
+								__( 'Change from %1$s to %2$s is pending', 'wpvdb' ),
+								$active_model,
+								$pending_model
+							)
+						);
+						?>
+					</td>
 				</tr>
 				<tr class="wpvdb-pending-change-row">
 					<th><?php _e( 'Actions', 'wpvdb' ); ?></th>
@@ -507,62 +507,62 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 				<p><?php esc_html_e( 'Maintenance tools are hidden for this demo site.', 'wpvdb' ); ?></p>
 			</div>
 		<?php else : ?>
-		<div class="wpvdb-card">
-			<h3><?php _e( 'Database Tables', 'wpvdb' ); ?></h3>
-			<p><?php _e( 'If you are experiencing issues with embeddings, you can recreate the database tables.', 'wpvdb' ); ?></p>
-			<p>
-				<?php
-				$has_vector = $database->has_native_vector_support();
-				if ( $has_vector ) {
-					esc_html_e( 'Re-create the database tables with native vector support.', 'wpvdb' );
-					echo ' <span class="dashicons dashicons-yes" style="color:green;"></span>';
-				} else {
-					esc_html_e( 'Re-create the database tables with fallback support.', 'wpvdb' );
-					echo ' <span class="dashicons dashicons-warning" style="color:orange;"></span>';
-				}
-				?>
-			</p>
-			<p>
-				<a href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'action' => 'wpvdb_recreate_tables' ), admin_url( 'admin.php?page=wpvdb-status' ) ), 'wpvdb_recreate_tables' ) ); ?>" class="button" onclick="return confirm('<?php echo esc_js( __( 'This will delete and recreate all Vector Database tables. Your embeddings will be lost and need to be regenerated. Are you sure?', 'wpvdb' ) ); ?>');">
-					<?php _e( 'Recreate Database Tables', 'wpvdb' ); ?>
-				</a>
-			</p>
-		</div>
+			<div class="wpvdb-card">
+				<h3><?php _e( 'Database Tables', 'wpvdb' ); ?></h3>
+				<p><?php _e( 'If you are experiencing issues with embeddings, you can recreate the database tables.', 'wpvdb' ); ?></p>
+				<p>
+					<?php
+					$has_vector = $database->has_native_vector_support();
+					if ( $has_vector ) {
+						esc_html_e( 'Re-create the database tables with native vector support.', 'wpvdb' );
+						echo ' <span class="dashicons dashicons-yes" style="color:green;"></span>';
+					} else {
+						esc_html_e( 'Re-create the database tables with fallback support.', 'wpvdb' );
+						echo ' <span class="dashicons dashicons-warning" style="color:orange;"></span>';
+					}
+					?>
+				</p>
+				<p>
+					<a href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'action' => 'wpvdb_recreate_tables' ), admin_url( 'admin.php?page=wpvdb-status' ) ), 'wpvdb_recreate_tables' ) ); ?>" class="button" onclick="return confirm('<?php echo esc_js( __( 'This will delete and recreate all Vector Database tables. Your embeddings will be lost and need to be regenerated. Are you sure?', 'wpvdb' ) ); ?>');">
+						<?php _e( 'Recreate Database Tables', 'wpvdb' ); ?>
+					</a>
+				</p>
+			</div>
 
 			<?php if ( $has_pending_change ) : ?>
-		<div class="wpvdb-card wpvdb-pending-change-card">
-			<h3><?php _e( 'Pending Provider Change', 'wpvdb' ); ?></h3>
-			<p><?php _e( 'There is a pending change to your embedding provider configuration.', 'wpvdb' ); ?></p>
-			<div class="wpvdb-provider-change-info">
-				<p><strong><?php _e( 'From:', 'wpvdb' ); ?></strong> <?php echo esc_html( ucfirst( $active_provider ) . ' (' . $active_model . ')' ); ?></p>
-				<p><strong><?php _e( 'To:', 'wpvdb' ); ?></strong> <?php echo esc_html( ucfirst( $pending_provider ) . ' (' . $pending_model . ')' ); ?></p>
-			</div>
-			<div class="wpvdb-action-buttons">
-				<!-- CRITICAL FIX: Use direct form submission instead of JavaScript -->
-				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;">
-					<input type="hidden" name="action" value="wpvdb_apply_provider_change">
-					<?php wp_nonce_field( 'wpvdb-admin' ); ?>
-					<input type="submit" id="wpvdb-apply-provider-change-direct-tool" class="button button-primary" value="<?php esc_attr_e( 'Apply Change', 'wpvdb' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'This will activate the new provider and start a background re-embed job for posts on the old model. Existing rows for the old model stay in place until each post is re-processed. Continue?', 'wpvdb' ) ); ?>');">
-				</form>
-				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block; margin-left:10px;">
-					<input type="hidden" name="action" value="wpvdb_cancel_provider_change">
-					<?php wp_nonce_field( 'wpvdb-admin' ); ?>
-					<input type="submit" id="wpvdb-cancel-provider-change-direct-tool" class="button" value="<?php esc_attr_e( 'Cancel Change', 'wpvdb' ); ?>" onclick="return confirm('Are you sure you want to cancel the pending provider change?');">
-				</form>
+				<div class="wpvdb-card wpvdb-pending-change-card">
+					<h3><?php _e( 'Pending Provider Change', 'wpvdb' ); ?></h3>
+					<p><?php _e( 'There is a pending change to your embedding provider configuration.', 'wpvdb' ); ?></p>
+					<div class="wpvdb-provider-change-info">
+						<p><strong><?php _e( 'From:', 'wpvdb' ); ?></strong> <?php echo esc_html( ucfirst( $active_provider ) . ' (' . $active_model . ')' ); ?></p>
+						<p><strong><?php _e( 'To:', 'wpvdb' ); ?></strong> <?php echo esc_html( ucfirst( $pending_provider ) . ' (' . $pending_model . ')' ); ?></p>
+					</div>
+					<div class="wpvdb-action-buttons">
+						<!-- CRITICAL FIX: Use direct form submission instead of JavaScript -->
+						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;">
+							<input type="hidden" name="action" value="wpvdb_apply_provider_change">
+							<?php wp_nonce_field( 'wpvdb-admin' ); ?>
+							<input type="submit" id="wpvdb-apply-provider-change-direct-tool" class="button button-primary" value="<?php esc_attr_e( 'Apply Change', 'wpvdb' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'This will activate the new provider and start a background re-embed job for posts on the old model. Existing rows for the old model stay in place until each post is re-processed. Continue?', 'wpvdb' ) ); ?>');">
+						</form>
+						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block; margin-left:10px;">
+							<input type="hidden" name="action" value="wpvdb_cancel_provider_change">
+							<?php wp_nonce_field( 'wpvdb-admin' ); ?>
+							<input type="submit" id="wpvdb-cancel-provider-change-direct-tool" class="button" value="<?php esc_attr_e( 'Cancel Change', 'wpvdb' ); ?>" onclick="return confirm('Are you sure you want to cancel the pending provider change?');">
+						</form>
 
-				<!-- Keep the original buttons as backup -->
-				<button id="wpvdb-apply-provider-change-tool" class="button button-primary" style="display:none;">
-					<?php _e( 'Apply Change', 'wpvdb' ); ?>
-				</button>
-				<button id="wpvdb-cancel-provider-change-tool" class="button" style="display:none;">
-					<?php _e( 'Cancel Change', 'wpvdb' ); ?>
-				</button>
-			</div>
-			<p class="description">
-				<?php _e( 'Applying the change activates the new provider and queues a background re-embed for posts on the old model.', 'wpvdb' ); ?>
-			</p>
-		</div>
-		<?php endif; ?>
+						<!-- Keep the original buttons as backup -->
+						<button id="wpvdb-apply-provider-change-tool" class="button button-primary" style="display:none;">
+							<?php _e( 'Apply Change', 'wpvdb' ); ?>
+						</button>
+						<button id="wpvdb-cancel-provider-change-tool" class="button" style="display:none;">
+							<?php _e( 'Cancel Change', 'wpvdb' ); ?>
+						</button>
+					</div>
+					<p class="description">
+						<?php _e( 'Applying the change activates the new provider and queues a background re-embed for posts on the old model.', 'wpvdb' ); ?>
+					</p>
+				</div>
+			<?php endif; ?>
 
 			<div class="wpvdb-card">
 				<h3><?php _e( 'Run Diagnostics', 'wpvdb' ); ?></h3>
@@ -594,81 +594,81 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 					$diagnostics = $database->run_diagnostics();
 					?>
 					<div class="wpvdb-diagnostics-results <?php echo isset( $diagnostics['error'] ) ? 'has-error' : ''; ?>">
-					<h4><?php esc_html_e( 'Diagnostic Results', 'wpvdb' ); ?></h4>
+						<h4><?php esc_html_e( 'Diagnostic Results', 'wpvdb' ); ?></h4>
 
-					<?php if ( ! empty( $diagnostics['note'] ) ) : ?>
-						<p class="description"><?php echo esc_html( $diagnostics['note'] ); ?></p>
-					<?php endif; ?>
+						<?php if ( ! empty( $diagnostics['note'] ) ) : ?>
+							<p class="description"><?php echo esc_html( $diagnostics['note'] ); ?></p>
+						<?php endif; ?>
 
-					<ul>
-						<li><strong><?php esc_html_e( 'Database Type:', 'wpvdb' ); ?></strong> <?php echo esc_html( ucfirst( $diagnostics['db_type'] ) ); ?></li>
-						<li><strong><?php esc_html_e( 'Database Version:', 'wpvdb' ); ?></strong> <?php echo esc_html( isset( $diagnostics['db_version'] ) ? $diagnostics['db_version'] : '' ); ?></li>
-						<li><strong><?php esc_html_e( 'Vector Support:', 'wpvdb' ); ?></strong>
-							<?php if ( $diagnostics['has_vector_support'] ) : ?>
-								<span style="color:green;">✓</span>
-							<?php else : ?>
-								<span style="color:red;">✗</span>
+						<ul>
+							<li><strong><?php esc_html_e( 'Database Type:', 'wpvdb' ); ?></strong> <?php echo esc_html( ucfirst( $diagnostics['db_type'] ) ); ?></li>
+							<li><strong><?php esc_html_e( 'Database Version:', 'wpvdb' ); ?></strong> <?php echo esc_html( isset( $diagnostics['db_version'] ) ? $diagnostics['db_version'] : '' ); ?></li>
+							<li><strong><?php esc_html_e( 'Vector Support:', 'wpvdb' ); ?></strong>
+								<?php if ( $diagnostics['has_vector_support'] ) : ?>
+									<span style="color:green;">✓</span>
+								<?php else : ?>
+									<span style="color:red;">✗</span>
+								<?php endif; ?>
+							</li>
+							<li><strong><?php esc_html_e( 'Fallbacks Enabled:', 'wpvdb' ); ?></strong>
+								<?php if ( $diagnostics['fallbacks_enabled'] ) : ?>
+									<span style="color:orange;">✓</span>
+								<?php else : ?>
+									<span style="color:gray;">✗</span>
+								<?php endif; ?>
+							</li>
+
+							<?php if ( $diagnostics['has_vector_support'] && isset( $diagnostics['create_table'] ) ) : ?>
+								<li><strong><?php esc_html_e( 'Create Vector Table:', 'wpvdb' ); ?></strong>
+									<?php if ( $diagnostics['create_table'] ) : ?>
+										<span style="color:green;">✓</span>
+									<?php else : ?>
+										<span style="color:red;">✗</span>
+									<?php endif; ?>
+								</li>
 							<?php endif; ?>
-						</li>
-						<li><strong><?php esc_html_e( 'Fallbacks Enabled:', 'wpvdb' ); ?></strong>
-							<?php if ( $diagnostics['fallbacks_enabled'] ) : ?>
-								<span style="color:orange;">✓</span>
-							<?php else : ?>
-								<span style="color:gray;">✗</span>
+
+							<?php if ( isset( $diagnostics['insert_data'] ) ) : ?>
+								<li><strong><?php esc_html_e( 'Insert Vector Data:', 'wpvdb' ); ?></strong>
+									<?php if ( $diagnostics['insert_data'] ) : ?>
+										<span style="color:green;">✓</span>
+									<?php else : ?>
+										<span style="color:red;">✗</span>
+									<?php endif; ?>
+								</li>
 							<?php endif; ?>
-						</li>
 
-						<?php if ( $diagnostics['has_vector_support'] && isset( $diagnostics['create_table'] ) ) : ?>
-							<li><strong><?php esc_html_e( 'Create Vector Table:', 'wpvdb' ); ?></strong>
-								<?php if ( $diagnostics['create_table'] ) : ?>
-									<span style="color:green;">✓</span>
-								<?php else : ?>
-									<span style="color:red;">✗</span>
-								<?php endif; ?>
-							</li>
-						<?php endif; ?>
+							<?php if ( isset( $diagnostics['cosine_distance'] ) ) : ?>
+								<li><strong><?php esc_html_e( 'Cosine Distance:', 'wpvdb' ); ?></strong>
+									<?php if ( $diagnostics['cosine_distance'] ) : ?>
+										<span style="color:green;">✓</span>
+									<?php else : ?>
+										<span style="color:red;">✗</span>
+									<?php endif; ?>
+								</li>
+							<?php endif; ?>
 
-						<?php if ( isset( $diagnostics['insert_data'] ) ) : ?>
-							<li><strong><?php esc_html_e( 'Insert Vector Data:', 'wpvdb' ); ?></strong>
-								<?php if ( $diagnostics['insert_data'] ) : ?>
-									<span style="color:green;">✓</span>
-								<?php else : ?>
-									<span style="color:red;">✗</span>
-								<?php endif; ?>
-							</li>
-						<?php endif; ?>
+							<?php if ( isset( $diagnostics['vector_index'] ) ) : ?>
+								<li><strong><?php esc_html_e( 'Vector Index:', 'wpvdb' ); ?></strong>
+									<?php if ( true === $diagnostics['vector_index'] ) : ?>
+										<span style="color:green;">✓</span>
+									<?php elseif ( is_string( $diagnostics['vector_index'] ) ) : ?>
+										<?php echo esc_html( $diagnostics['vector_index'] ); ?>
+									<?php else : ?>
+										<span style="color:red;">✗</span>
+									<?php endif; ?>
+								</li>
+							<?php endif; ?>
 
-						<?php if ( isset( $diagnostics['cosine_distance'] ) ) : ?>
-							<li><strong><?php esc_html_e( 'Cosine Distance:', 'wpvdb' ); ?></strong>
-								<?php if ( $diagnostics['cosine_distance'] ) : ?>
-									<span style="color:green;">✓</span>
-								<?php else : ?>
-									<span style="color:red;">✗</span>
-								<?php endif; ?>
-							</li>
-						<?php endif; ?>
-
-						<?php if ( isset( $diagnostics['vector_index'] ) ) : ?>
-							<li><strong><?php esc_html_e( 'Vector Index:', 'wpvdb' ); ?></strong>
-								<?php if ( true === $diagnostics['vector_index'] ) : ?>
-									<span style="color:green;">✓</span>
-								<?php elseif ( is_string( $diagnostics['vector_index'] ) ) : ?>
-									<?php echo esc_html( $diagnostics['vector_index'] ); ?>
-								<?php else : ?>
-									<span style="color:red;">✗</span>
-								<?php endif; ?>
-							</li>
-						<?php endif; ?>
-
-						<?php if ( isset( $diagnostics['error'] ) ) : ?>
-							<li><strong><?php esc_html_e( 'Error:', 'wpvdb' ); ?></strong> <span style="color:red;"><?php echo esc_html( $diagnostics['error'] ); ?></span></li>
-						<?php endif; ?>
-					</ul>
-				</div>
+							<?php if ( isset( $diagnostics['error'] ) ) : ?>
+								<li><strong><?php esc_html_e( 'Error:', 'wpvdb' ); ?></strong> <span style="color:red;"><?php echo esc_html( $diagnostics['error'] ); ?></span></li>
+							<?php endif; ?>
+						</ul>
+					</div>
 					<?php
 				}
 				?>
-		</div>
+			</div>
 		<?php endif; ?>
 
 		<?php if ( apply_filters( 'wpvdb_render_test_embedding_ui', true ) ) : ?>
@@ -875,14 +875,14 @@ jQuery(document).ready(function($) {
 				$(this).addClass('updating-message').prop('disabled', true);
 
 				// Make the AJAX request directly
-					$.ajax({
-						url: ajaxurl, // WordPress global
-						type: 'POST',
-						data: {
-							action: 'wpvdb_confirm_provider_change',
-							nonce: '<?php echo esc_js( wp_create_nonce( 'wpvdb-admin' ) ); ?>',
-							cancel: false
-						},
+				$.ajax({
+					url: ajaxurl, // WordPress global
+					type: 'POST',
+					data: {
+						action: 'wpvdb_confirm_provider_change',
+						nonce: '<?php echo esc_js( wp_create_nonce( 'wpvdb-admin' ) ); ?>',
+						cancel: false
+					},
 					success: function(response) {
 						console.log('WPVDB CRITICAL: Provider change response received', response);
 						if (response.success) {
@@ -914,14 +914,14 @@ jQuery(document).ready(function($) {
 				$(this).addClass('updating-message').prop('disabled', true);
 
 				// Make the AJAX request directly
-					$.ajax({
-						url: ajaxurl, // WordPress global
-						type: 'POST',
-						data: {
-							action: 'wpvdb_confirm_provider_change',
-							nonce: '<?php echo esc_js( wp_create_nonce( 'wpvdb-admin' ) ); ?>',
-							cancel: true
-						},
+				$.ajax({
+					url: ajaxurl, // WordPress global
+					type: 'POST',
+					data: {
+						action: 'wpvdb_confirm_provider_change',
+						nonce: '<?php echo esc_js( wp_create_nonce( 'wpvdb-admin' ) ); ?>',
+						cancel: true
+					},
 					success: function(response) {
 						console.log('WPVDB CRITICAL: Provider change cancel response received', response);
 						if (response.success) {
