@@ -146,10 +146,10 @@
 						$sql = $wpdb->prepare(
 							"SELECT e.*,
 								$distance_function AS distance
-								FROM $table_name e
-								WHERE e.model = %s
-								ORDER BY distance
-								LIMIT %d",
+							FROM $table_name e
+							WHERE e.model = %s
+							ORDER BY distance
+							LIMIT %d",
 							$model,
 							20 // Show top 20 matches.
 						);
