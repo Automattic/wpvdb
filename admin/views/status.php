@@ -837,8 +837,9 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 			var sampleSize = Math.min(10, data.embedding.length);
 			var sample = data.embedding.slice(0, sampleSize);
 			var $sampleLabel = $('<p>');
-			<?php /* translators: %d: Number of embedding sample values shown. */ ?>
-			$('<strong>').text('<?php echo esc_js( __( 'Sample (first %d values):', 'wpvdb' ) ); ?>'.replace('%d', sampleSize)).appendTo($sampleLabel);
+			<?php /* translators: %s: Placeholder replaced in JavaScript with the number of embedding sample values shown. */ ?>
+			var sampleLabelTemplate = '<?php echo esc_js( sprintf( __( 'Sample (first %s values):', 'wpvdb' ), '__COUNT__' ) ); ?>';
+			$('<strong>').text(sampleLabelTemplate.replace('__COUNT__', sampleSize)).appendTo($sampleLabel);
 			$details.append($sampleLabel);
 			$('<pre>').text(JSON.stringify(sample) + '...').appendTo($details);
 		}
