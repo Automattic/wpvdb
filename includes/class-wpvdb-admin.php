@@ -747,9 +747,21 @@ class Admin {
 			$tab = 'dashboard';
 		}
 
-		$tabs = $this->get_admin_tabs();
-		if ( ! isset( $tabs[ $tab ] ) || ! current_user_can( $tabs[ $tab ]['capability'] ) ) {
-			wp_die( esc_html__( 'You do not have permission to access this WPVDB admin page.', 'wpvdb' ) );
+		$tabs         = $this->get_admin_tabs();
+		$visible_tabs = $this->filter_admin_tabs_by_current_user( $tabs );
+		if ( ! isset( $tabs[ $tab ] ) ) {
+			wp_die(
+				esc_html__( 'WPVDB admin tab not found.', 'wpvdb' ),
+				esc_html__( 'Tab not found', 'wpvdb' ),
+				array( 'response' => 404 )
+			);
+		}
+		if ( ! current_user_can( $tabs[ $tab ]['capability'] ) ) {
+			wp_die(
+				esc_html__( 'You do not have permission to access this WPVDB admin page.', 'wpvdb' ),
+				esc_html__( 'Permission denied', 'wpvdb' ),
+				array( 'response' => 403 )
+			);
 		}
 
 		// Pass the current instance to views.
@@ -872,7 +884,11 @@ class Admin {
 	 * Get the current tab from the page parameter
 	 */
 	private function get_current_tab() {
-		$page = isset( $_GET['page'] ) ? sanitize_text_field( $_GET['page'] ) : 'wpvdb-dashboard';
+		$page = 'wpvdb-dashboard';
+		if ( isset( $_GET['page'] ) && is_scalar( $_GET['page'] ) ) {
+			$page = sanitize_key( wp_unslash( $_GET['page'] ) );
+		}
+
 		$tabs = $this->get_admin_tabs();
 
 		foreach ( $tabs as $tab_id => $tab ) {
@@ -919,14 +935,20 @@ class Admin {
 		/**
 		 * Filter the WPVDB admin tabs.
 		 *
-		 * Plugins can add tabs by returning an entry with label, page, capability,
-		 * position, and render_callback keys. The page defaults to wpvdb-{tab_id}.
+		 * Plugins can add tabs by returning an entry with label, menu_label,
+		 * page, capability, position, and render_callback keys. The page
+		 * defaults to wpvdb-{tab_id}. For built-in tabs, page is ignored so
+		 * existing wpvdb admin links remain stable. The render_callback runs
+		 * with no arguments inside the shared Vector Database admin wrapper.
 		 *
 		 * @param array<string, array<string, mixed>> $tabs  Admin tabs keyed by tab ID.
 		 * @param Admin                               $admin Admin controller instance.
 		 */
-		$tabs = apply_filters( 'wpvdb_admin_tabs', $tabs, $this );
-		$tabs = $this->normalize_admin_tabs( is_array( $tabs ) ? $tabs : array() );
+		$filtered_tabs = apply_filters( 'wpvdb_admin_tabs', $tabs, $this );
+		if ( is_array( $filtered_tabs ) ) {
+			$tabs = $filtered_tabs;
+		}
+		$tabs = $this->normalize_admin_tabs( $tabs );
 
 		uasort(
 			$tabs,
@@ -957,7 +979,7 @@ class Admin {
 			$normalized[ $tab_id ] = array(
 				'label'           => (string) $tab['label'],
 				'menu_label'      => isset( $tab['menu_label'] ) ? (string) $tab['menu_label'] : (string) $tab['label'],
-				'page'            => ! empty( $tab['page'] ) ? sanitize_key( (string) $tab['page'] ) : 'wpvdb-' . $tab_id,
+				'page'            => $this->get_admin_tab_page( $tab_id, $tab ),
 				'capability'      => ! empty( $tab['capability'] ) ? (string) $tab['capability'] : 'manage_options',
 				'position'        => isset( $tab['position'] ) ? (int) $tab['position'] : 100,
 				'render_callback' => isset( $tab['render_callback'] ) ? $tab['render_callback'] : null,
@@ -965,6 +987,43 @@ class Admin {
 		}
 
 		return $normalized;
+	}
+
+	/**
+	 * Return the stable page slug for an admin tab.
+	 *
+	 * @param string               $tab_id Tab ID.
+	 * @param array<string, mixed> $tab    Tab config.
+	 * @return string Page slug.
+	 */
+	private function get_admin_tab_page( $tab_id, $tab ) {
+		$core_pages = array(
+			'dashboard'  => 'wpvdb-dashboard',
+			'embeddings' => 'wpvdb-embeddings',
+			'settings'   => 'wpvdb-settings',
+			'status'     => 'wpvdb-status',
+		);
+
+		if ( isset( $core_pages[ $tab_id ] ) ) {
+			return $core_pages[ $tab_id ];
+		}
+
+		return ! empty( $tab['page'] ) ? sanitize_key( (string) $tab['page'] ) : 'wpvdb-' . $tab_id;
+	}
+
+	/**
+	 * Filter tabs to those the current user can access.
+	 *
+	 * @param array<string, array<string, mixed>> $tabs Admin tabs.
+	 * @return array<string, array<string, mixed>>
+	 */
+	private function filter_admin_tabs_by_current_user( array $tabs ) {
+		return array_filter(
+			$tabs,
+			static function ( $tab ) {
+				return current_user_can( $tab['capability'] );
+			}
+		);
 	}
 
 	/**

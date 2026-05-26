@@ -3,9 +3,10 @@
  * Admin header template
  *
  * @package WPVDB
- * @var string $tab The current tab
- * @var array $tabs Array of available tabs
- * @var Admin $admin Admin instance
+ * @var string       $tab          Current tab ID.
+ * @var array        $tabs         All normalized admin tabs.
+ * @var array        $visible_tabs Admin tabs available to the current user.
+ * @var \WPVDB\Admin $admin        Admin controller instance.
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -199,7 +200,7 @@ switch ( $tab ) {
 
 	<?php if ( $admin->is_database_compatible() || $admin->are_fallbacks_enabled() ) : ?>
 		<nav class="nav-tab-wrapper woo-nav-tab-wrapper">
-			<?php foreach ( $tabs as $tab_id => $tab_config ) : ?>
+			<?php foreach ( $visible_tabs as $tab_id => $tab_config ) : ?>
 				<?php
 				$active = $tab === $tab_id ? ' nav-tab-active' : '';
 				$url    = admin_url( 'admin.php?page=' . $tab_config['page'] );
