@@ -9,9 +9,6 @@
 
 defined( 'ABSPATH' ) || exit;
 
-// Admin diagnostics intentionally query WPVDB custom tables directly.
-// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-
 global $wpdb;
 
 // Get the database instance.
@@ -29,6 +26,7 @@ if ( $database->get_db_type() === 'mariadb' && $database->has_native_vector_supp
 	$table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
 	// Check if the table exists first.
+	// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 	$table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table_name ) ) ) === $table_name;
 
 	if ( $table_exists ) {
@@ -52,6 +50,7 @@ if ( $database->get_db_type() === 'mariadb' && $database->has_native_vector_supp
 			}
 		}
 	}
+	// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 }
 
 // Get provider change status - CRITICAL FIX: Force fresh data retrieval.
@@ -111,7 +110,8 @@ $system_info['vector_support']    = $database->has_native_vector_support() ? 'Ye
 $system_info['fallbacks_enabled'] = $database->are_fallbacks_enabled() ? 'Yes' : 'No';
 
 // Get embedding tables info.
-$embedding_table                       = $wpdb->prefix . 'wpvdb_embeddings';
+$embedding_table = $wpdb->prefix . 'wpvdb_embeddings';
+// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 $embedding_table_exists                = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $embedding_table ) ) ) === $embedding_table;
 $system_info['embedding_table_exists'] = $embedding_table_exists ? 'Yes' : 'No';
 
@@ -120,6 +120,7 @@ if ( $embedding_table_exists ) {
 } else {
 	$system_info['embedding_count'] = '0';
 }
+// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 // Define available sections.
 $sections = array(
@@ -427,7 +428,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 							<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block; margin-left:10px;">
 								<input type="hidden" name="action" value="wpvdb_cancel_provider_change">
 								<?php wp_nonce_field( 'wpvdb-admin' ); ?>
-								<input type="submit" id="wpvdb-cancel-provider-change-direct" class="button" value="<?php esc_attr_e( 'Cancel Change', 'wpvdb' ); ?>" onclick="return confirm('Are you sure you want to cancel the pending provider change?');">
+								<input type="submit" id="wpvdb-cancel-provider-change-direct" class="button" value="<?php esc_attr_e( 'Cancel Change', 'wpvdb' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to cancel the pending provider change?', 'wpvdb' ) ); ?>');">
 							</form>
 
 							<!-- Keep the original buttons as backup -->
@@ -547,7 +548,7 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block; margin-left:10px;">
 							<input type="hidden" name="action" value="wpvdb_cancel_provider_change">
 							<?php wp_nonce_field( 'wpvdb-admin' ); ?>
-							<input type="submit" id="wpvdb-cancel-provider-change-direct-tool" class="button" value="<?php esc_attr_e( 'Cancel Change', 'wpvdb' ); ?>" onclick="return confirm('Are you sure you want to cancel the pending provider change?');">
+							<input type="submit" id="wpvdb-cancel-provider-change-direct-tool" class="button" value="<?php esc_attr_e( 'Cancel Change', 'wpvdb' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to cancel the pending provider change?', 'wpvdb' ) ); ?>');">
 						</form>
 
 						<!-- Keep the original buttons as backup -->
@@ -939,7 +940,7 @@ jQuery(document).ready(function($) {
 				e.stopPropagation(); // Prevent multiple handlers
 				console.log('WPVDB CRITICAL: Cancel provider change button clicked directly');
 
-				if (!confirm('Are you sure you want to cancel the pending provider change?')) {
+				if (!confirm('<?php echo esc_js( __( 'Are you sure you want to cancel the pending provider change?', 'wpvdb' ) ); ?>')) {
 					return;
 				}
 

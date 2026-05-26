@@ -10,9 +10,6 @@
 
 defined( 'ABSPATH' ) || exit;
 
-// Admin diagnostics intentionally query WPVDB custom tables directly.
-// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-
 // Get the plugin instance.
 global $wpvdb_plugin, $wpdb;
 
@@ -24,6 +21,7 @@ $settings   = get_option( 'wpvdb_settings', array() );
 $table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
 // Check if table exists.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 $table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table_name ) ) ) === $table_name;
 
 // Default values in case of errors.
@@ -52,6 +50,7 @@ if ( $table_exists ) {
 		$storage_used     = size_format( 0 );
 	}
 }
+// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 // Restore error display.
 $wpdb->show_errors = $show_errors;
@@ -76,12 +75,13 @@ switch ( $tab ) {
 		$total_pages = 0;
 
 		if ( $table_exists ) {
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			try {
 				$embeddings = $wpdb->get_results(
 					$wpdb->prepare(
 						"SELECT id, doc_id, chunk_id, LEFT(chunk_content, 150) as preview, summary
-						FROM {$wpdb->prefix}wpvdb_embeddings
-						ORDER BY id DESC LIMIT %d OFFSET %d",
+							FROM {$wpdb->prefix}wpvdb_embeddings
+							ORDER BY id DESC LIMIT %d OFFSET %d",
 						$items_per_page,
 						$offset
 					)
@@ -97,6 +97,7 @@ switch ( $tab ) {
 				$total_embeddings = 0;
 				$total_pages      = 0;
 			}
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		}
 		break;
 
@@ -127,6 +128,7 @@ switch ( $tab ) {
 		);
 
 		// Get database statistics only if table exists.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		if ( $table_exists ) {
 			try {
 				// Update db_info with actual values.
@@ -163,6 +165,7 @@ switch ( $tab ) {
 				$table_structure = array();
 			}
 		}
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		// Embedding provider information.
 		$embedding_info = array(
