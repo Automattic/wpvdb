@@ -799,14 +799,14 @@ if ( ! array_key_exists( $current_section, $sections ) ) {
 </div>
 </div><!-- .wrap -->
 
-<?php if ( $has_pending_change || apply_filters( 'wpvdb_render_test_embedding_ui', true ) ) : ?>
-<script type="text/javascript">
-jQuery(document).ready(function($) {
-	console.log('WPVDB CRITICAL FIX: Direct inline JavaScript loaded');
+		<?php if ( $has_pending_change || apply_filters( 'wpvdb_render_test_embedding_ui', true ) ) : ?>
+	<script type="text/javascript">
+	jQuery(document).ready(function($) {
+		console.log('WPVDB CRITICAL FIX: Direct inline JavaScript loaded');
 
-	// Check if the test embedding modal is already working
-	var testEmbeddingHandled = false;
-	var testButtonClicked = false;
+		// Check if the test embedding modal is already working
+		var testEmbeddingHandled = false;
+		var testButtonClicked = false;
 
 	function normalizeDisplayValue(value) {
 		return null === value || 'undefined' === typeof value ? '' : String(value);
@@ -828,16 +828,17 @@ jQuery(document).ready(function($) {
 	function renderEmbeddingDetails(data) {
 		var $details = $('<div>').addClass('wpvdb-embedding-details');
 
-		appendEmbeddingDetail($details, 'Provider', data.provider);
-		appendEmbeddingDetail($details, 'Model', data.model);
-		appendEmbeddingDetail($details, 'Dimensions', data.dimensions);
-		appendEmbeddingDetail($details, 'Time', data.time, ' seconds');
+		appendEmbeddingDetail($details, '<?php echo esc_js( __( 'Provider', 'wpvdb' ) ); ?>', data.provider);
+		appendEmbeddingDetail($details, '<?php echo esc_js( __( 'Model', 'wpvdb' ) ); ?>', data.model);
+		appendEmbeddingDetail($details, '<?php echo esc_js( __( 'Dimensions', 'wpvdb' ) ); ?>', data.dimensions);
+		appendEmbeddingDetail($details, '<?php echo esc_js( __( 'Time', 'wpvdb' ) ); ?>', data.time, '<?php echo esc_js( __( ' seconds', 'wpvdb' ) ); ?>');
 
 		if (data.embedding && data.embedding.length > 0) {
 			var sampleSize = Math.min(10, data.embedding.length);
 			var sample = data.embedding.slice(0, sampleSize);
 			var $sampleLabel = $('<p>');
-			$('<strong>').text('Sample (first ' + sampleSize + ' values):').appendTo($sampleLabel);
+			<?php /* translators: %d: Number of embedding sample values shown. */ ?>
+			$('<strong>').text('<?php echo esc_js( __( 'Sample (first %d values):', 'wpvdb' ) ); ?>'.replace('%d', sampleSize)).appendTo($sampleLabel);
 			$details.append($sampleLabel);
 			$('<pre>').text(JSON.stringify(sample) + '...').appendTo($details);
 		}
@@ -901,7 +902,7 @@ jQuery(document).ready(function($) {
 				e.stopPropagation(); // Prevent multiple handlers
 				console.log('WPVDB CRITICAL: Apply provider change button clicked directly');
 
-				if (!confirm('This will activate the new provider and start a background re-embed job for posts on the old model. Existing rows for the old model stay in place until each post is re-processed. Continue?')) {
+				if (!confirm('<?php echo esc_js( __( 'This will activate the new provider and start a background re-embed job for posts on the old model. Existing rows for the old model stay in place until each post is re-processed. Continue?', 'wpvdb' ) ); ?>')) {
 					return;
 				}
 
@@ -920,16 +921,16 @@ jQuery(document).ready(function($) {
 					success: function(response) {
 						console.log('WPVDB CRITICAL: Provider change response received', response);
 						if (response.success) {
-							alert('Provider change successful. Page will reload.');
+							alert('<?php echo esc_js( __( 'Provider change successful. Page will reload.', 'wpvdb' ) ); ?>');
 							window.location.reload();
 						} else {
-							alert(response.data && response.data.message ? response.data.message : 'Error applying provider change');
+							alert(response.data && response.data.message ? response.data.message : '<?php echo esc_js( __( 'Error applying provider change', 'wpvdb' ) ); ?>');
 							$('.button').removeClass('updating-message').prop('disabled', false);
 						}
 					},
 					error: function(xhr, status, error) {
 						console.error('WPVDB CRITICAL: AJAX error:', xhr.responseText);
-						alert('Error applying provider change: ' + error);
+						alert('<?php echo esc_js( __( 'Error applying provider change: ', 'wpvdb' ) ); ?>' + error);
 						$('.button').removeClass('updating-message').prop('disabled', false);
 					}
 				});
@@ -959,16 +960,16 @@ jQuery(document).ready(function($) {
 					success: function(response) {
 						console.log('WPVDB CRITICAL: Provider change cancel response received', response);
 						if (response.success) {
-							alert('Provider change cancelled. Page will reload.');
+							alert('<?php echo esc_js( __( 'Provider change cancelled. Page will reload.', 'wpvdb' ) ); ?>');
 							window.location.reload();
 						} else {
-							alert(response.data && response.data.message ? response.data.message : 'Error cancelling provider change');
+							alert(response.data && response.data.message ? response.data.message : '<?php echo esc_js( __( 'Error cancelling provider change', 'wpvdb' ) ); ?>');
 							$('.button').removeClass('updating-message').prop('disabled', false);
 						}
 					},
 					error: function(xhr, status, error) {
 						console.error('WPVDB CRITICAL: AJAX error:', xhr.responseText);
-						alert('Error cancelling provider change: ' + error);
+						alert('<?php echo esc_js( __( 'Error cancelling provider change: ', 'wpvdb' ) ); ?>' + error);
 						$('.button').removeClass('updating-message').prop('disabled', false);
 					}
 				});
@@ -1007,12 +1008,12 @@ jQuery(document).ready(function($) {
 			var text = $('#wpvdb-test-text').val();
 
 			if (!text.trim()) {
-				alert('Please enter some text to embed.');
+				alert('<?php echo esc_js( __( 'Please enter some text to embed.', 'wpvdb' ) ); ?>');
 				return;
 			}
 
 			// Show loading state
-			renderStatusNotice('info', 'Generating embedding...');
+			renderStatusNotice('info', '<?php echo esc_js( __( 'Generating embedding...', 'wpvdb' ) ); ?>');
 			$('#wpvdb-test-embedding-results').show();
 
 			// Make AJAX request directly
@@ -1029,15 +1030,15 @@ jQuery(document).ready(function($) {
 				success: function(response) {
 					console.log('WPVDB CRITICAL: Test embedding response received', response);
 					if (response.success) {
-						renderStatusNotice('success', 'Embedding generated successfully!');
+						renderStatusNotice('success', '<?php echo esc_js( __( 'Embedding generated successfully!', 'wpvdb' ) ); ?>');
 						renderEmbeddingDetails(response.data);
 					} else {
-						renderStatusNotice('error', 'Error: ' + (response.data ? response.data.message : 'Unknown error'));
+						renderStatusNotice('error', '<?php echo esc_js( __( 'Error: ', 'wpvdb' ) ); ?>' + (response.data ? response.data.message : '<?php echo esc_js( __( 'Unknown error', 'wpvdb' ) ); ?>'));
 					}
 				},
 				error: function(xhr, status, error) {
 					console.error('WPVDB CRITICAL: AJAX error:', xhr.responseText);
-					renderStatusNotice('error', 'Error connecting to the server: ' + error);
+					renderStatusNotice('error', '<?php echo esc_js( __( 'Error connecting to the server: ', 'wpvdb' ) ); ?>' + error);
 				}
 			});
 		});
