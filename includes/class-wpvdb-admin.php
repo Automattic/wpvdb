@@ -739,7 +739,8 @@ class Admin {
 		}
 
 		// For compatible databases, show the regular admin pages.
-		$tab     = $this->get_current_tab();
+		$tabs    = $this->get_admin_tabs();
+		$tab     = $this->get_current_tab( $tabs );
 		$section = $this->get_current_section();
 
 		// Default to dashboard if no tab is specified.
@@ -747,7 +748,6 @@ class Admin {
 			$tab = 'dashboard';
 		}
 
-		$tabs         = $this->get_admin_tabs();
 		$visible_tabs = $this->filter_admin_tabs_by_current_user( $tabs );
 		if ( ! isset( $tabs[ $tab ] ) ) {
 			wp_die(
@@ -883,16 +883,14 @@ class Admin {
 	/**
 	 * Get the current tab from the page parameter
 	 */
-	private function get_current_tab() {
+	private function get_current_tab( array $tabs ) {
 		$page = 'wpvdb-dashboard';
 		if ( isset( $_GET['page'] ) && is_scalar( $_GET['page'] ) ) {
 			$page = sanitize_key( wp_unslash( $_GET['page'] ) );
 		}
 
-		$tabs = $this->get_admin_tabs();
-
-		foreach ( $tabs as $tab_id => $tab ) {
-			if ( isset( $tab['page'] ) && $page === $tab['page'] ) {
+		foreach ( $tabs as $tab_id => $tab_config ) {
+			if ( isset( $tab_config['page'] ) && $page === $tab_config['page'] ) {
 				return $tab_id;
 			}
 		}
@@ -968,6 +966,7 @@ class Admin {
 	 */
 	private function normalize_admin_tabs( array $tabs ) {
 		$normalized = array();
+		$used_pages = array();
 
 		foreach ( $tabs as $tab_id => $tab ) {
 			$tab_id = sanitize_key( (string) $tab_id );
@@ -976,10 +975,19 @@ class Admin {
 				continue;
 			}
 
+			$page = $this->get_admin_tab_page( $tab_id, $tab );
+			if ( isset( $used_pages[ $page ] ) ) {
+				$page = 'wpvdb-' . $tab_id;
+			}
+			if ( isset( $used_pages[ $page ] ) ) {
+				continue;
+			}
+			$used_pages[ $page ] = true;
+
 			$normalized[ $tab_id ] = array(
 				'label'           => (string) $tab['label'],
 				'menu_label'      => isset( $tab['menu_label'] ) ? (string) $tab['menu_label'] : (string) $tab['label'],
-				'page'            => $this->get_admin_tab_page( $tab_id, $tab ),
+				'page'            => $page,
 				'capability'      => ! empty( $tab['capability'] ) ? (string) $tab['capability'] : 'manage_options',
 				'position'        => isset( $tab['position'] ) ? (int) $tab['position'] : 100,
 				'render_callback' => isset( $tab['render_callback'] ) ? $tab['render_callback'] : null,
