@@ -807,8 +807,41 @@ jQuery(document).ready(function($) {
 	var testEmbeddingHandled = false;
 	var testButtonClicked = false;
 
-	function escapeHtml(value) {
-		return $('<div>').text(value == null ? '' : String(value)).html();
+	function normalizeDisplayValue(value) {
+		return null === value || 'undefined' === typeof value ? '' : String(value);
+	}
+
+	function renderStatusNotice(type, message) {
+		var $notice = $('<div>').addClass('notice notice-' + type);
+		$('<p>').text(message).appendTo($notice);
+		$('.wpvdb-status-message').empty().append($notice);
+	}
+
+	function appendEmbeddingDetail($details, label, value, suffix) {
+		var $row = $('<p>');
+		$('<strong>').text(label + ': ').appendTo($row);
+		$row.append(document.createTextNode(normalizeDisplayValue(value) + (suffix || '')));
+		$details.append($row);
+	}
+
+	function renderEmbeddingDetails(data) {
+		var $details = $('<div>').addClass('wpvdb-embedding-details');
+
+		appendEmbeddingDetail($details, 'Provider', data.provider);
+		appendEmbeddingDetail($details, 'Model', data.model);
+		appendEmbeddingDetail($details, 'Dimensions', data.dimensions);
+		appendEmbeddingDetail($details, 'Time', data.time, ' seconds');
+
+		if (data.embedding && data.embedding.length > 0) {
+			var sampleSize = Math.min(10, data.embedding.length);
+			var sample = data.embedding.slice(0, sampleSize);
+			var $sampleLabel = $('<p>');
+			$('<strong>').text('Sample (first ' + sampleSize + ' values):').appendTo($sampleLabel);
+			$details.append($sampleLabel);
+			$('<pre>').text(JSON.stringify(sample) + '...').appendTo($details);
+		}
+
+		$('.wpvdb-embedding-info').empty().append($details);
 	}
 
 	// CRITICAL FIX: Create a test function to check if event handlers already exist
@@ -978,7 +1011,7 @@ jQuery(document).ready(function($) {
 			}
 
 			// Show loading state
-			$('.wpvdb-status-message').html('<div class="notice notice-info"><p>Generating embedding...</p></div>');
+			renderStatusNotice('info', 'Generating embedding...');
 			$('#wpvdb-test-embedding-results').show();
 
 			// Make AJAX request directly
@@ -995,32 +1028,15 @@ jQuery(document).ready(function($) {
 				success: function(response) {
 					console.log('WPVDB CRITICAL: Test embedding response received', response);
 					if (response.success) {
-						$('.wpvdb-status-message').html('<div class="notice notice-success"><p>Embedding generated successfully!</p></div>');
-
-						// Display embedding info
-						var html = '<div class="wpvdb-embedding-details">';
-						html += '<p><strong>Provider:</strong> ' + escapeHtml(response.data.provider) + '</p>';
-						html += '<p><strong>Model:</strong> ' + escapeHtml(response.data.model) + '</p>';
-						html += '<p><strong>Dimensions:</strong> ' + escapeHtml(response.data.dimensions) + '</p>';
-						html += '<p><strong>Time:</strong> ' + escapeHtml(response.data.time) + ' seconds</p>';
-
-						// Show a sample of the embedding vector
-						if (response.data.embedding && response.data.embedding.length > 0) {
-							var sampleSize = Math.min(10, response.data.embedding.length);
-							var sample = response.data.embedding.slice(0, sampleSize);
-							html += '<p><strong>Sample (first ' + sampleSize + ' values):</strong></p>';
-							html += '<pre>' + escapeHtml(JSON.stringify(sample)) + '...</pre>';
-						}
-
-						html += '</div>';
-						$('.wpvdb-embedding-info').html(html);
+						renderStatusNotice('success', 'Embedding generated successfully!');
+						renderEmbeddingDetails(response.data);
 					} else {
-						$('.wpvdb-status-message').html('<div class="notice notice-error"><p>Error: ' + escapeHtml(response.data ? response.data.message : 'Unknown error') + '</p></div>');
+						renderStatusNotice('error', 'Error: ' + (response.data ? response.data.message : 'Unknown error'));
 					}
 				},
 				error: function(xhr, status, error) {
 					console.error('WPVDB CRITICAL: AJAX error:', xhr.responseText);
-					$('.wpvdb-status-message').html('<div class="notice notice-error"><p>Error connecting to the server: ' + escapeHtml(error) + '</p></div>');
+					renderStatusNotice('error', 'Error connecting to the server: ' + error);
 				}
 			});
 		});
