@@ -1860,7 +1860,7 @@ class Admin {
 	 */
 	public function ajax_get_embedding_content() {
 		// Check nonce.
-		if ( ! check_ajax_referer( 'wpvdb_ajax_nonce', 'nonce', false ) ) {
+		if ( ! check_ajax_referer( 'wpvdb-admin', 'nonce', false ) ) {
 			wp_send_json_error( array( 'message' => __( 'Security check failed', 'wpvdb' ) ) );
 		}
 

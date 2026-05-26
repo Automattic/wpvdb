@@ -21,7 +21,8 @@ $settings   = get_option( 'wpvdb_settings', array() );
 $table_name = $wpdb->prefix . 'wpvdb_embeddings';
 
 // Check if table exists.
-$table_exists = $wpdb->get_var( "SHOW TABLES LIKE '{$table_name}'" ) === $table_name;
+// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+$table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table_name ) ) ) === $table_name;
 
 // Default values in case of errors.
 $total_embeddings = 0;
@@ -36,11 +37,11 @@ $wpdb->show_errors = false;
 // Get statistics only if table exists.
 if ( $table_exists ) {
 	try {
-		$total_embeddings = $wpdb->get_var( "SELECT COUNT(*) FROM {$table_name}" );
+		$total_embeddings = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}wpvdb_embeddings" );
 		$total_embeddings = $total_embeddings ? $total_embeddings : 0;
-		$total_docs       = $wpdb->get_var( "SELECT COUNT(DISTINCT doc_id) FROM {$table_name}" );
+		$total_docs       = $wpdb->get_var( "SELECT COUNT(DISTINCT doc_id) FROM {$wpdb->prefix}wpvdb_embeddings" );
 		$total_docs       = $total_docs ? $total_docs : 0;
-		$storage_used     = $wpdb->get_var( "SELECT SUM(LENGTH(embedding)) FROM {$table_name}" );
+		$storage_used     = $wpdb->get_var( "SELECT SUM(LENGTH(embedding)) FROM {$wpdb->prefix}wpvdb_embeddings" );
 		$storage_used     = size_format( $storage_used ? $storage_used : 0 );
 	} catch ( \Exception $e ) {
 		// Handle exception.
@@ -49,6 +50,7 @@ if ( $table_exists ) {
 		$storage_used     = size_format( 0 );
 	}
 }
+// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 // Restore error display.
 $wpdb->show_errors = $show_errors;
@@ -65,34 +67,37 @@ switch ( $tab ) {
 
 	case 'embeddings':
 		// Get paginated embeddings if table exists.
-		$page     = isset( $_GET['paged'] ) ? absint( $_GET['paged'] ) : 1;
-		$per_page = 20;
-		$offset   = ( $page - 1 ) * $per_page;
+		$embedding_page = isset( $_GET['paged'] ) ? absint( $_GET['paged'] ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$items_per_page = 20;
+		$offset         = ( $embedding_page - 1 ) * $items_per_page;
 
 		$embeddings  = array();
 		$total_pages = 0;
 
 		if ( $table_exists ) {
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			try {
 				$embeddings = $wpdb->get_results(
 					$wpdb->prepare(
 						"SELECT id, doc_id, chunk_id, LEFT(chunk_content, 150) as preview, summary
-                    FROM {$table_name} ORDER BY id DESC LIMIT %d OFFSET %d",
-						$per_page,
+							FROM {$wpdb->prefix}wpvdb_embeddings
+							ORDER BY id DESC LIMIT %d OFFSET %d",
+						$items_per_page,
 						$offset
 					)
 				);
 				$embeddings = $embeddings ? $embeddings : array();
 
-				$total_embeddings = $wpdb->get_var( "SELECT COUNT(*) FROM {$table_name}" );
+				$total_embeddings = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}wpvdb_embeddings" );
 				$total_embeddings = $total_embeddings ? $total_embeddings : 0;
-				$total_pages      = ceil( $total_embeddings / $per_page );
+				$total_pages      = ceil( $total_embeddings / $items_per_page );
 			} catch ( \Exception $e ) {
 				// Handle exception.
 				$embeddings       = array();
 				$total_embeddings = 0;
 				$total_pages      = 0;
 			}
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		}
 		break;
 
@@ -123,25 +128,26 @@ switch ( $tab ) {
 		);
 
 		// Get database statistics only if table exists.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		if ( $table_exists ) {
 			try {
 				// Update db_info with actual values.
-				$db_info['total_embeddings'] = $wpdb->get_var( "SELECT COUNT(*) FROM {$table_name}" );
+				$db_info['total_embeddings'] = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}wpvdb_embeddings" );
 				$db_info['total_embeddings'] = $db_info['total_embeddings'] ? $db_info['total_embeddings'] : 0;
-				$db_info['total_documents']  = $wpdb->get_var( "SELECT COUNT(DISTINCT doc_id) FROM {$table_name}" );
+				$db_info['total_documents']  = $wpdb->get_var( "SELECT COUNT(DISTINCT doc_id) FROM {$wpdb->prefix}wpvdb_embeddings" );
 				$db_info['total_documents']  = $db_info['total_documents'] ? $db_info['total_documents'] : 0;
-				$storage_used                = $wpdb->get_var( "SELECT SUM(LENGTH(embedding)) FROM {$table_name}" );
+				$storage_used                = $wpdb->get_var( "SELECT SUM(LENGTH(embedding)) FROM {$wpdb->prefix}wpvdb_embeddings" );
 				$db_info['storage_used']     = size_format( $storage_used ? $storage_used : 0 );
 
 				// Update db_stats with actual values.
 				$db_stats['total_embeddings']       = $db_info['total_embeddings'];
 				$db_stats['total_docs']             = $db_info['total_documents'];
 				$db_stats['storage_used']           = $db_info['storage_used'];
-				$avg_embedding_size                 = $wpdb->get_var( "SELECT AVG(LENGTH(embedding)) FROM {$table_name}" );
+				$avg_embedding_size                 = $wpdb->get_var( "SELECT AVG(LENGTH(embedding)) FROM {$wpdb->prefix}wpvdb_embeddings" );
 				$db_stats['avg_embedding_size']     = size_format( $avg_embedding_size ? $avg_embedding_size : 0 );
-				$largest_embedding                  = $wpdb->get_var( "SELECT MAX(LENGTH(embedding)) FROM {$table_name}" );
+				$largest_embedding                  = $wpdb->get_var( "SELECT MAX(LENGTH(embedding)) FROM {$wpdb->prefix}wpvdb_embeddings" );
 				$db_stats['largest_embedding']      = size_format( $largest_embedding ? $largest_embedding : 0 );
-				$avg_chunk_content_size             = $wpdb->get_var( "SELECT AVG(LENGTH(chunk_content)) FROM {$table_name}" );
+				$avg_chunk_content_size             = $wpdb->get_var( "SELECT AVG(LENGTH(chunk_content)) FROM {$wpdb->prefix}wpvdb_embeddings" );
 				$db_stats['avg_chunk_content_size'] = size_format( $avg_chunk_content_size ? $avg_chunk_content_size : 0 );
 			} catch ( \Exception $e ) {
 				// In case of error, we already have default values.
@@ -153,12 +159,13 @@ switch ( $tab ) {
 		$table_structure = array();
 		if ( $table_exists ) {
 			try {
-				$table_structure = $wpdb->get_results( "DESCRIBE {$table_name}" );
+				$table_structure = $wpdb->get_results( "DESCRIBE {$wpdb->prefix}wpvdb_embeddings" );
 				$table_structure = $table_structure ? $table_structure : array();
 			} catch ( \Exception $e ) {
 				$table_structure = array();
 			}
 		}
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		// Embedding provider information.
 		$embedding_info = array(
@@ -197,7 +204,7 @@ switch ( $tab ) {
 				$active = $tab === $tab_id ? ' nav-tab-active' : '';
 				$url    = admin_url( 'admin.php?page=wpvdb-' . $tab_id );
 				?>
-				<a href="<?php echo esc_url( $url ); ?>" class="nav-tab<?php echo $active; ?>"><?php echo esc_html( $tab_label ); ?></a>
+				<a href="<?php echo esc_url( $url ); ?>" class="<?php echo esc_attr( 'nav-tab' . $active ); ?>"><?php echo esc_html( $tab_label ); ?></a>
 			<?php endforeach; ?>
 		</nav>
 	<?php endif; ?>

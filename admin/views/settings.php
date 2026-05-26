@@ -54,7 +54,8 @@ $specter_model        = $provider_model( 'specter' );
 <div class="wrap wpvdb-settings">
 	<?php
 	// Show WordPress settings updated notice.
-	if ( isset( $_GET['settings-updated'] ) && $_GET['settings-updated'] ) {
+	$settings_updated = isset( $_GET['settings-updated'] ) && is_scalar( $_GET['settings-updated'] ) ? sanitize_key( wp_unslash( $_GET['settings-updated'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+	if ( 'true' === $settings_updated ) {
 		add_settings_error( 'wpvdb_settings', 'wpvdb_settings_updated', __( 'Settings saved.', 'wpvdb' ), 'success' );
 	}
 	settings_errors( 'wpvdb_settings' );
@@ -87,7 +88,7 @@ $specter_model        = $provider_model( 'specter' );
 	);
 
 	// Get the current section from URL or default to 'api'.
-	$current_section = isset( $_GET['section'] ) ? sanitize_key( $_GET['section'] ) : 'api';
+	$current_section = isset( $_GET['section'] ) && is_scalar( $_GET['section'] ) ? sanitize_key( wp_unslash( $_GET['section'] ) ) : 'api'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 
 	// Ensure we have a valid section.
 	if ( ! array_key_exists( $current_section, $sections ) ) {
@@ -422,18 +423,17 @@ $specter_model        = $provider_model( 'specter' );
 							</p>
 
 							<?php
-							$post_types = get_post_types( array( 'public' => true ), 'objects' );
-							foreach ( $post_types as $post_type ) :
-								$checked = in_array( $post_type->name, $auto_embed_post_types ) ? 'checked' : '';
+							$available_post_types = get_post_types( array( 'public' => true ), 'objects' );
+							foreach ( $available_post_types as $content_type ) :
 								?>
 								<p>
 									<label>
 										<input type="checkbox"
 												name="wpvdb_settings[post_types][]"
-												value="<?php echo esc_attr( $post_type->name ); ?>"
-												<?php echo $checked; ?>
+												value="<?php echo esc_attr( $content_type->name ); ?>"
+												<?php checked( in_array( $content_type->name, $auto_embed_post_types, true ) ); ?>
 												class="wpvdb-post-type-checkbox">
-										<?php echo esc_html( $post_type->label ); ?>
+										<?php echo esc_html( $content_type->label ); ?>
 									</label>
 								</p>
 							<?php endforeach; ?>
