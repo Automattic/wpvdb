@@ -21,6 +21,13 @@ class Admin {
 	private $database;
 
 	/**
+	 * Normalized admin tabs for the current request.
+	 *
+	 * @var array<string, array<string, mixed>>|null
+	 */
+	private $admin_tabs = null;
+
+	/**
 	 * Constructor
 	 */
 	public function __construct() {
@@ -192,43 +199,16 @@ class Admin {
 
 		// If database is compatible or fallbacks are enabled, show all admin pages.
 		if ( $this->is_database_compatible() || $this->are_fallbacks_enabled() ) {
-			// Replace individual submenu pages with a single page with tabs.
-			add_submenu_page(
-				'wpvdb-dashboard',
-				__( 'Dashboard', 'wpvdb' ),
-				__( 'Dashboard', 'wpvdb' ),
-				'manage_options',
-				'wpvdb-dashboard',
-				array( $this, 'render_admin_page' )
-			);
-
-			add_submenu_page(
-				'wpvdb-dashboard',
-				__( 'Embeddings', 'wpvdb' ),
-				__( 'Embeddings', 'wpvdb' ),
-				'manage_options',
-				'wpvdb-embeddings',
-				array( $this, 'render_admin_page' )
-			);
-
-			add_submenu_page(
-				'wpvdb-dashboard',
-				__( 'Settings', 'wpvdb' ),
-				__( 'Settings', 'wpvdb' ),
-				'manage_options',
-				'wpvdb-settings',
-				array( $this, 'render_admin_page' )
-			);
-
-			// Add new Status page.
-			add_submenu_page(
-				'wpvdb-dashboard',
-				__( 'Status', 'wpvdb' ),
-				__( 'Status', 'wpvdb' ),
-				'manage_options',
-				'wpvdb-status',
-				array( $this, 'render_admin_page' )
-			);
+			foreach ( $this->get_admin_tabs() as $tab ) {
+				add_submenu_page(
+					'wpvdb-dashboard',
+					$tab['label'],
+					$tab['menu_label'],
+					$tab['capability'],
+					$tab['page'],
+					array( $this, 'render_admin_page' )
+				);
+			}
 
 			// Add hidden Automattic connection page.
 			add_submenu_page(
@@ -766,7 +746,8 @@ class Admin {
 		}
 
 		// For compatible databases, show the regular admin pages.
-		$tab     = $this->get_current_tab();
+		$tabs    = $this->get_admin_tabs();
+		$tab     = $this->get_current_tab( $tabs );
 		$section = $this->get_current_section();
 
 		// Default to dashboard if no tab is specified.
@@ -774,7 +755,21 @@ class Admin {
 			$tab = 'dashboard';
 		}
 
-		$tabs = $this->get_admin_tabs();
+		$visible_tabs = $this->filter_admin_tabs_by_current_user( $tabs );
+		if ( ! isset( $tabs[ $tab ] ) ) {
+			wp_die(
+				esc_html__( 'WPVDB admin tab not found.', 'wpvdb' ),
+				esc_html__( 'Tab not found', 'wpvdb' ),
+				array( 'response' => 404 )
+			);
+		}
+		if ( ! current_user_can( $tabs[ $tab ]['capability'] ) ) {
+			wp_die(
+				esc_html__( 'You do not have permission to access this WPVDB admin page.', 'wpvdb' ),
+				esc_html__( 'Permission denied', 'wpvdb' ),
+				array( 'response' => 403 )
+			);
+		}
 
 		// Pass the current instance to views.
 		$admin = $this;
@@ -818,6 +813,8 @@ class Admin {
 			}
 
 			include $tab_file;
+		} elseif ( is_callable( $tabs[ $tab ]['render_callback'] ) ) {
+			call_user_func( $tabs[ $tab ]['render_callback'] );
 		} else {
 			echo '<div class="notice notice-error"><p>';
 			printf( __( 'Tab file not found: %s', 'wpvdb' ), esc_html( $tab ) );
@@ -893,9 +890,19 @@ class Admin {
 	/**
 	 * Get the current tab from the page parameter
 	 */
-	private function get_current_tab() {
-		$page = isset( $_GET['page'] ) ? sanitize_text_field( $_GET['page'] ) : 'wpvdb-dashboard';
-		$tab  = ( is_string( $page ) && strpos( $page, 'wpvdb-' ) === 0 ) ? substr( $page, 6 ) : 'dashboard';
+	private function get_current_tab( array $tabs ) {
+		$page = 'wpvdb-dashboard';
+		if ( isset( $_GET['page'] ) && is_scalar( $_GET['page'] ) ) {
+			$page = sanitize_key( wp_unslash( $_GET['page'] ) );
+		}
+
+		foreach ( $tabs as $tab_id => $tab_config ) {
+			if ( isset( $tab_config['page'] ) && $page === $tab_config['page'] ) {
+				return $tab_id;
+			}
+		}
+
+		$tab = ( is_string( $page ) && strpos( $page, 'wpvdb-' ) === 0 ) ? substr( $page, 6 ) : 'dashboard';
 
 		return $tab;
 	}
@@ -911,11 +918,132 @@ class Admin {
 	 * Define available admin tabs
 	 */
 	private function get_admin_tabs() {
-		return array(
-			'dashboard'  => __( 'Dashboard', 'wpvdb' ),
-			'embeddings' => __( 'Embeddings', 'wpvdb' ),
-			'settings'   => __( 'Settings', 'wpvdb' ),
-			'status'     => __( 'Status', 'wpvdb' ),
+		if ( null !== $this->admin_tabs ) {
+			return $this->admin_tabs;
+		}
+
+		$tabs = array(
+			'dashboard'  => array(
+				'label'    => __( 'Dashboard', 'wpvdb' ),
+				'position' => 10,
+			),
+			'embeddings' => array(
+				'label'    => __( 'Embeddings', 'wpvdb' ),
+				'position' => 20,
+			),
+			'settings'   => array(
+				'label'    => __( 'Settings', 'wpvdb' ),
+				'position' => 30,
+			),
+			'status'     => array(
+				'label'    => __( 'Status', 'wpvdb' ),
+				'position' => 40,
+			),
+		);
+
+		/**
+		 * Filter the WPVDB admin tabs.
+		 *
+		 * Plugins can add tabs by returning an entry with label, menu_label,
+		 * page, capability, position, and render_callback keys. The page
+		 * defaults to wpvdb-{tab_id}. For built-in tabs, page is ignored so
+		 * existing wpvdb admin links remain stable. The render_callback runs
+		 * with no arguments inside the shared Vector Database admin wrapper.
+		 *
+		 * @param array<string, array<string, mixed>> $tabs  Admin tabs keyed by tab ID.
+		 * @param Admin                               $admin Admin controller instance.
+		 */
+		$filtered_tabs = apply_filters( 'wpvdb_admin_tabs', $tabs, $this );
+		if ( is_array( $filtered_tabs ) ) {
+			$tabs = array_replace( $tabs, $filtered_tabs );
+		}
+		$tabs = $this->normalize_admin_tabs( $tabs );
+
+		uasort(
+			$tabs,
+			static function ( $a, $b ) {
+				return $a['position'] <=> $b['position'];
+			}
+		);
+
+		$this->admin_tabs = $tabs;
+
+		return $this->admin_tabs;
+	}
+
+	/**
+	 * Normalize admin tab definitions.
+	 *
+	 * @param array<string, array<string, mixed>> $tabs Raw tabs.
+	 * @return array<string, array<string, mixed>>
+	 */
+	private function normalize_admin_tabs( array $tabs ) {
+		$normalized = array();
+		$used_pages = array();
+
+		foreach ( $tabs as $tab_id => $tab ) {
+			$tab_id = sanitize_key( (string) $tab_id );
+
+			if ( '' === $tab_id || ! is_array( $tab ) || empty( $tab['label'] ) ) {
+				continue;
+			}
+
+			$page = $this->get_admin_tab_page( $tab_id, $tab );
+			if ( isset( $used_pages[ $page ] ) ) {
+				$page = 'wpvdb-' . $tab_id;
+			}
+			if ( isset( $used_pages[ $page ] ) ) {
+				continue;
+			}
+			$used_pages[ $page ] = true;
+
+			$normalized[ $tab_id ] = array(
+				'label'           => (string) $tab['label'],
+				'menu_label'      => isset( $tab['menu_label'] ) ? (string) $tab['menu_label'] : (string) $tab['label'],
+				'page'            => $page,
+				'capability'      => ! empty( $tab['capability'] ) ? (string) $tab['capability'] : 'manage_options',
+				'position'        => isset( $tab['position'] ) ? (int) $tab['position'] : 100,
+				'render_callback' => isset( $tab['render_callback'] ) ? $tab['render_callback'] : null,
+			);
+		}
+
+		return $normalized;
+	}
+
+	/**
+	 * Return the stable page slug for an admin tab.
+	 *
+	 * @param string               $tab_id Tab ID.
+	 * @param array<string, mixed> $tab    Tab config.
+	 * @return string Page slug.
+	 */
+	private function get_admin_tab_page( $tab_id, $tab ) {
+		$core_pages = array(
+			'dashboard'  => 'wpvdb-dashboard',
+			'embeddings' => 'wpvdb-embeddings',
+			'settings'   => 'wpvdb-settings',
+			'status'     => 'wpvdb-status',
+		);
+
+		if ( isset( $core_pages[ $tab_id ] ) ) {
+			return $core_pages[ $tab_id ];
+		}
+
+		return ! empty( $tab['page'] ) ? sanitize_key( (string) $tab['page'] ) : 'wpvdb-' . $tab_id;
+	}
+
+	/**
+	 * Filter tabs to those the current user can access.
+	 *
+	 * @param array<string, array<string, mixed>> $tabs Admin tabs.
+	 * @return array<string, array<string, mixed>>
+	 */
+	private function filter_admin_tabs_by_current_user( array $tabs ) {
+		return array_filter(
+			$tabs,
+			static function ( $tab ) {
+				return current_user_can( $tab['capability'] );
+			}
 		);
 	}
 
