@@ -21,6 +21,13 @@ class Admin {
 	private $database;
 
 	/**
+	 * Normalized admin tabs for the current request.
+	 *
+	 * @var array<string, array<string, mixed>>|null
+	 */
+	private $admin_tabs = null;
+
+	/**
 	 * Constructor
 	 */
 	public function __construct() {
@@ -911,6 +918,10 @@ class Admin {
 	 * Define available admin tabs
 	 */
 	private function get_admin_tabs() {
+		if ( null !== $this->admin_tabs ) {
+			return $this->admin_tabs;
+		}
+
 		$tabs = array(
 			'dashboard'  => array(
 				'label'    => __( 'Dashboard', 'wpvdb' ),
@@ -944,7 +955,7 @@ class Admin {
 		 */
 		$filtered_tabs = apply_filters( 'wpvdb_admin_tabs', $tabs, $this );
 		if ( is_array( $filtered_tabs ) ) {
-			$tabs = $filtered_tabs;
+			$tabs = array_replace( $tabs, $filtered_tabs );
 		}
 		$tabs = $this->normalize_admin_tabs( $tabs );
 
@@ -955,7 +966,9 @@ class Admin {
 			}
 		);
 
-		return $tabs;
+		$this->admin_tabs = $tabs;
+
+		return $this->admin_tabs;
 	}
 
 	/**
