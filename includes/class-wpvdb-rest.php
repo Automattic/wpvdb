@@ -912,6 +912,29 @@ class REST {
 	 * @return int|\WP_Error        Row ID, or WP_Error on validation failure or DB insert failure.
 	 */
 	public static function insert_embedding_row( $doc_id, $chunk_id, $chunk_content, $summary, $embedding, $model = '', $doc_type = 'post', $chunk_index = null ) {
+		/**
+		 * Filters whether a missing or invalid chunk_index is a hard error.
+		 *
+		 * Default false preserves the legacy behavior (warn, then default to 0).
+		 * Return true to reject a null, non-numeric, or negative chunk_index with a
+		 * WP_Error instead of silently storing 0, so caller regressions fail loudly.
+		 *
+		 * @param bool $strict Whether to reject an invalid chunk_index. Default false.
+		 */
+		if ( apply_filters( 'wpvdb_strict_chunk_index', false )
+			&& ( null === $chunk_index || ! is_numeric( $chunk_index ) || (int) $chunk_index < 0 ) ) {
+			Logger::error( 'insert_embedding_row rejected invalid chunk_index for doc_id=' . $doc_id );
+			return new \WP_Error(
+				'chunk_index_invalid',
+				'Refused to store an embedding with a missing, non-numeric, or negative chunk_index while strict mode is enabled.',
+				array(
+					'doc_id'      => $doc_id,
+					'chunk_index' => $chunk_index,
+					'status'      => 400,
+				)
+			);
+		}
+
 		// Detect callers using the legacy 5/6/7-arg signature; fall back to 0 for backward
 		// compatibility but emit a warning so the regression is visible.
 		if ( null === $chunk_index ) {
