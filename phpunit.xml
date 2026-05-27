@@ -21,6 +21,9 @@
             <directory>tests/api</directory>
         </testsuite>
     </testsuites>
+    <extensions>
+        <extension class="WPVDB_Filter_Reset_Hook" file="tests/filter-reset-hook.php" />
+    </extensions>
     <coverage processUncoveredFiles="true">
         <include>
             <directory suffix=".php">includes</directory>
