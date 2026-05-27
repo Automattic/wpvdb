@@ -533,9 +533,9 @@ class REST {
 				$timing['server_elapsed_ms'] = (int) round( ( microtime( true ) - $server_start ) * 1000 );
 				$response                    = $cached_result;
 				$response['debug']           = $timing;
-				return rest_ensure_response( $response );
+				return self::add_model_mismatch_header( $response, $model );
 			}
-			return rest_ensure_response( $cached_result );
+			return self::add_model_mismatch_header( $cached_result, $model );
 		}
 
 		// Try to generate an embedding for the query.
@@ -840,11 +840,37 @@ class REST {
 				$timing['server_elapsed_ms'] = (int) round( ( microtime( true ) - $server_start ) * 1000 );
 				$response_data['debug']      = $timing;
 			}
-			return rest_ensure_response( $response_data );
+			return self::add_model_mismatch_header( $response_data, $model );
 		} catch ( \Exception $e ) {
 			Logger::log_exception( $e, 'Unhandled query exception' );
 			return new \WP_Error( 'error', $e->getMessage(), array( 'status' => 500 ) );
 		}
+	}
+
+	/**
+	 * Wrap a query response, flagging a requested model that differs from the active one.
+	 *
+	 * The /query path embeds with and filters by the requested `model`, so a stale
+	 * client that pins an old model after a migration silently gets zero results. This
+	 * adds an `X-WPVDB-Model-Mismatch` response header (visibility only; the request
+	 * still succeeds) when the requested model is not the active default model.
+	 *
+	 * @param mixed  $response        Response payload to return.
+	 * @param string $requested_model Model the request resolved to.
+	 * @return \WP_REST_Response
+	 */
+	private static function add_model_mismatch_header( $response, $requested_model ) {
+		$response     = rest_ensure_response( $response );
+		$active_model = Settings::get_default_model();
+
+		if ( '' !== (string) $requested_model && $requested_model !== $active_model ) {
+			$response->header(
+				'X-WPVDB-Model-Mismatch',
+				sprintf( 'requested=%s; active=%s', $requested_model, $active_model )
+			);
+		}
+
+		return $response;
 	}
 
 	/**
