@@ -75,7 +75,8 @@ require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-admin.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-embedding-enqueuer.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-plugin.php';
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
-	require_once WPVDB_PLUGIN_DIR . 'includes/cli/class-wpvdb-cli.php';
+	require_once WPVDB_PLUGIN_DIR . 'includes/cli/class-embeddings-command.php';
+	require_once WPVDB_PLUGIN_DIR . 'includes/cli/class-jobs-command.php';
 }
 
 if ( ! function_exists( 'wpvdb_has_action_scheduler' ) ) {
