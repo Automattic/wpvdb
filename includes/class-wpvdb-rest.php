@@ -916,19 +916,31 @@ class REST {
 		 * Filters whether a missing or invalid chunk_index is a hard error.
 		 *
 		 * Default false preserves the legacy behavior (warn, then default to 0).
-		 * Return true to reject a null, non-integer, or negative chunk_index with a
-		 * WP_Error instead of silently storing 0, so caller regressions fail loudly.
+		 * Return true to reject a null, non-integer, negative, or out-of-range
+		 * chunk_index with a WP_Error instead of silently storing 0, so caller
+		 * regressions fail loudly.
 		 *
 		 * @param bool $strict Whether to reject an invalid chunk_index. Default false.
 		 */
 		$strict_chunk_index = (bool) apply_filters( 'wpvdb_strict_chunk_index', false );
-		$valid_chunk_index  = is_int( $chunk_index )
-			|| ( is_string( $chunk_index ) && preg_match( '/^\d+$/', $chunk_index ) );
-		if ( $strict_chunk_index && ( ! $valid_chunk_index || (int) $chunk_index < 0 ) ) {
+		$valid_chunk_index  = false;
+		if ( is_int( $chunk_index ) ) {
+			$valid_chunk_index = $chunk_index >= 0;
+		} elseif ( is_string( $chunk_index ) && preg_match( '/^\d+$/', $chunk_index ) ) {
+			$normalized_chunk_index = ltrim( $chunk_index, '0' );
+			$max_chunk_index        = (string) PHP_INT_MAX;
+			$valid_chunk_index      = '' === $normalized_chunk_index
+				|| strlen( $normalized_chunk_index ) < strlen( $max_chunk_index )
+				|| (
+					strlen( $normalized_chunk_index ) === strlen( $max_chunk_index )
+					&& strcmp( $normalized_chunk_index, $max_chunk_index ) <= 0
+				);
+		}
+		if ( $strict_chunk_index && ! $valid_chunk_index ) {
 			Logger::error( 'insert_embedding_row rejected invalid chunk_index for doc_id=' . $doc_id );
 			return new \WP_Error(
 				'chunk_index_invalid',
-				'Refused to store an embedding with a missing, non-integer, or negative chunk_index while strict mode is enabled.',
+				'Refused to store an embedding with a missing, non-integer, negative, or out-of-range chunk_index while strict mode is enabled.',
 				array(
 					'doc_id'      => $doc_id,
 					'chunk_index' => $chunk_index,

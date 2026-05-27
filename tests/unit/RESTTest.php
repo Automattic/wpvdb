@@ -16,7 +16,7 @@ use WPVDB\REST;
 class RESTTest extends TestCase {
 
 	/**
-	 * Test strict chunk index mode rejects missing and non-integer values.
+	 * Test strict chunk index mode rejects invalid chunk index values.
 	 *
 	 * @dataProvider invalid_chunk_indexes
 	 *
@@ -45,11 +45,14 @@ class RESTTest extends TestCase {
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'chunk_index_invalid', $result->get_error_code() );
-		$this->assertSame( $chunk_index, $result->get_error_data()['chunk_index'] );
+		$error_data = $result->get_error_data();
+		$this->assertSame( 123, $error_data['doc_id'] );
+		$this->assertSame( $chunk_index, $error_data['chunk_index'] );
+		$this->assertSame( 400, $error_data['status'] );
 	}
 
 	/**
-	 * Test strict chunk index mode accepts integer values.
+	 * Test strict chunk index mode accepts valid chunk index values.
 	 *
 	 * @dataProvider valid_chunk_indexes
 	 *
@@ -79,6 +82,32 @@ class RESTTest extends TestCase {
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'embedding_invalid', $result->get_error_code() );
 		$this->assertSame( (int) $chunk_index, $result->get_error_data()['chunk_index'] );
+	}
+
+	/**
+	 * Test default mode does not reject invalid chunk index values.
+	 *
+	 * @dataProvider invalid_chunk_indexes
+	 *
+	 * @param mixed $chunk_index Invalid chunk index.
+	 */
+	public function test_default_chunk_index_mode_does_not_reject_invalid_values( $chunk_index ) {
+		$result = REST::insert_embedding_row(
+			123,
+			'chunk-0',
+			'Chunk content',
+			'',
+			array( 0.0 ),
+			'test-model',
+			'post',
+			$chunk_index
+		);
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'embedding_invalid', $result->get_error_code() );
+		$error_data = $result->get_error_data();
+		$this->assertSame( 123, $error_data['doc_id'] );
+		$this->assertSame( 400, $error_data['status'] );
 	}
 
 	/**
@@ -115,6 +144,14 @@ class RESTTest extends TestCase {
 			'fraction float' => array( 1.5 ),
 			'fraction text'  => array( '1.5' ),
 			'boolean'        => array( true ),
+			'false'          => array( false ),
+			'empty string'   => array( '' ),
+			'spaced number'  => array( ' 1' ),
+			'float one'      => array( 1.0 ),
+			'float zero'     => array( 0.0 ),
+			'plus one'       => array( '+1' ),
+			'exponent'       => array( '1e3' ),
+			'oversized'      => array( PHP_INT_MAX . '0' ),
 		);
 	}
 
@@ -129,6 +166,7 @@ class RESTTest extends TestCase {
 			'positive int' => array( 3 ),
 			'zero text'    => array( '0' ),
 			'number text'  => array( '3' ),
+			'max text'     => array( (string) PHP_INT_MAX ),
 		);
 	}
 }
