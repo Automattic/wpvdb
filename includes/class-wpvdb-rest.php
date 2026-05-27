@@ -916,17 +916,19 @@ class REST {
 		 * Filters whether a missing or invalid chunk_index is a hard error.
 		 *
 		 * Default false preserves the legacy behavior (warn, then default to 0).
-		 * Return true to reject a null, non-numeric, or negative chunk_index with a
+		 * Return true to reject a null, non-integer, or negative chunk_index with a
 		 * WP_Error instead of silently storing 0, so caller regressions fail loudly.
 		 *
 		 * @param bool $strict Whether to reject an invalid chunk_index. Default false.
 		 */
-		if ( apply_filters( 'wpvdb_strict_chunk_index', false )
-			&& ( null === $chunk_index || ! is_numeric( $chunk_index ) || (int) $chunk_index < 0 ) ) {
+		$strict_chunk_index = (bool) apply_filters( 'wpvdb_strict_chunk_index', false );
+		$valid_chunk_index  = is_int( $chunk_index )
+			|| ( is_string( $chunk_index ) && preg_match( '/^\d+$/', $chunk_index ) );
+		if ( $strict_chunk_index && ( ! $valid_chunk_index || (int) $chunk_index < 0 ) ) {
 			Logger::error( 'insert_embedding_row rejected invalid chunk_index for doc_id=' . $doc_id );
 			return new \WP_Error(
 				'chunk_index_invalid',
-				'Refused to store an embedding with a missing, non-numeric, or negative chunk_index while strict mode is enabled.',
+				'Refused to store an embedding with a missing, non-integer, or negative chunk_index while strict mode is enabled.',
 				array(
 					'doc_id'      => $doc_id,
 					'chunk_index' => $chunk_index,

@@ -12,6 +12,9 @@ require_once dirname( __DIR__ ) . '/vendor/autoload.php';
 echo "Using standalone testing mode.\n";
 
 // Mock essential WordPress functions for testing
+global $_wp_filters;
+$_wp_filters = [];
+
 if ( ! function_exists( 'add_action' ) ) {
     function add_action( $tag, $function_to_add, $priority = 10, $accepted_args = 1 ) {
         return true;
@@ -20,7 +23,36 @@ if ( ! function_exists( 'add_action' ) ) {
 
 if ( ! function_exists( 'add_filter' ) ) {
     function add_filter( $tag, $function_to_add, $priority = 10, $accepted_args = 1 ) {
+        global $_wp_filters;
+        if ( ! isset( $_wp_filters[ $tag ] ) ) {
+            $_wp_filters[ $tag ] = [];
+        }
+        if ( ! isset( $_wp_filters[ $tag ][ $priority ] ) ) {
+            $_wp_filters[ $tag ][ $priority ] = [];
+        }
+        $_wp_filters[ $tag ][ $priority ][] = [
+            'function'      => $function_to_add,
+            'accepted_args' => $accepted_args,
+        ];
         return true;
+    }
+}
+
+if ( ! function_exists( 'remove_filter' ) ) {
+    function remove_filter( $tag, $function_to_remove, $priority = 10 ) {
+        global $_wp_filters;
+        if ( empty( $_wp_filters[ $tag ][ $priority ] ) ) {
+            return false;
+        }
+
+        foreach ( $_wp_filters[ $tag ][ $priority ] as $index => $filter ) {
+            if ( $filter['function'] === $function_to_remove ) {
+                unset( $_wp_filters[ $tag ][ $priority ][ $index ] );
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
@@ -32,8 +64,22 @@ if ( ! function_exists( 'do_action' ) ) {
 }
 
 if ( ! function_exists( 'apply_filters' ) ) {
-    function apply_filters( $tag, $value ) {
-        // Simple mock that just returns the value unchanged
+    function apply_filters( $tag, $value, ...$args ) {
+        global $_wp_filters;
+        if ( empty( $_wp_filters[ $tag ] ) ) {
+            return $value;
+        }
+
+        ksort( $_wp_filters[ $tag ] );
+        $filter_args = array_merge( [ $value ], $args );
+        foreach ( $_wp_filters[ $tag ] as $filters ) {
+            foreach ( $filters as $filter ) {
+                $accepted_args = max( 1, (int) $filter['accepted_args'] );
+                $value = call_user_func_array( $filter['function'], array_slice( $filter_args, 0, $accepted_args ) );
+                $filter_args[0] = $value;
+            }
+        }
+
         return $value;
     }
 }
@@ -266,6 +312,12 @@ if ( ! defined( 'REST_REQUEST' ) ) {
     define( 'REST_REQUEST', false );
 }
 
+if ( ! function_exists( 'wpvdb_should_log_to_error_log' ) ) {
+    function wpvdb_should_log_to_error_log() {
+        return false;
+    }
+}
+
 if ( ! defined( 'OBJECT' ) ) {
     define( 'OBJECT', 'OBJECT' );
 }
@@ -435,8 +487,10 @@ require_once dirname( __DIR__ ) . '/includes/class-wpvdb-utils.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-providers.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-models.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-settings.php';
+require_once dirname( __DIR__ ) . '/includes/class-wpvdb-cache.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-core.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-database.php';
+require_once dirname( __DIR__ ) . '/includes/class-wpvdb-rest.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-embedding-enqueuer.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-queue.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-security.php';
