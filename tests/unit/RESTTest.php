@@ -26,7 +26,7 @@ class RESTTest extends TestCase {
 		$strict = function () {
 			return true;
 		};
-		add_filter( 'wpvdb_strict_chunk_index', $strict );
+		add_filter( 'wpvdb_strict_chunk_index', $strict, 10, 0 );
 
 		try {
 			$result = REST::insert_embedding_row(
@@ -62,7 +62,7 @@ class RESTTest extends TestCase {
 		$strict = function () {
 			return true;
 		};
-		add_filter( 'wpvdb_strict_chunk_index', $strict );
+		add_filter( 'wpvdb_strict_chunk_index', $strict, 10, 0 );
 
 		try {
 			$result = REST::insert_embedding_row(

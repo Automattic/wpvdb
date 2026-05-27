@@ -48,6 +48,12 @@ if ( ! function_exists( 'remove_filter' ) ) {
         foreach ( $_wp_filters[ $tag ][ $priority ] as $index => $filter ) {
             if ( $filter['function'] === $function_to_remove ) {
                 unset( $_wp_filters[ $tag ][ $priority ][ $index ] );
+                if ( empty( $_wp_filters[ $tag ][ $priority ] ) ) {
+                    unset( $_wp_filters[ $tag ][ $priority ] );
+                }
+                if ( empty( $_wp_filters[ $tag ] ) ) {
+                    unset( $_wp_filters[ $tag ] );
+                }
                 return true;
             }
         }
