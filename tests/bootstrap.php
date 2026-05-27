@@ -74,7 +74,7 @@ if ( ! function_exists( 'apply_filters' ) ) {
         $filter_args = array_merge( [ $value ], $args );
         foreach ( $_wp_filters[ $tag ] as $filters ) {
             foreach ( $filters as $filter ) {
-                $accepted_args = max( 1, (int) $filter['accepted_args'] );
+                $accepted_args = max( 0, (int) $filter['accepted_args'] );
                 $value = call_user_func_array( $filter['function'], array_slice( $filter_args, 0, $accepted_args ) );
                 $filter_args[0] = $value;
             }
