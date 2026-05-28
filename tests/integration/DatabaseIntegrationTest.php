@@ -74,9 +74,9 @@ class DatabaseIntegrationTest extends WPVDBIntegrationTestCase {
 
         $this->assertIsBool( $has_vector_support, 'Vector support should return boolean' );
 
-        // Log the result for debugging
+        // Emit the result as a test diagnostic for debugging.
         $db_type = $this->database->get_db_type();
-        error_log( "WPVDB Integration Test: {$db_type} vector support: " . ( $has_vector_support ? 'true' : 'false' ) );
+        fwrite( STDERR, "WPVDB Integration Test: {$db_type} vector support: " . ( $has_vector_support ? 'true' : 'false' ) . "\n" );
     }
 
     /**
@@ -301,6 +301,6 @@ class DatabaseIntegrationTest extends WPVDBIntegrationTestCase {
         $this->assertEquals( $num_records, (int) $count, 'Should have correct record count' );
         $this->assertLessThan( 1.0, $query_time, 'COUNT query should complete quickly' );
 
-        error_log( "WPVDB Performance Test: Inserted {$num_records} records in {$insert_time}s, queried in {$query_time}s" );
+        fwrite( STDERR, "WPVDB Performance Test: Inserted {$num_records} records in {$insert_time}s, queried in {$query_time}s\n" );
     }
 }

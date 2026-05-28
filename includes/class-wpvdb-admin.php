@@ -1169,6 +1169,37 @@ class Admin {
 	}
 
 	/**
+	 * Apply a pending provider/model change to a settings array.
+	 *
+	 * Sets the active provider/model, mirrors the model into the matching
+	 * per-provider default_model, and clears the pending fields. Returns the
+	 * mutated settings so the caller can persist them; persistence (update_option
+	 * plus cache busting) is intentionally left to the caller because those steps
+	 * differ between the AJAX and admin-post paths.
+	 *
+	 * @param array  $settings     Current settings array.
+	 * @param string $new_provider Provider to activate.
+	 * @param string $new_model    Model to activate.
+	 * @return array Mutated settings array.
+	 */
+	private function apply_pending_provider_change( $settings, $new_provider, $new_model ) {
+		$settings['active_provider'] = $new_provider;
+		$settings['active_model']    = $new_model;
+		$settings['provider']        = $new_provider;
+
+		if ( 'openai' === $new_provider && isset( $settings['openai'] ) ) {
+			$settings['openai']['default_model'] = $new_model;
+		} elseif ( 'automattic' === $new_provider && isset( $settings['automattic'] ) ) {
+			$settings['automattic']['default_model'] = $new_model;
+		}
+
+		$settings['pending_provider'] = '';
+		$settings['pending_model']    = '';
+
+		return $settings;
+	}
+
+	/**
 	 * Ajax handler for confirming provider/model changes
 	 */
 	public function ajax_confirm_provider_change() {
@@ -1316,18 +1347,7 @@ class Admin {
 
 			$job_id = isset( $job['job_id'] ) ? (int) $job['job_id'] : 0;
 
-			$settings['active_provider'] = $new_provider;
-			$settings['active_model']    = $new_model;
-			$settings['provider']        = $new_provider;
-
-			if ( 'openai' === $new_provider && isset( $settings['openai'] ) ) {
-				$settings['openai']['default_model'] = $new_model;
-			} elseif ( 'automattic' === $new_provider && isset( $settings['automattic'] ) ) {
-				$settings['automattic']['default_model'] = $new_model;
-			}
-
-			$settings['pending_provider'] = '';
-			$settings['pending_model']    = '';
+			$settings = $this->apply_pending_provider_change( $settings, $new_provider, $new_model );
 
 			update_option( 'wpvdb_settings', Settings::normalize_settings_for_storage( $settings ) );
 			Cache::invalidate_query_cache();
@@ -2670,18 +2690,7 @@ class Admin {
 
 		$job_id = isset( $job['job_id'] ) ? (int) $job['job_id'] : 0;
 
-		$settings['active_provider'] = $new_provider;
-		$settings['active_model']    = $new_model;
-		$settings['provider']        = $new_provider;
-
-		if ( 'openai' === $new_provider && isset( $settings['openai'] ) ) {
-			$settings['openai']['default_model'] = $new_model;
-		} elseif ( 'automattic' === $new_provider && isset( $settings['automattic'] ) ) {
-			$settings['automattic']['default_model'] = $new_model;
-		}
-
-		$settings['pending_provider'] = '';
-		$settings['pending_model']    = '';
+		$settings = $this->apply_pending_provider_change( $settings, $new_provider, $new_model );
 
 		update_option( 'wpvdb_settings', Settings::normalize_settings_for_storage( $settings ), true );
 		delete_transient( 'wpvdb_settings' );
