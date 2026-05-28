@@ -492,7 +492,8 @@ class REST {
 		);
 
 		$text               = isset( $data['query'] ) ? sanitize_textarea_field( $data['query'] ) : '';
-		$model              = isset( $data['model'] ) ? sanitize_text_field( $data['model'] ) : Settings::get_default_model();
+		$model              = isset( $data['model'] ) ? sanitize_text_field( $data['model'] ) : '';
+		$model              = $model ? $model : Settings::get_default_model();
 		$provider           = isset( $data['provider'] ) ? sanitize_text_field( $data['provider'] ) : Settings::get_active_provider();
 		$api_base           = $has_provided_vector ? '' : Settings::get_api_base_for_provider( $provider );
 		$cache_key_override = null;
@@ -533,9 +534,9 @@ class REST {
 				$timing['server_elapsed_ms'] = (int) round( ( microtime( true ) - $server_start ) * 1000 );
 				$response                    = $cached_result;
 				$response['debug']           = $timing;
-				return rest_ensure_response( $response );
+				return self::add_model_mismatch_header( $response, $model, ! $has_provided_vector );
 			}
-			return rest_ensure_response( $cached_result );
+			return self::add_model_mismatch_header( $cached_result, $model, ! $has_provided_vector );
 		}
 
 		// Try to generate an embedding for the query.
@@ -840,11 +841,46 @@ class REST {
 				$timing['server_elapsed_ms'] = (int) round( ( microtime( true ) - $server_start ) * 1000 );
 				$response_data['debug']      = $timing;
 			}
-			return rest_ensure_response( $response_data );
+			return self::add_model_mismatch_header( $response_data, $model, ! $has_provided_vector );
 		} catch ( \Exception $e ) {
 			Logger::log_exception( $e, 'Unhandled query exception' );
 			return new \WP_Error( 'error', $e->getMessage(), array( 'status' => 500 ) );
 		}
+	}
+
+	/**
+	 * Wrap a query response, flagging a requested model that differs from the active one.
+	 *
+	 * On the text-query path the request embeds with and filters by the requested
+	 * `model`, so a stale client that pins an old model after a migration silently
+	 * gets zero results. This adds an `X-WPVDB-Model-Mismatch` response header
+	 * (visibility only; the request still succeeds) when the requested model is not
+	 * the active default model.
+	 *
+	 * The header is skipped for client-supplied-vector queries: those intentionally
+	 * target rows of a specific (often non-active) model with a matching vector, so a
+	 * mismatch there is expected and the header would be noise.
+	 *
+	 * @param mixed  $response        Response payload to return.
+	 * @param string $requested_model Model the request resolved to.
+	 * @param bool   $is_text_query   Whether this is a text query (not a provided-vector query).
+	 * @return \WP_REST_Response
+	 */
+	private static function add_model_mismatch_header( $response, $requested_model, $is_text_query = true ) {
+		$response = rest_ensure_response( $response );
+
+		if ( $is_text_query ) {
+			$active_model = Settings::get_default_model();
+
+			if ( '' !== (string) $requested_model && $requested_model !== $active_model ) {
+				$response->header(
+					'X-WPVDB-Model-Mismatch',
+					sprintf( 'requested=%s; active=%s', $requested_model, $active_model )
+				);
+			}
+		}
+
+		return $response;
 	}
 
 	/**
