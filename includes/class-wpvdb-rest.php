@@ -492,7 +492,8 @@ class REST {
 		);
 
 		$text               = isset( $data['query'] ) ? sanitize_textarea_field( $data['query'] ) : '';
-		$model              = isset( $data['model'] ) ? sanitize_text_field( $data['model'] ) : Settings::get_default_model();
+		$model              = isset( $data['model'] ) ? sanitize_text_field( $data['model'] ) : '';
+		$model              = $model ? $model : Settings::get_default_model();
 		$provider           = isset( $data['provider'] ) ? sanitize_text_field( $data['provider'] ) : Settings::get_active_provider();
 		$api_base           = $has_provided_vector ? '' : Settings::get_api_base_for_provider( $provider );
 		$cache_key_override = null;
