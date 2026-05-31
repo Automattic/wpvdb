@@ -312,6 +312,12 @@ class Admin {
 		if ( isset( $input['specter']['api_base'] ) ) {
 			$input['specter']['api_base'] = sanitize_text_field( $input['specter']['api_base'] );
 		}
+		if ( isset( $input['voyage']['api_key'] ) ) {
+			$input['voyage']['api_key'] = Settings::encrypt_api_key( sanitize_text_field( $input['voyage']['api_key'] ) );
+		}
+		if ( isset( $input['voyage']['api_base'] ) ) {
+			$input['voyage']['api_base'] = sanitize_text_field( $input['voyage']['api_base'] );
+		}
 		if ( isset( $input['active_provider'] ) ) {
 			$input['active_provider'] = sanitize_text_field( $input['active_provider'] );
 			// For backwards compatibility.
@@ -331,6 +337,9 @@ class Admin {
 		}
 		if ( isset( $input['specter']['default_model'] ) ) {
 			$input['specter']['default_model'] = sanitize_text_field( $input['specter']['default_model'] );
+		}
+		if ( isset( $input['voyage']['default_model'] ) ) {
+			$input['voyage']['default_model'] = sanitize_text_field( $input['voyage']['default_model'] );
 		}
 
 		// Update individual options for backwards compatibility.
@@ -359,6 +368,9 @@ class Admin {
 		if ( ! isset( $input['specter'] ) || ! is_array( $input['specter'] ) ) {
 			$input['specter'] = isset( $current_settings['specter'] ) && is_array( $current_settings['specter'] ) ? $current_settings['specter'] : array();
 		}
+		if ( ! isset( $input['voyage'] ) || ! is_array( $input['voyage'] ) ) {
+			$input['voyage'] = isset( $current_settings['voyage'] ) && is_array( $current_settings['voyage'] ) ? $current_settings['voyage'] : array();
+		}
 
 		// Make sure api_key and default_model at least exist (even if empty).
 		if ( ! isset( $input['openai']['api_key'] ) ) {
@@ -375,6 +387,9 @@ class Admin {
 		}
 		if ( ! isset( $input['specter']['default_model'] ) ) {
 			$input['specter']['default_model'] = $this->get_default_model( 'specter' );
+		}
+		if ( ! isset( $input['voyage']['default_model'] ) ) {
+			$input['voyage']['default_model'] = $this->get_default_model( 'voyage' );
 		}
 
 		// Make sure post_types is always an array.
@@ -1508,12 +1523,50 @@ class Admin {
 
 		$queue->save()->dispatch();
 
+		// Report the real outcome instead of treating "queued" as success: the queue
+		// runs inline in the admin request, so chunk counts reflect what actually persisted.
+		$succeeded = array();
+		$failed    = array();
+		foreach ( $post_ids as $post_id ) {
+			if ( (int) get_post_meta( $post_id, '_wpvdb_chunks_count', true ) > 0 ) {
+				$succeeded[] = $post_id;
+			} else {
+				$failed[] = $post_id;
+			}
+		}
+
+		if ( ! empty( $failed ) ) {
+			$recorded = get_transient( 'wpvdb_embedding_failures' );
+			$reason   = '';
+			if ( is_array( $recorded ) && ! empty( $recorded ) ) {
+				$entry  = end( $recorded );
+				$reason = isset( $entry['message'] ) ? (string) $entry['message'] : '';
+			}
+
+			$failed_message = sprintf(
+				/* translators: 1: number of posts that failed, 2: failure reason from the provider. */
+				_n( '%1$d post failed to embed: %2$s', '%1$d posts failed to embed: %2$s', count( $failed ), 'wpvdb' ),
+				count( $failed ),
+				$reason
+			);
+
+			wp_send_json_error(
+				array(
+					'message'    => $failed_message,
+					'failed_ids' => $failed,
+				)
+			);
+		}
+
+		$success_message = sprintf(
+			/* translators: %d: number of posts successfully embedded. */
+			_n( '%d post embedded successfully.', '%d posts embedded successfully.', count( $succeeded ), 'wpvdb' ),
+			count( $succeeded )
+		);
+
 		wp_send_json_success(
 			array(
-				'message'       => sprintf(
-					__( 'Queued %d posts for embedding generation', 'wpvdb' ),
-					count( $post_ids )
-				),
+				'message'       => $success_message,
 				'using_pending' => $using_pending,
 			)
 		);
@@ -2132,9 +2185,73 @@ class Admin {
 	}
 
 	/**
+	 * Human-readable label for an embedding error code.
+	 *
+	 * @param string $code WP_Error code from the embedding pipeline.
+	 * @return string
+	 */
+	private static function embedding_error_label( $code ) {
+		switch ( $code ) {
+			case 'embedding_auth_error':
+				return __( 'authentication failed (check the API key under Settings)', 'wpvdb' );
+			case 'embedding_forbidden':
+				return __( 'access forbidden by the provider', 'wpvdb' );
+			case 'embedding_rate_limited':
+				return __( 'rate limited by the provider (HTTP 429)', 'wpvdb' );
+			case 'embedding_model_not_found':
+				return __( 'model not found', 'wpvdb' );
+			case 'embedding_provider_error':
+				return __( 'provider server error', 'wpvdb' );
+			default:
+				return __( 'embedding error', 'wpvdb' );
+		}
+	}
+
+	/**
 	 * Display admin notices for action results
 	 */
 	public function admin_notices() {
+		// Surface embedding failures captured during background processing so they are never lost silently.
+		$embedding_failures = get_transient( 'wpvdb_embedding_failures' );
+		if ( is_array( $embedding_failures ) && ! empty( $embedding_failures ) ) {
+			delete_transient( 'wpvdb_embedding_failures' );
+
+			$counts  = array();
+			$samples = array();
+			foreach ( $embedding_failures as $failure ) {
+				$code            = isset( $failure['code'] ) ? (string) $failure['code'] : 'embedding_error';
+				$counts[ $code ] = isset( $counts[ $code ] ) ? $counts[ $code ] + 1 : 1;
+				if ( ! isset( $samples[ $code ] ) && ! empty( $failure['message'] ) ) {
+					$samples[ $code ] = (string) $failure['message'];
+				}
+			}
+
+			$total = count( $embedding_failures );
+			echo '<div class="notice notice-error is-dismissible"><p><strong>';
+			printf(
+				/* translators: %d: number of failed embeddings. */
+				esc_html( _n( 'WPVDB: %d embedding failed and was not saved.', 'WPVDB: %d embeddings failed and were not saved.', $total, 'wpvdb' ) ),
+				(int) $total
+			);
+			echo '</strong></p><ul style="list-style:disc;margin-left:20px;">';
+			foreach ( $counts as $code => $count ) {
+				echo '<li>';
+				printf(
+					/* translators: 1: number of failures, 2: human-readable reason. */
+					esc_html__( '%1$d × %2$s', 'wpvdb' ),
+					(int) $count,
+					esc_html( self::embedding_error_label( $code ) )
+				);
+				if ( ! empty( $samples[ $code ] ) ) {
+					echo ' — <code>' . esc_html( $samples[ $code ] ) . '</code>';
+				}
+				echo '</li>';
+			}
+			echo '</ul><p>';
+			esc_html_e( 'See the debug log for full details, then re-run “Bulk Generate Embeddings” for the affected items.', 'wpvdb' );
+			echo '</p></div>';
+		}
+
 		// Check for table recreation status.
 		$recreate_status = get_transient( 'wpvdb_table_recreate_status' );
 		if ( $recreate_status ) {

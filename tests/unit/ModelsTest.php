@@ -244,6 +244,51 @@ class ModelsTest extends TestCase {
     }
 
     /**
+     * Test that the Voyage AI provider exposes the expected models.
+     */
+    public function test_voyage_provider_models() {
+        $models = Models::get_provider_models( 'voyage' );
+
+        $this->assertIsArray( $models );
+        foreach ( [ 'voyage-4-lite', 'voyage-4-large', 'voyage-code-3', 'voyage-finance-2', 'voyage-law-2' ] as $model_name ) {
+            $this->assertArrayHasKey( $model_name, $models );
+            $this->assertEquals( 1024, $models[ $model_name ]['dimensions'] );
+        }
+    }
+
+    /**
+     * Test the provider-specific dimension request parameter name.
+     */
+    public function test_get_dimension_param() {
+        $voyage_base = 'https://api.voyageai.com/v1/';
+
+        $this->assertEquals( 'output_dimension', Models::get_dimension_param( 'voyage-4-lite', $voyage_base ) );
+        $this->assertEquals( 'output_dimension', Models::get_dimension_param( 'voyage-finance-2', $voyage_base ) );
+        $this->assertEquals( 'dimensions', Models::get_dimension_param( 'text-embedding-3-small', 'https://api.openai.com/v1/' ) );
+    }
+
+    /**
+     * Test Voyage storage compatibility against the discrete allowed-dimensions set.
+     */
+    public function test_voyage_storage_compatibility() {
+        $voyage_base = 'https://api.voyageai.com/v1/';
+
+        // Flexible (Matryoshka) models accept only their allowed set.
+        foreach ( [ 256, 512, 1024, 2048 ] as $dim ) {
+            $this->assertTrue( Models::is_storage_compatible( 'voyage-4-lite', $voyage_base, $dim ) );
+            $this->assertTrue( Models::is_storage_compatible( 'voyage-code-3', $voyage_base, $dim ) );
+        }
+        $this->assertFalse( Models::is_storage_compatible( 'voyage-4-lite', $voyage_base, 768 ) );
+        $this->assertFalse( Models::is_storage_compatible( 'voyage-4-large', $voyage_base, 1000 ) );
+
+        // Fixed-dimension models only fit a 1024 column.
+        $this->assertTrue( Models::is_storage_compatible( 'voyage-finance-2', $voyage_base, 1024 ) );
+        $this->assertFalse( Models::is_storage_compatible( 'voyage-finance-2', $voyage_base, 512 ) );
+        $this->assertTrue( Models::is_storage_compatible( 'voyage-law-2', $voyage_base, 1024 ) );
+        $this->assertFalse( Models::is_storage_compatible( 'voyage-law-2', $voyage_base, 2048 ) );
+    }
+
+    /**
      * Test Automattic AI proxy URL detection.
      */
     public function test_automattic_ai_proxy_url_detection() {

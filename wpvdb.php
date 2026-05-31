@@ -27,6 +27,8 @@ define( 'WPVDB_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPVDB_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'WPVDB_PLUGIN_FILE', __FILE__ );
 
+define( 'WPVDB_DEFAULT_EMBED_DIM', 1024 );
+
 if ( ! defined( 'WPVDB_PLAYGROUND_SUPPORT_VERSION' ) ) {
 	define( 'WPVDB_PLAYGROUND_SUPPORT_VERSION', '1' );
 }

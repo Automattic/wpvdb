@@ -291,7 +291,20 @@ class Core {
 		}
 
 		if ( 200 !== $code ) {
-			return new \WP_Error( 'embedding_error', 'Failed to get embedding: ' . $code . ' ' . ( is_string( $data ) ? $data : wp_json_encode( $data ) ) );
+			$status_code = (int) $code;
+			$error_code  = 'embedding_error';
+			if ( 401 === $status_code ) {
+				$error_code = 'embedding_auth_error';
+			} elseif ( 403 === $status_code ) {
+				$error_code = 'embedding_forbidden';
+			} elseif ( 404 === $status_code ) {
+				$error_code = 'embedding_model_not_found';
+			} elseif ( 429 === $status_code ) {
+				$error_code = 'embedding_rate_limited';
+			} elseif ( $status_code >= 500 && $status_code < 600 ) {
+				$error_code = 'embedding_provider_error';
+			}
+			return new \WP_Error( $error_code, 'Failed to get embedding: ' . $code . ' ' . ( is_string( $data ) ? $data : wp_json_encode( $data ) ) );
 		}
 
 		if ( 'a8c_nomic_native' === $response_format ) {
@@ -446,13 +459,15 @@ class Core {
 			return array();
 		}
 
-		// Only send dimensions to models that explicitly support it.
+		// Only send dimensions to models that explicitly support it, under the
+		// parameter name the provider expects (OpenAI: dimensions, Voyage: output_dimension).
+		$dimension_param = Models::get_dimension_param( $model, $api_base );
 		if (
-			! isset( $options['dimensions'] ) &&
+			! isset( $options[ $dimension_param ] ) &&
 			defined( 'WPVDB_DEFAULT_EMBED_DIM' ) &&
 			Models::supports_dimensions( $model, $api_base )
 		) {
-			$options['dimensions'] = (int) WPVDB_DEFAULT_EMBED_DIM;
+			$options[ $dimension_param ] = (int) WPVDB_DEFAULT_EMBED_DIM;
 		}
 
 		return array_filter(

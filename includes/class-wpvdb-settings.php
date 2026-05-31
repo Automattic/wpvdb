@@ -36,6 +36,10 @@ class Settings {
 			'api_key'  => '',
 			'api_base' => '',
 		),
+		'voyage'                => array(
+			'api_key'  => '',
+			'api_base' => '',
+		),
 	);
 
 	/**
@@ -51,6 +55,7 @@ class Settings {
 		$defaults['default_model']          = Models::get_default_model_for_provider( $defaults['active_provider'] );
 		$defaults['openai']['api_base']     = Providers::get_api_base( 'openai' );
 		$defaults['automattic']['api_base'] = Providers::get_api_base( 'automattic' );
+		$defaults['voyage']['api_base']     = Providers::get_api_base( 'voyage' );
 		return $defaults;
 	}
 
@@ -94,7 +99,7 @@ class Settings {
 		$validated = self::get_defaults();
 
 		// Validate active provider.
-		if ( isset( $input['active_provider'] ) && in_array( $input['active_provider'], array( 'openai', 'automattic' ), true ) ) {
+		if ( isset( $input['active_provider'] ) && in_array( $input['active_provider'], array( 'openai', 'automattic', 'voyage' ), true ) ) {
 			$validated['active_provider'] = $input['active_provider'];
 			$validated['default_model']   = Models::get_default_model_for_provider( $validated['active_provider'] );
 		}
@@ -141,7 +146,7 @@ class Settings {
 		}
 
 		// Validate provider settings.
-		foreach ( array( 'openai', 'automattic' ) as $provider ) {
+		foreach ( array( 'openai', 'automattic', 'voyage' ) as $provider ) {
 			if ( ! isset( $input[ $provider ] ) || ! is_array( $input[ $provider ] ) ) {
 				continue;
 			}
@@ -150,7 +155,26 @@ class Settings {
 
 			// Validate and encrypt API key.
 			if ( ! empty( $provider_settings['api_key'] ) ) {
-				$validated[ $provider ]['api_key'] = self::encrypt_api_key( $provider_settings['api_key'] );
+				$raw_api_key                       = $provider_settings['api_key'];
+				$validated[ $provider ]['api_key'] = self::encrypt_api_key( $raw_api_key );
+
+				// A plaintext value (not the stored encrypted blob) means the user entered a new key; verify it.
+				if ( 0 !== strpos( $raw_api_key, 'wpvdb_encrypted_' ) ) {
+					$key_error = self::validate_provider_api_key( $provider, $raw_api_key, $provider_settings );
+					if ( is_wp_error( $key_error ) ) {
+						add_settings_error(
+							'wpvdb_settings',
+							'wpvdb_invalid_api_key_' . $provider,
+							sprintf(
+								/* translators: 1: provider name, 2: error message returned by the provider. */
+								__( 'The %1$s API key was rejected: %2$s', 'wpvdb' ),
+								$provider,
+								$key_error->get_error_message()
+							),
+							'error'
+						);
+					}
+				}
 			}
 
 			// Validate API base URL.
@@ -185,6 +209,32 @@ class Settings {
 		do_action( 'wpvdb_settings_updated', $validated, $input );
 
 		return $validated;
+	}
+
+	/**
+	 * Verify a provider API key by issuing a minimal embedding request.
+	 *
+	 * @param string $provider          Provider identifier.
+	 * @param string $api_key           Plaintext API key to verify.
+	 * @param array  $provider_settings Submitted provider settings (api_base, default_model).
+	 * @return \WP_Error|null WP_Error when the provider rejects the credentials, null otherwise.
+	 */
+	private static function validate_provider_api_key( $provider, $api_key, $provider_settings ) {
+		$api_base = ! empty( $provider_settings['api_base'] )
+			? self::normalize_api_base_for_provider( $provider, $provider_settings['api_base'] )
+			: self::get_api_base_for_provider( $provider );
+
+		$model = ! empty( $provider_settings['default_model'] )
+			? $provider_settings['default_model']
+			: Models::get_default_model_for_provider( $provider );
+
+		$result = Core::get_embedding( 'wpvdb api key check', $model, $api_base, $api_key );
+
+		if ( is_wp_error( $result ) && in_array( $result->get_error_code(), array( 'embedding_auth_error', 'embedding_forbidden' ), true ) ) {
+			return $result;
+		}
+
+		return null;
 	}
 
 	/**
@@ -414,6 +464,7 @@ class Settings {
 		// Remove sensitive information.
 		unset( $settings['openai']['api_key'] );
 		unset( $settings['automattic']['api_key'] );
+		unset( $settings['voyage']['api_key'] );
 
 		return array(
 			'version'     => WPVDB_VERSION,
@@ -512,6 +563,10 @@ class Settings {
 			return \constant( 'WPVDB_AUTOMATTIC_API_KEY' );
 		}
 
+		if ( 'voyage' === $provider && defined( 'WPVDB_VOYAGE_API_KEY' ) ) {
+			return \constant( 'WPVDB_VOYAGE_API_KEY' );
+		}
+
 		$encrypted_key = isset( $settings[ $provider ]['api_key'] ) ? $settings[ $provider ]['api_key'] : '';
 
 		// If no key in options, check filter.
@@ -544,6 +599,10 @@ class Settings {
 
 		if ( 'automattic' === $provider && defined( 'WPVDB_AUTOMATTIC_API_KEY' ) ) {
 			return \constant( 'WPVDB_AUTOMATTIC_API_KEY' );
+		}
+
+		if ( 'voyage' === $provider && defined( 'WPVDB_VOYAGE_API_KEY' ) ) {
+			return \constant( 'WPVDB_VOYAGE_API_KEY' );
 		}
 
 		$encrypted_key = '';

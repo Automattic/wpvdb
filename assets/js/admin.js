@@ -180,7 +180,7 @@ jQuery(document).ready(function($) {
                                           response.data.embedding_count + ' existing embeddings. Continue?')) {
                                     console.log('WPVDB: User confirmed provider change');
                                     // User confirmed, submit the form
-                                    $('#wpvdb-settings-form').off('submit').trigger('submit');
+                                    HTMLFormElement.prototype.submit.call($('#wpvdb-settings-form').off('submit').get(0));
                                 } else {
                                     console.log('WPVDB: User cancelled provider change');
                                     // User cancelled, reset the form
@@ -190,7 +190,7 @@ jQuery(document).ready(function($) {
                             } else {
                                 console.log('WPVDB: No embeddings exist, proceeding with provider change');
                                 // No embeddings exist, just submit the form
-                                $('#wpvdb-settings-form').off('submit').trigger('submit');
+                                HTMLFormElement.prototype.submit.call($('#wpvdb-settings-form').off('submit').get(0));
                             }
                         } else {
                             console.error('WPVDB: Provider change validation error:', response.data.message);

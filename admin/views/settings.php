@@ -36,6 +36,8 @@ $openai_organization  = isset( $settings['openai']['organization'] ) ? $settings
 $openai_api_version   = isset( $settings['openai']['api_version'] ) ? $settings['openai']['api_version'] : '';
 $automattic_api_key   = isset( $settings['automattic']['api_key'] ) ? $settings['automattic']['api_key'] : '';
 $automattic_endpoint  = isset( $settings['automattic']['api_base'] ) ? $settings['automattic']['api_base'] : \WPVDB\Providers::get_api_base( 'automattic' );
+$voyage_api_key       = isset( $settings['voyage']['api_key'] ) ? $settings['voyage']['api_key'] : '';
+$voyage_endpoint      = isset( $settings['voyage']['api_base'] ) ? $settings['voyage']['api_base'] : \WPVDB\Providers::get_api_base( 'voyage' );
 $embedding_batch_size = isset( $settings['batch_size'] ) ? $settings['batch_size'] : \WPVDB\Settings::DEFAULTS['batch_size'];
 $provider_model       = static function ( $provider_id ) use ( $settings, $provider, $active_model ) {
 	if ( $provider === $provider_id && ! empty( $active_model ) ) {
@@ -49,6 +51,7 @@ $provider_model       = static function ( $provider_id ) use ( $settings, $provi
 $openai_model         = $provider_model( 'openai' );
 $automattic_model     = $provider_model( 'automattic' );
 $specter_model        = $provider_model( 'specter' );
+$voyage_model         = $provider_model( 'voyage' );
 ?>
 
 <div class="wrap wpvdb-settings">
@@ -344,6 +347,94 @@ $specter_model        = $provider_model( 'specter' );
 								class="regular-text">
 						<p class="description">
 							<?php esc_html_e( 'API endpoint for SPECTER embeddings. Default is http://localhost:8000/v1/', 'wpvdb' ); ?>
+						</p>
+					</td>
+				</tr>
+
+				<!-- Voyage AI Provider Fields -->
+				<tr id="voyage_api_key_field" class="api-key-field" <?php echo 'voyage' !== $provider ? 'style="display: none;"' : ''; ?>>
+					<th scope="row">
+						<label for="wpvdb_voyage_api_key"><?php esc_html_e( 'Voyage AI API Key', 'wpvdb' ); ?></label>
+					</th>
+					<td>
+						<input type="password"
+								name="wpvdb_settings[voyage][api_key]"
+								id="wpvdb_voyage_api_key"
+								value="<?php echo esc_attr( $voyage_api_key ); ?>"
+								class="regular-text">
+						<p class="description">
+							<?php esc_html_e( 'Enter your Voyage AI API key. You can get one from', 'wpvdb' ); ?>
+							<a href="https://dashboard.voyageai.com/" target="_blank">https://dashboard.voyageai.com/</a>
+						</p>
+					</td>
+				</tr>
+
+				<?php
+				$voyage_selectable   = \WPVDB\Models::get_selectable_provider_models( 'voyage' );
+				$voyage_current_dim  = \WPVDB\Models::get_configured_dimension();
+				$voyage_allowed_dims = \WPVDB\Models::get_provider_compatible_dimensions( 'voyage' );
+				?>
+				<tr id="voyage_model_field" class="model-field" <?php echo 'voyage' !== $provider ? 'style="display: none;"' : ''; ?>>
+					<th scope="row">
+						<label for="wpvdb_voyage_model"><?php esc_html_e( 'Voyage AI Embedding Model', 'wpvdb' ); ?></label>
+					</th>
+					<td>
+						<?php if ( empty( $voyage_selectable ) ) : ?>
+							<div class="notice notice-warning inline" style="margin: 0; padding: 8px 12px;">
+								<p style="margin-top: 0;">
+									<?php
+									printf(
+										/* translators: 1: current embedding dimension, 2: comma-separated list of supported dimensions. */
+										esc_html__( 'No Voyage AI models fit the current embedding dimension (%1$d). Voyage models require a dimension of %2$s.', 'wpvdb' ),
+										(int) $voyage_current_dim,
+										esc_html( implode( ', ', $voyage_allowed_dims ) )
+									);
+									?>
+								</p>
+								<p style="margin-bottom: 0;">
+									<?php
+									printf(
+										wp_kses(
+											/* translators: 1: WPVDB_DEFAULT_EMBED_DIM constant snippet, 2: rebuild-embeddings admin URL. */
+											__( 'To use Voyage, set <code>%1$s</code> in <code>wp-config.php</code> to a supported value (e.g. 1024), then <a href="%2$s">rebuild your embeddings</a>.', 'wpvdb' ),
+											array(
+												'code' => array(),
+												'a'    => array( 'href' => array() ),
+											)
+										),
+										"define( 'WPVDB_DEFAULT_EMBED_DIM', 1024 );",
+										esc_url( admin_url( 'admin.php?page=wpvdb-embeddings' ) )
+									);
+									?>
+								</p>
+							</div>
+						<?php else : ?>
+							<select name="wpvdb_settings[voyage][default_model]" id="wpvdb_voyage_model">
+								<?php foreach ( $voyage_selectable as $model_id => $model_data ) : ?>
+									<option value="<?php echo esc_attr( $model_id ); ?>" <?php selected( $voyage_model, $model_id ); ?>>
+										<?php echo esc_html( $model_data['label'] ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+							<p class="description">
+								<?php esc_html_e( 'Select the Voyage AI model to use for generating embeddings.', 'wpvdb' ); ?>
+							</p>
+						<?php endif; ?>
+					</td>
+				</tr>
+
+				<tr class="provider-specific-field" data-provider="voyage" <?php echo 'voyage' !== $provider ? 'style="display: none;"' : ''; ?>>
+					<th scope="row">
+						<label for="wpvdb_voyage_endpoint"><?php esc_html_e( 'Voyage AI API Endpoint', 'wpvdb' ); ?></label>
+					</th>
+					<td>
+						<input type="text"
+								name="wpvdb_settings[voyage][api_base]"
+								id="wpvdb_voyage_endpoint"
+								value="<?php echo esc_attr( $voyage_endpoint ); ?>"
+								class="regular-text">
+						<p class="description">
+							<?php esc_html_e( 'API endpoint for Voyage AI embeddings. You probably don\'t need to change this.', 'wpvdb' ); ?>
 						</p>
 					</td>
 				</tr>
