@@ -24,7 +24,7 @@ class Models {
 		$default_models = array(
 			'openai'     => array(
 				'text-embedding-3-small' => array(
-					'label'               => 'Ada 3 Small (1536 dimensions)',
+					'label'               => 'text-embedding-3-small (1536 dimensions)',
 					'dimensions'          => 1536,
 					'default'             => true,
 					'selectable'          => true,
@@ -34,7 +34,7 @@ class Models {
 					'supports_dimensions' => true,
 				),
 				'text-embedding-3-large' => array(
-					'label'               => 'Ada 3 Large (3072 dimensions)',
+					'label'               => 'text-embedding-3-large (3072 dimensions)',
 					'dimensions'          => 3072,
 					'selectable'          => true,
 					'endpoint'            => 'embeddings',
