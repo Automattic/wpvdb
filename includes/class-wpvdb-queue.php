@@ -578,11 +578,14 @@ class WPVDB_Queue {
 			$failures = array();
 		}
 
+		$message = (string) $error->get_error_message();
+		$message = function_exists( 'mb_substr' ) ? mb_substr( $message, 0, 200 ) : substr( $message, 0, 200 );
+
 		$failures[] = array(
 			'post_id'  => (int) $post_id,
 			'provider' => (string) $provider,
 			'code'     => $error->get_error_code(),
-			'message'  => mb_substr( (string) $error->get_error_message(), 0, 200 ),
+			'message'  => $message,
 		);
 
 		// Cap the list so a large failed batch cannot bloat the options table.

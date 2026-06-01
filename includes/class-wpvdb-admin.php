@@ -1521,47 +1521,50 @@ class Admin {
 			);
 		}
 
+		$failures_before = get_transient( 'wpvdb_embedding_failures' );
+		$failures_before = is_array( $failures_before ) ? count( $failures_before ) : 0;
+
 		$queue->save()->dispatch();
 
-		// Report the real outcome instead of treating "queued" as success: the queue
-		// runs inline in the admin request, so chunk counts reflect what actually persisted.
-		$succeeded = array();
-		$failed    = array();
-		foreach ( $post_ids as $post_id ) {
-			if ( (int) get_post_meta( $post_id, '_wpvdb_chunks_count', true ) > 0 ) {
-				$succeeded[] = $post_id;
-			} else {
-				$failed[] = $post_id;
+		// Determine the outcome from recorded failures, not chunk counts.
+		$recorded     = get_transient( 'wpvdb_embedding_failures' );
+		$new_failures = ( is_array( $recorded ) && count( $recorded ) > $failures_before )
+			? array_slice( $recorded, $failures_before )
+			: array();
+
+		$requested  = array_flip( $post_ids );
+		$failed_ids = array();
+		$reason     = '';
+		foreach ( $new_failures as $entry ) {
+			if ( isset( $entry['post_id'], $requested[ $entry['post_id'] ] ) ) {
+				$failed_ids[] = (int) $entry['post_id'];
+				if ( '' === $reason && ! empty( $entry['message'] ) ) {
+					$reason = (string) $entry['message'];
+				}
 			}
 		}
+		$failed_ids = array_values( array_unique( $failed_ids ) );
 
-		if ( ! empty( $failed ) ) {
-			$recorded = get_transient( 'wpvdb_embedding_failures' );
-			$reason   = '';
-			if ( is_array( $recorded ) && ! empty( $recorded ) ) {
-				$entry  = end( $recorded );
-				$reason = isset( $entry['message'] ) ? (string) $entry['message'] : '';
-			}
-
+		if ( ! empty( $failed_ids ) ) {
 			$failed_message = sprintf(
 				/* translators: 1: number of posts that failed, 2: failure reason from the provider. */
-				_n( '%1$d post failed to embed: %2$s', '%1$d posts failed to embed: %2$s', count( $failed ), 'wpvdb' ),
-				count( $failed ),
+				_n( '%1$d post failed to embed: %2$s', '%1$d posts failed to embed: %2$s', count( $failed_ids ), 'wpvdb' ),
+				count( $failed_ids ),
 				$reason
 			);
 
 			wp_send_json_error(
 				array(
 					'message'    => $failed_message,
-					'failed_ids' => $failed,
+					'failed_ids' => $failed_ids,
 				)
 			);
 		}
 
 		$success_message = sprintf(
-			/* translators: %d: number of posts successfully embedded. */
-			_n( '%d post embedded successfully.', '%d posts embedded successfully.', count( $succeeded ), 'wpvdb' ),
-			count( $succeeded )
+			/* translators: %d: number of posts queued for embedding. */
+			_n( '%d post queued for embedding.', '%d posts queued for embedding.', count( $post_ids ), 'wpvdb' ),
+			count( $post_ids )
 		);
 
 		wp_send_json_success(
