@@ -153,22 +153,26 @@ class Settings {
 
 			$provider_settings = $input[ $provider ];
 
-			// Validate and encrypt API key.
-			if ( ! empty( $provider_settings['api_key'] ) ) {
-				$raw_api_key                       = $provider_settings['api_key'];
+			// Validate and encrypt API key. Ignore non-string values (e.g. a malformed array payload).
+			$raw_api_key = isset( $provider_settings['api_key'] ) && is_string( $provider_settings['api_key'] )
+				? $provider_settings['api_key']
+				: '';
+			if ( '' !== $raw_api_key ) {
 				$validated[ $provider ]['api_key'] = self::encrypt_api_key( $raw_api_key );
 
 				// A plaintext value (not the stored encrypted blob) means the user entered a new key; verify it.
 				if ( 0 !== strpos( $raw_api_key, 'wpvdb_encrypted_' ) ) {
 					$key_error = self::validate_provider_api_key( $provider, $raw_api_key, $provider_settings );
 					if ( is_wp_error( $key_error ) ) {
+						$provider_data  = Providers::get_provider( $provider );
+						$provider_label = ( is_array( $provider_data ) && ! empty( $provider_data['label'] ) ) ? $provider_data['label'] : $provider;
 						add_settings_error(
 							'wpvdb_settings',
 							'wpvdb_invalid_api_key_' . $provider,
 							sprintf(
 								/* translators: 1: provider name, 2: error message returned by the provider. */
 								__( 'The %1$s API key was rejected: %2$s', 'wpvdb' ),
-								$provider,
+								$provider_label,
 								$key_error->get_error_message()
 							),
 							'error'
@@ -220,12 +224,18 @@ class Settings {
 	 * @return \WP_Error|null WP_Error when the provider rejects the credentials, null otherwise.
 	 */
 	private static function validate_provider_api_key( $provider, $api_key, $provider_settings ) {
-		$api_base = ! empty( $provider_settings['api_base'] )
-			? self::normalize_api_base_for_provider( $provider, $provider_settings['api_base'] )
+		$submitted_base = isset( $provider_settings['api_base'] ) && is_string( $provider_settings['api_base'] )
+			? $provider_settings['api_base']
+			: '';
+		$api_base       = '' !== $submitted_base
+			? self::normalize_api_base_for_provider( $provider, $submitted_base )
 			: self::get_api_base_for_provider( $provider );
 
-		$model = ! empty( $provider_settings['default_model'] )
+		$submitted_model = isset( $provider_settings['default_model'] ) && is_string( $provider_settings['default_model'] )
 			? $provider_settings['default_model']
+			: '';
+		$model           = '' !== $submitted_model
+			? $submitted_model
 			: Models::get_default_model_for_provider( $provider );
 
 		$result = Core::get_embedding( 'wpvdb api key check', $model, $api_base, $api_key );

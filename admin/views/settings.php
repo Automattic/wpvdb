@@ -197,7 +197,7 @@ $voyage_model         = $provider_model( 'voyage' );
 								class="regular-text">
 						<p class="description">
 							<?php esc_html_e( 'Enter your OpenAI API key. You can get one from', 'wpvdb' ); ?>
-							<a href="https://platform.openai.com/api-keys" target="_blank">https://platform.openai.com/api-keys</a>
+							<a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">https://platform.openai.com/api-keys</a>
 						</p>
 					</td>
 				</tr>
@@ -216,7 +216,7 @@ $voyage_model         = $provider_model( 'voyage' );
 						</select>
 						<p class="description">
 							<?php esc_html_e( 'Select the OpenAI model to use for generating embeddings.', 'wpvdb' ); ?>
-							<a href="https://platform.openai.com/docs/guides/embeddings" target="_blank"><?php esc_html_e( 'Learn more', 'wpvdb' ); ?></a>
+							<a href="https://platform.openai.com/docs/guides/embeddings" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Learn more', 'wpvdb' ); ?></a>
 						</p>
 					</td>
 				</tr>
@@ -364,7 +364,7 @@ $voyage_model         = $provider_model( 'voyage' );
 								class="regular-text">
 						<p class="description">
 							<?php esc_html_e( 'Enter your Voyage AI API key. You can get one from', 'wpvdb' ); ?>
-							<a href="https://dashboard.voyageai.com/" target="_blank">https://dashboard.voyageai.com/</a>
+							<a href="https://dashboard.voyageai.com/" target="_blank" rel="noopener noreferrer">https://dashboard.voyageai.com/</a>
 						</p>
 					</td>
 				</tr>
