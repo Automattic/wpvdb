@@ -983,7 +983,7 @@ class REST {
 		// Storage gate (defense in depth): backstops every caller; fresh read also
 		// closes the post-provider/pre-insert race.
 		if ( ! Indexability::is_indexable( $doc_id, true ) ) {
-			Logger::error( 'insert_embedding_row refused a non-indexable doc_id=' . $doc_id );
+			Logger::debug( 'insert_embedding_row refused non-indexable content', array( 'doc_id' => $doc_id ) );
 			return new \WP_Error(
 				'wpvdb_not_indexable',
 				'Refusing to store an embedding for non-indexable content.',
