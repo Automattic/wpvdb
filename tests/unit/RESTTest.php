@@ -30,6 +30,7 @@ class RESTTest extends TestCase {
 			),
 		);
 		$GLOBALS['wpvdb_test_viewable_statuses'] = array( 'publish' );
+		$GLOBALS['_wp_filters']                  = array();
 	}
 
 	protected function tearDown(): void {

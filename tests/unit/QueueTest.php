@@ -18,11 +18,16 @@ class QueueTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		global $_wp_options;
-		$_wp_options = [];
+		$_wp_options                             = [];
+		$GLOBALS['wpvdb_test_posts']             = array();
+		$GLOBALS['wpvdb_test_viewable_statuses'] = array( 'publish' );
+		$GLOBALS['_wp_filters']                  = array();
 	}
 
 	protected function tearDown(): void {
-		$GLOBALS['wpvdb_test_posts'] = array();
+		$GLOBALS['wpvdb_test_posts']             = array();
+		$GLOBALS['wpvdb_test_viewable_statuses'] = array( 'publish' );
+		$GLOBALS['_wp_filters']                  = array();
 		parent::tearDown();
 	}
 
