@@ -142,6 +142,20 @@ namespace WPVDB\Tests\Unit {
 			$this->assertFalse( Indexability::is_indexable( '' ) );
 		}
 
+		public function test_leading_numeric_string_and_booleans_not_coerced_to_one() {
+			// (int) '1abc' and (int) true both resolve to 1; the gate must not
+			// treat them as post ID 1.
+			$this->make_post( 1, 'publish' );
+			$this->assertFalse( Indexability::is_indexable( '1abc' ) );
+			$this->assertFalse( Indexability::is_indexable( true ) );
+			$this->assertFalse( Indexability::is_indexable( false ) );
+		}
+
+		public function test_digit_string_resolves_like_an_int() {
+			$this->make_post( 5, 'publish' );
+			$this->assertTrue( Indexability::is_indexable( '5' ) );
+		}
+
 		public function test_false_boolean_is_not_indexable() {
 			$this->make_post( 1, 'publish' );
 			// (int) false === 0 -> no backing post.

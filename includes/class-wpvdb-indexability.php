@@ -32,13 +32,15 @@ class Indexability {
 	 * @return bool
 	 */
 	public static function is_indexable( $post, $fresh = false ) {
-		// Normalize to a non-negative int id. ID-less objects and arrays carry no
-		// post identity; casting them straight to int would resolve to 1 (and warn),
-		// silently targeting a real post — so guard them to 0.
+		// Normalize to a non-negative int id. Only an int or a digit-string is a
+		// post identity; ID-less objects, arrays, booleans, and non-numeric
+		// strings guard to 0 (a bare (int) cast would resolve true or "1abc" to 1).
 		if ( is_object( $post ) ) {
 			$post_id = isset( $post->ID ) ? max( 0, (int) $post->ID ) : 0;
-		} elseif ( is_scalar( $post ) ) {
-			$post_id = max( 0, (int) $post );
+		} elseif ( is_int( $post ) ) {
+			$post_id = max( 0, $post );
+		} elseif ( is_string( $post ) && ctype_digit( $post ) ) {
+			$post_id = (int) $post;
 		} else {
 			$post_id = 0;
 		}
