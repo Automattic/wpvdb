@@ -238,9 +238,6 @@ class REST {
 			)
 		);
 
-		global $wpdb;
-		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
-
 		$doc_id = absint( $request->get_param( 'doc_id' ) );
 		$text   = sanitize_textarea_field( $request->get_param( 'text' ) );
 
