@@ -203,10 +203,12 @@ class Query {
 				return;
 			}
 
-			// If there are doc_ids, limit the WP query to only those.
+			// Limit the WP query to the matched docs. WP_Query re-gates
+			// status/caps; has_password also drops protected posts (still publish).
 			$doc_ids = array_unique( $doc_ids );
 			$query->set( 'post__in', $doc_ids );
 			$query->set( 'orderby', 'post__in' );
+			$query->set( 'has_password', false );
 		} catch ( \Exception $e ) {
 			Logger::error( 'Unhandled exception in maybe_vector_search: ' . $e->getMessage() );
 		}
