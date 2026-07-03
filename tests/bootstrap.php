@@ -167,13 +167,13 @@ if ( ! function_exists( 'wp_cache_get' ) ) {
 }
 
 if ( ! function_exists( '__return_true' ) ) {
-    function __return_true() {
+    function __return_true( ...$args ) {
         return true;
     }
 }
 
 if ( ! function_exists( '__return_false' ) ) {
-    function __return_false() {
+    function __return_false( ...$args ) {
         return false;
     }
 }
