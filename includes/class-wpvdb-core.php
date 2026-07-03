@@ -648,19 +648,22 @@ class Core {
 			return;
 		}
 
-		// Only process published posts.
-		if ( ! isset( $post->post_status ) || 'publish' !== $post->post_status ) {
-			return;
-		}
-
 		// Check post type property exists.
 		if ( ! isset( $post->post_type ) || empty( $post->post_type ) ) {
 			return;
 		}
 
-		// Check if this post type should be auto-embedded.
+		// Visibility gate before the post-type filter: purge if this save made the
+		// post non-indexable. Runs for any type, since rows can exist for
+		// non-managed types (REST/bulk). No-op when there are no rows.
+		if ( ! Indexability::is_indexable( $post_id ) ) {
+			Database::get_instance()->delete_post_embeddings( $post_id );
+			return;
+		}
+
+		// Only auto-enqueue indexable content whose type is in the auto-embed set.
 		$auto_embed_types = Settings::get_auto_embed_post_types();
-		if ( ! is_array( $auto_embed_types ) || ! in_array( $post->post_type, $auto_embed_types ) ) {
+		if ( ! is_array( $auto_embed_types ) || ! in_array( $post->post_type, $auto_embed_types, true ) ) {
 			return;
 		}
 

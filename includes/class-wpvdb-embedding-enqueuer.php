@@ -252,6 +252,9 @@ class Embedding_Enqueuer {
 			$params[] = $ps;
 		}
 
+		// Skip password-protected posts (optimization; process_item is the gate).
+		$clauses[] = "post_password = ''";
+
 		if ( ! empty( $args['since'] ) ) {
 			$since     = strlen( $args['since'] ) === 10 ? $args['since'] . ' 00:00:00' : $args['since'];
 			$clauses[] = 'post_modified_gmt >= %s';

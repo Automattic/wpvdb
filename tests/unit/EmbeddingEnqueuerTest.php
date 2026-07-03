@@ -47,6 +47,20 @@ class EmbeddingEnqueuerTest extends TestCase {
 		$this->assertEquals( Embedding_Enqueuer::DEFAULT_PAGE_SIZE, $normalized['page_size'] );
 	}
 
+	public function test_build_scope_where_sql_excludes_password_protected() {
+		$ref = new \ReflectionMethod( Embedding_Enqueuer::class, 'build_scope_where_sql' );
+
+		$params = array();
+		$args   = array(
+			'post_type'   => array( 'post', 'page' ),
+			'post_status' => array( 'publish' ),
+		);
+		$sql = $ref->invokeArgs( null, array( $args, &$params ) );
+
+		// Password-protected posts must be excluded from the bulk scan.
+		$this->assertStringContainsString( "post_password = ''", $sql );
+	}
+
 	public function test_normalize_args_accepts_csv_string_lists() {
 		$normalized = Embedding_Enqueuer::normalize_args(
 			[

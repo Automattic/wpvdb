@@ -97,6 +97,99 @@ if ( ! function_exists( 'sanitize_key' ) ) {
     }
 }
 
+// Minimal WP_Post + visibility function stubs, fixture-driven via globals, so
+// the Indexability gate can be unit-tested without a full WordPress runtime.
+//   $GLOBALS['wpvdb_test_posts']              => array<int, WP_Post>
+//   $GLOBALS['wpvdb_test_viewable_statuses']  => array<string> (default ['publish'])
+if ( ! class_exists( 'WP_Post' ) ) {
+    class WP_Post {
+        public $ID            = 0;
+        public $post_status   = 'publish';
+        public $post_password = '';
+        public $post_type     = 'post';
+        public $post_title    = '';
+        public $post_content  = '';
+        public function __construct( $data = array() ) {
+            foreach ( (array) $data as $k => $v ) {
+                $this->$k = $v;
+            }
+        }
+    }
+}
+
+if ( ! function_exists( 'get_post' ) ) {
+    function get_post( $post = null ) {
+        if ( is_object( $post ) ) {
+            return $post;
+        }
+        $id = (int) $post;
+        return isset( $GLOBALS['wpvdb_test_posts'][ $id ] ) ? $GLOBALS['wpvdb_test_posts'][ $id ] : null;
+    }
+}
+
+if ( ! function_exists( 'get_post_type' ) ) {
+    function get_post_type( $post = null ) {
+        $p = get_post( $post );
+        return ( $p && isset( $p->post_type ) ) ? $p->post_type : false;
+    }
+}
+
+if ( ! function_exists( 'is_post_publicly_viewable' ) ) {
+    function is_post_publicly_viewable( $post = null ) {
+        $p = get_post( $post );
+        if ( ! $p || ! isset( $p->post_status ) ) {
+            return false;
+        }
+        $viewable = isset( $GLOBALS['wpvdb_test_viewable_statuses'] )
+            ? $GLOBALS['wpvdb_test_viewable_statuses']
+            : array( 'publish' );
+        return in_array( $p->post_status, $viewable, true );
+    }
+}
+
+if ( ! function_exists( 'wp_cache_delete' ) ) {
+    function wp_cache_delete( $key, $group = '' ) {
+        return true;
+    }
+}
+
+if ( ! function_exists( 'wp_cache_set' ) ) {
+    function wp_cache_set( $key, $data, $group = '', $expire = 0 ) {
+        return true;
+    }
+}
+
+if ( ! function_exists( 'wp_cache_get' ) ) {
+    function wp_cache_get( $key, $group = '', $force = false, &$found = null ) {
+        $found = false;
+        return false;
+    }
+}
+
+if ( ! function_exists( '__return_true' ) ) {
+    function __return_true( ...$args ) {
+        return true;
+    }
+}
+
+if ( ! function_exists( '__return_false' ) ) {
+    function __return_false( ...$args ) {
+        return false;
+    }
+}
+
+if ( ! function_exists( 'wpvdb_is_playground_runtime' ) ) {
+    function wpvdb_is_playground_runtime() {
+        return false;
+    }
+}
+
+if ( ! function_exists( 'delete_post_meta' ) ) {
+    function delete_post_meta( $post_id, $meta_key, $meta_value = '' ) {
+        return true;
+    }
+}
+
 if ( ! function_exists( 'get_transient' ) ) {
     function get_transient( $transient ) {
         // Mock implementation - always return false (not found)
@@ -517,6 +610,7 @@ require_once dirname( __DIR__ ) . '/includes/class-wpvdb-providers.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-models.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-settings.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-cache.php';
+require_once dirname( __DIR__ ) . '/includes/class-wpvdb-indexability.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-core.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-database.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-rest.php';

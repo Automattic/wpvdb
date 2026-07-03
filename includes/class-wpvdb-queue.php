@@ -230,6 +230,14 @@ class WPVDB_Queue {
 			return false;
 		}
 
+		// Authoritative visibility gate, before the API-key/content preflights
+		// (which return early): skip non-indexable posts and purge stale rows.
+		if ( ! Indexability::is_indexable( $post ) ) {
+			Database::get_instance()->delete_post_embeddings( $post_id );
+			Logger::debug( "Skipped non-indexable post {$post_id}; purged any existing embeddings." );
+			return false;
+		}
+
 		// Validate post content.
 		if ( ! isset( $post->post_title ) || ! isset( $post->post_content ) ) {
 			Core::log_error( 'Post missing required fields', array( 'post_id' => $post_id ) );
@@ -481,6 +489,14 @@ class WPVDB_Queue {
 		$successful_chunks = 0;
 
 		foreach ( $chunks as $index => $chunk ) {
+			// In-flight re-check (fresh) before each chunk's summarize/embed/insert,
+			// in case the post was privatized/protected mid-run. Mitigation only.
+			if ( ! Indexability::is_indexable( $post->ID, true ) ) {
+				Logger::debug( "Post {$post->ID} became non-indexable mid-run; aborting and purging." );
+				Database::get_instance()->delete_post_embeddings( $post->ID );
+				return false;
+			}
+
 			// Get summary if enabled.
 			$summary = '';
 			if ( Settings::is_summarization_enabled() ) {
@@ -514,6 +530,13 @@ class WPVDB_Queue {
 			);
 
 			if ( is_wp_error( $result ) ) {
+				// Fresh storage gate rejected: post went non-indexable after
+				// embedding, before insert. Purge everything written for it and stop.
+				if ( 'wpvdb_not_indexable' === $result->get_error_code() ) {
+					Logger::debug( "Post {$post->ID} became non-indexable before insert; aborting and purging." );
+					Database::get_instance()->delete_post_embeddings( $post->ID );
+					return false;
+				}
 				Core::log_error(
 					'Failed to insert embedding',
 					array(

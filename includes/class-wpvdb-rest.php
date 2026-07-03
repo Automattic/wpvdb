@@ -238,9 +238,6 @@ class REST {
 			)
 		);
 
-		global $wpdb;
-		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
-
 		$doc_id = absint( $request->get_param( 'doc_id' ) );
 		$text   = sanitize_textarea_field( $request->get_param( 'text' ) );
 
@@ -251,6 +248,11 @@ class REST {
 
 		if ( ! $doc_id || empty( $text ) ) {
 			return new WP_Error( 'invalid_params', 'Missing required fields: doc_id and text.', array( 'status' => 400 ) );
+		}
+
+		// Preflight before any provider call so non-public content is never sent.
+		if ( ! Indexability::is_indexable( $doc_id ) ) {
+			return new WP_Error( 'wpvdb_not_indexable', 'Refusing to embed non-indexable content.', array( 'status' => 403 ) );
 		}
 
 		if ( empty( $api_key ) ) {
@@ -280,6 +282,13 @@ class REST {
 				continue;
 			}
 
+			// In-flight re-check (fresh) before the provider call, purging any
+			// chunks already inserted this request if the post flipped.
+			if ( ! Indexability::is_indexable( $doc_id, true ) ) {
+				Database::get_instance()->delete_post_embeddings( $doc_id );
+				return new WP_Error( 'wpvdb_not_indexable', 'Content became non-indexable mid-request.', array( 'status' => 403 ) );
+			}
+
 			// Summarize chunk if needed.
 			$summary = apply_filters( 'wpvdb_ai_summarize_chunk', '', $chunk );
 
@@ -290,9 +299,15 @@ class REST {
 				return $embedding_result;
 			}
 
-			// Insert into DB.
-			$res = self::insert_embedding_row( $doc_id, 'chunk-' . $index, $chunk, $summary, $embedding_result, $model, 'post', $index );
+			// Store the real post type so REST rows match the queue path.
+			$stored_type = get_post_type( $doc_id );
+			$stored_type = $stored_type ? $stored_type : 'post';
+			$res         = self::insert_embedding_row( $doc_id, 'chunk-' . $index, $chunk, $summary, $embedding_result, $model, $stored_type, $index );
 			if ( is_wp_error( $res ) ) {
+				// Storage gate rejected mid-loop (post flipped): purge and stop.
+				if ( 'wpvdb_not_indexable' === $res->get_error_code() ) {
+					Database::get_instance()->delete_post_embeddings( $doc_id );
+				}
 				return $res;
 			}
 			$inserted[] = $res;
@@ -365,6 +380,12 @@ class REST {
 			return new WP_Error( 'invalid_params', 'Missing or invalid doc_id or embedding.', array( 'status' => 400 ) );
 		}
 
+		// Preflight before storing precomputed vectors; insert_embedding_row is
+		// the backstop for any future caller.
+		if ( ! Indexability::is_indexable( $doc_id ) ) {
+			return new WP_Error( 'wpvdb_not_indexable', 'Refusing to store an embedding for non-indexable content.', array( 'status' => 403 ) );
+		}
+
 		// Use security class to validate embedding.
 		$validated_embedding = Security::validate_embedding( $embedding );
 		if ( is_wp_error( $validated_embedding ) ) {
@@ -380,7 +401,9 @@ class REST {
 			)
 		);
 
-		$res = self::insert_embedding_row( $doc_id, $chunk_id, $chunk_content, $summary, $validated_embedding, $model, 'post', $chunk_index );
+		$stored_type = get_post_type( $doc_id );
+		$stored_type = $stored_type ? $stored_type : 'post';
+		$res         = self::insert_embedding_row( $doc_id, $chunk_id, $chunk_content, $summary, $validated_embedding, $model, $stored_type, $chunk_index );
 		if ( is_wp_error( $res ) ) {
 			return $res;
 		}
@@ -649,14 +672,17 @@ class REST {
 						)
 					);
 
-					// Filter by the query model so a partial migration cannot leak rows of a different model.
+					// Scope by model (no cross-model rows) and exclude protected /
+					// non-public post rows at query time (arbitrary docs pass).
 					$sql = $wpdb->prepare(
-						"SELECT id, doc_id, chunk_id, chunk_content, summary,
-                            {$distance_function} as distance
-                         FROM {$table_name}
-                         WHERE model = %s
-                         ORDER BY distance
-                         LIMIT %d",
+						"SELECT e.id, e.doc_id, e.chunk_id, e.chunk_content, e.summary,
+						{$distance_function} as distance
+						FROM {$table_name} e
+						LEFT JOIN {$wpdb->posts} p ON p.ID = e.doc_id
+						WHERE e.model = %s
+						AND ( p.ID IS NULL OR ( p.post_status = 'publish' AND p.post_password = '' ) )
+						ORDER BY distance
+						LIMIT %d",
 						$model,
 						$limit
 					);
@@ -703,12 +729,15 @@ class REST {
 				$total_processed = 0;
 
 				while ( true ) {
-					// Get a batch of rows with LIMIT and OFFSET.
+					// Get a batch of rows with LIMIT and OFFSET. Same visibility
+					// filter as the native path (exclude protected/non-public posts).
 					$batch_query = $wpdb->prepare(
-						"SELECT id, doc_id, chunk_id, chunk_content, summary, embedding
-                         FROM {$table_name}
-                         WHERE model = %s
-                         LIMIT %d OFFSET %d",
+						"SELECT e.id, e.doc_id, e.chunk_id, e.chunk_content, e.summary, e.embedding
+						FROM {$table_name} e
+						LEFT JOIN {$wpdb->posts} p ON p.ID = e.doc_id
+						WHERE e.model = %s
+						AND ( p.ID IS NULL OR ( p.post_status = 'publish' AND p.post_password = '' ) )
+						LIMIT %d OFFSET %d",
 						$model,
 						$page_size,
 						$offset
@@ -948,6 +977,20 @@ class REST {
 	 * @return int|\WP_Error        Row ID, or WP_Error on validation failure or DB insert failure.
 	 */
 	public static function insert_embedding_row( $doc_id, $chunk_id, $chunk_content, $summary, $embedding, $model = '', $doc_type = 'post', $chunk_index = null ) {
+		// Storage gate (defense in depth): backstops every caller; fresh read also
+		// closes the post-provider/pre-insert race.
+		if ( ! Indexability::is_indexable( $doc_id, true ) ) {
+			Logger::debug( 'insert_embedding_row refused non-indexable content', array( 'doc_id' => $doc_id ) );
+			return new \WP_Error(
+				'wpvdb_not_indexable',
+				'Refusing to store an embedding for non-indexable content.',
+				array(
+					'doc_id' => $doc_id,
+					'status' => 403,
+				)
+			);
+		}
+
 		/**
 		 * Filters whether a missing or invalid chunk_index is a hard error.
 		 *

@@ -18,7 +18,68 @@ class QueueTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		global $_wp_options;
-		$_wp_options = [];
+		$_wp_options                             = [];
+		$GLOBALS['wpvdb_test_posts']             = array();
+		$GLOBALS['wpvdb_test_viewable_statuses'] = array( 'publish' );
+		$GLOBALS['_wp_filters']                  = array();
+	}
+
+	protected function tearDown(): void {
+		$GLOBALS['wpvdb_test_posts']             = array();
+		$GLOBALS['wpvdb_test_viewable_statuses'] = array( 'publish' );
+		$GLOBALS['_wp_filters']                  = array();
+		parent::tearDown();
+	}
+
+	/**
+	 * Regression for blocker 1: process_item() must gate visibility and purge
+	 * BEFORE its API-key/content preflights, which can return early. A queued
+	 * non-indexable post with existing rows must be purged even when it would
+	 * otherwise bail (here: no provider ever consulted).
+	 */
+	public function test_process_item_purges_non_indexable_before_preflights() {
+		// Spy wpdb: report the embeddings table exists and record deletes.
+		$spy = new class() extends \wpdb {
+			public $deleted = array();
+			public function get_var( $query = null, $x = 0, $y = 0 ) {
+				if ( is_string( $query ) && false !== strpos( $query, 'SHOW TABLES' ) ) {
+					return $this->prefix . 'wpvdb_embeddings';
+				}
+				return parent::get_var( $query, $x, $y );
+			}
+			public function delete( $table, $where, $format = null ) {
+				$this->deleted[] = $where;
+				return 1;
+			}
+		};
+
+		$original_wpdb   = isset( $GLOBALS['wpdb'] ) ? $GLOBALS['wpdb'] : null;
+		$GLOBALS['wpdb'] = $spy;
+
+		$GLOBALS['wpvdb_test_viewable_statuses'] = array( 'publish' );
+		$GLOBALS['wpvdb_test_posts']             = array(
+			10 => new \WP_Post(
+				array(
+					'ID'           => 10,
+					'post_status'  => 'private',
+					'post_type'    => 'post',
+					'post_title'   => 'Secret',
+					'post_content' => 'Body',
+				)
+			),
+		);
+
+		$result = WPVDB_Queue::process_item( array( 'post_id' => 10, 'model' => 'm' ) );
+
+		if ( $original_wpdb ) {
+			$GLOBALS['wpdb'] = $original_wpdb;
+		} else {
+			unset( $GLOBALS['wpdb'] );
+		}
+
+		$this->assertFalse( $result );
+		$this->assertNotEmpty( $spy->deleted, 'Expected the non-indexable post rows to be purged.' );
+		$this->assertSame( 10, $spy->deleted[0]['doc_id'] );
 	}
 
 	public function test_build_item_returns_canonical_shape() {
