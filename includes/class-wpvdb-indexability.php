@@ -24,23 +24,27 @@ class Indexability {
 	/**
 	 * Whether a post is indexable.
 	 *
-	 * @param int|\WP_Post $post  Post ID or object.
-	 * @param bool         $fresh When true, bust the post object cache before
-	 *                            reading so a concurrent visibility change made
-	 *                            by another request is observed. Used for the
-	 *                            in-flight re-check; not a zero-window guarantee.
+	 * @param int|string|\WP_Post $post  Post ID, digit-string, or object with an
+	 *                                   ID. Anything else normalizes to id 0
+	 *                                   (not indexable).
+	 * @param bool                $fresh When true, bust the post object cache
+	 *                                   before reading so a concurrent visibility
+	 *                                   change made by another request is
+	 *                                   observed. Used for the in-flight re-check;
+	 *                                   not a zero-window guarantee.
 	 * @return bool
 	 */
 	public static function is_indexable( $post, $fresh = false ) {
 		// Normalize to a non-negative int id. Only an int or a digit-string is a
-		// post identity; ID-less objects, arrays, booleans, and non-numeric
-		// strings guard to 0 (a bare (int) cast would resolve true or "1abc" to 1).
-		if ( is_object( $post ) ) {
-			$post_id = isset( $post->ID ) ? max( 0, (int) $post->ID ) : 0;
-		} elseif ( is_int( $post ) ) {
-			$post_id = max( 0, $post );
-		} elseif ( is_string( $post ) && ctype_digit( $post ) ) {
-			$post_id = (int) $post;
+		// post identity (for an object, that means its ID property); ID-less
+		// objects, arrays, booleans, and non-numeric strings guard to 0, since a
+		// bare (int) cast would resolve true or "1abc" to 1.
+		$candidate = is_object( $post ) ? ( $post->ID ?? null ) : $post;
+
+		if ( is_int( $candidate ) ) {
+			$post_id = max( 0, $candidate );
+		} elseif ( is_string( $candidate ) && ctype_digit( $candidate ) ) {
+			$post_id = (int) $candidate;
 		} else {
 			$post_id = 0;
 		}

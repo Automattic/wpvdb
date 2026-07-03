@@ -224,6 +224,16 @@ namespace WPVDB\Tests\Unit {
 			$this->make_post( 1, 'publish' );
 			// A partial post-like object (exposes ID) still resolves.
 			$this->assertTrue( Indexability::is_indexable( (object) array( 'ID' => 1 ) ) );
+			// ...but a digit-string ID also resolves.
+			$this->assertTrue( Indexability::is_indexable( (object) array( 'ID' => '1' ) ) );
+		}
+
+		public function test_object_with_non_numeric_id_not_coerced_to_one() {
+			// A duck-typed object whose ID is a boolean or leading-numeric string
+			// must not be coerced to post 1.
+			$this->make_post( 1, 'publish' );
+			$this->assertFalse( Indexability::is_indexable( (object) array( 'ID' => '1abc' ) ) );
+			$this->assertFalse( Indexability::is_indexable( (object) array( 'ID' => true ) ) );
 		}
 
 		/* ---- must not false-negative legitimately public content ------------- */
