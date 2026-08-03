@@ -153,31 +153,37 @@ class Settings {
 
 			$provider_settings = $input[ $provider ];
 
-			// Validate and encrypt API key. Ignore non-string values (e.g. a malformed array payload).
+			// Validate the API key. Ignore non-string values (e.g. a malformed array payload).
 			$raw_api_key = isset( $provider_settings['api_key'] ) && is_string( $provider_settings['api_key'] )
 				? $provider_settings['api_key']
 				: '';
 			if ( '' !== $raw_api_key ) {
-				$validated[ $provider ]['api_key'] = self::encrypt_api_key( $raw_api_key );
-
 				// A plaintext value (not the stored encrypted blob) means the user entered a new key; verify it.
-				if ( 0 !== strpos( $raw_api_key, 'wpvdb_encrypted_' ) ) {
-					$key_error = self::validate_provider_api_key( $provider, $raw_api_key, $provider_settings );
-					if ( is_wp_error( $key_error ) ) {
-						$provider_data  = Providers::get_provider( $provider );
-						$provider_label = ( is_array( $provider_data ) && ! empty( $provider_data['label'] ) ) ? $provider_data['label'] : $provider;
-						add_settings_error(
-							'wpvdb_settings',
-							'wpvdb_invalid_api_key_' . $provider,
-							sprintf(
-								/* translators: 1: provider name, 2: error message returned by the provider. */
-								__( 'The %1$s API key was rejected: %2$s', 'wpvdb' ),
-								$provider_label,
-								$key_error->get_error_message()
-							),
-							'error'
-						);
+				$is_new_key = ( 0 !== strpos( $raw_api_key, 'wpvdb_encrypted_' ) );
+				$key_error  = $is_new_key ? self::validate_provider_api_key( $provider, $raw_api_key, $provider_settings ) : null;
+
+				if ( is_wp_error( $key_error ) ) {
+					// Rejected: keep the previously stored key instead of overwriting a working one with a bad value.
+					$existing = get_option( 'wpvdb_settings', array() );
+					if ( is_array( $existing ) && isset( $existing[ $provider ]['api_key'] ) && is_string( $existing[ $provider ]['api_key'] ) ) {
+						$validated[ $provider ]['api_key'] = $existing[ $provider ]['api_key'];
 					}
+
+					$provider_data  = Providers::get_provider( $provider );
+					$provider_label = ( is_array( $provider_data ) && ! empty( $provider_data['label'] ) ) ? $provider_data['label'] : $provider;
+					add_settings_error(
+						'wpvdb_settings',
+						'wpvdb_invalid_api_key_' . $provider,
+						sprintf(
+							/* translators: 1: provider name, 2: error message returned by the provider. */
+							__( 'The %1$s API key was rejected and was not saved: %2$s', 'wpvdb' ),
+							$provider_label,
+							$key_error->get_error_message()
+						),
+						'error'
+					);
+				} else {
+					$validated[ $provider ]['api_key'] = self::encrypt_api_key( $raw_api_key );
 				}
 			}
 

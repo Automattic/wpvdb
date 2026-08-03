@@ -142,11 +142,7 @@ jQuery(document).ready(function($) {
             var newProvider = $('#wpvdb_provider').val();
             var newModel;
             
-            if (newProvider === 'openai') {
-                newModel = $('#wpvdb_openai_model').val();
-            } else {
-                newModel = $('#wpvdb_automattic_model').val();
-            }
+            newModel = $('#wpvdb_' + newProvider + '_model').val();
             
             // Check if provider or model changed
             if (newProvider !== currentProvider || newModel !== currentModel) {
