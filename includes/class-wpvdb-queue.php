@@ -506,6 +506,7 @@ class WPVDB_Queue {
 			// Get embedding.
 			$embedding_result = Core::get_embedding( $chunk, $model, $api_base, $api_key );
 			if ( is_wp_error( $embedding_result ) ) {
+				self::record_embedding_failure( $post->ID, $provider, $embedding_result );
 				Core::log_error(
 					'Failed to generate embedding',
 					array(
@@ -530,6 +531,8 @@ class WPVDB_Queue {
 			);
 
 			if ( is_wp_error( $result ) ) {
+				self::record_embedding_failure( $post->ID, $provider, $result );
+
 				// Fresh storage gate rejected: post went non-indexable after
 				// embedding, before insert. Purge everything written for it and stop.
 				if ( 'wpvdb_not_indexable' === $result->get_error_code() ) {
@@ -537,6 +540,7 @@ class WPVDB_Queue {
 					Database::get_instance()->delete_post_embeddings( $post->ID );
 					return false;
 				}
+
 				Core::log_error(
 					'Failed to insert embedding',
 					array(
@@ -558,5 +562,37 @@ class WPVDB_Queue {
 		update_post_meta( $post->ID, '_wpvdb_embedded_model', $model );
 
 		return $successful_chunks > 0;
+	}
+
+	/**
+	 * Record an embedding failure so it can be surfaced to the user as an admin notice.
+	 *
+	 * @param int       $post_id  Post that failed.
+	 * @param string    $provider Provider used for the attempt.
+	 * @param \WP_Error $error    Failure returned by the embedding pipeline.
+	 * @return void
+	 */
+	private static function record_embedding_failure( $post_id, $provider, $error ) {
+		$failures = get_transient( 'wpvdb_embedding_failures' );
+		if ( ! is_array( $failures ) ) {
+			$failures = array();
+		}
+
+		$message = (string) $error->get_error_message();
+		$message = function_exists( 'mb_substr' ) ? mb_substr( $message, 0, 200 ) : substr( $message, 0, 200 );
+
+		$failures[] = array(
+			'post_id'  => (int) $post_id,
+			'provider' => (string) $provider,
+			'code'     => $error->get_error_code(),
+			'message'  => $message,
+		);
+
+		// Cap the list so a large failed batch cannot bloat the options table.
+		if ( count( $failures ) > 50 ) {
+			$failures = array_slice( $failures, -50 );
+		}
+
+		set_transient( 'wpvdb_embedding_failures', $failures, HOUR_IN_SECONDS );
 	}
 }

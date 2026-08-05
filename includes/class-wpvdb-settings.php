@@ -36,6 +36,10 @@ class Settings {
 			'api_key'  => '',
 			'api_base' => '',
 		),
+		'voyage'                => array(
+			'api_key'  => '',
+			'api_base' => '',
+		),
 	);
 
 	/**
@@ -51,6 +55,7 @@ class Settings {
 		$defaults['default_model']          = Models::get_default_model_for_provider( $defaults['active_provider'] );
 		$defaults['openai']['api_base']     = Providers::get_api_base( 'openai' );
 		$defaults['automattic']['api_base'] = Providers::get_api_base( 'automattic' );
+		$defaults['voyage']['api_base']     = Providers::get_api_base( 'voyage' );
 		return $defaults;
 	}
 
@@ -94,7 +99,7 @@ class Settings {
 		$validated = self::get_defaults();
 
 		// Validate active provider.
-		if ( isset( $input['active_provider'] ) && in_array( $input['active_provider'], array( 'openai', 'automattic' ), true ) ) {
+		if ( isset( $input['active_provider'] ) && in_array( $input['active_provider'], array( 'openai', 'automattic', 'voyage' ), true ) ) {
 			$validated['active_provider'] = $input['active_provider'];
 			$validated['default_model']   = Models::get_default_model_for_provider( $validated['active_provider'] );
 		}
@@ -141,16 +146,45 @@ class Settings {
 		}
 
 		// Validate provider settings.
-		foreach ( array( 'openai', 'automattic' ) as $provider ) {
+		foreach ( array( 'openai', 'automattic', 'voyage' ) as $provider ) {
 			if ( ! isset( $input[ $provider ] ) || ! is_array( $input[ $provider ] ) ) {
 				continue;
 			}
 
 			$provider_settings = $input[ $provider ];
 
-			// Validate and encrypt API key.
-			if ( ! empty( $provider_settings['api_key'] ) ) {
-				$validated[ $provider ]['api_key'] = self::encrypt_api_key( $provider_settings['api_key'] );
+			// Validate the API key. Ignore non-string values (e.g. a malformed array payload).
+			$raw_api_key = isset( $provider_settings['api_key'] ) && is_string( $provider_settings['api_key'] )
+				? $provider_settings['api_key']
+				: '';
+			if ( '' !== $raw_api_key ) {
+				// A plaintext value (not the stored encrypted blob) means the user entered a new key; verify it.
+				$is_new_key = ( 0 !== strpos( $raw_api_key, 'wpvdb_encrypted_' ) );
+				$key_error  = $is_new_key ? self::validate_provider_api_key( $provider, $raw_api_key, $provider_settings ) : null;
+
+				if ( is_wp_error( $key_error ) ) {
+					// Rejected: keep the previously stored key instead of overwriting a working one with a bad value.
+					$existing = get_option( 'wpvdb_settings', array() );
+					if ( is_array( $existing ) && isset( $existing[ $provider ]['api_key'] ) && is_string( $existing[ $provider ]['api_key'] ) ) {
+						$validated[ $provider ]['api_key'] = $existing[ $provider ]['api_key'];
+					}
+
+					$provider_data  = Providers::get_provider( $provider );
+					$provider_label = ( is_array( $provider_data ) && ! empty( $provider_data['label'] ) ) ? $provider_data['label'] : $provider;
+					add_settings_error(
+						'wpvdb_settings',
+						'wpvdb_invalid_api_key_' . $provider,
+						sprintf(
+							/* translators: 1: provider name, 2: error message returned by the provider. */
+							__( 'The %1$s API key was rejected and was not saved: %2$s', 'wpvdb' ),
+							$provider_label,
+							$key_error->get_error_message()
+						),
+						'error'
+					);
+				} else {
+					$validated[ $provider ]['api_key'] = self::encrypt_api_key( $raw_api_key );
+				}
 			}
 
 			// Validate API base URL.
@@ -185,6 +219,38 @@ class Settings {
 		do_action( 'wpvdb_settings_updated', $validated, $input );
 
 		return $validated;
+	}
+
+	/**
+	 * Verify a provider API key by issuing a minimal embedding request.
+	 *
+	 * @param string $provider          Provider identifier.
+	 * @param string $api_key           Plaintext API key to verify.
+	 * @param array  $provider_settings Submitted provider settings (api_base, default_model).
+	 * @return \WP_Error|null WP_Error when the provider rejects the credentials, null otherwise.
+	 */
+	private static function validate_provider_api_key( $provider, $api_key, $provider_settings ) {
+		$submitted_base = isset( $provider_settings['api_base'] ) && is_string( $provider_settings['api_base'] )
+			? $provider_settings['api_base']
+			: '';
+		$api_base       = '' !== $submitted_base
+			? self::normalize_api_base_for_provider( $provider, $submitted_base )
+			: self::get_api_base_for_provider( $provider );
+
+		$submitted_model = isset( $provider_settings['default_model'] ) && is_string( $provider_settings['default_model'] )
+			? $provider_settings['default_model']
+			: '';
+		$model           = '' !== $submitted_model
+			? $submitted_model
+			: Models::get_default_model_for_provider( $provider );
+
+		$result = Core::get_embedding( 'wpvdb api key check', $model, $api_base, $api_key );
+
+		if ( is_wp_error( $result ) && in_array( $result->get_error_code(), array( 'embedding_auth_error', 'embedding_forbidden' ), true ) ) {
+			return $result;
+		}
+
+		return null;
 	}
 
 	/**
@@ -414,6 +480,7 @@ class Settings {
 		// Remove sensitive information.
 		unset( $settings['openai']['api_key'] );
 		unset( $settings['automattic']['api_key'] );
+		unset( $settings['voyage']['api_key'] );
 
 		return array(
 			'version'     => WPVDB_VERSION,
@@ -512,6 +579,10 @@ class Settings {
 			return \constant( 'WPVDB_AUTOMATTIC_API_KEY' );
 		}
 
+		if ( 'voyage' === $provider && defined( 'WPVDB_VOYAGE_API_KEY' ) ) {
+			return \constant( 'WPVDB_VOYAGE_API_KEY' );
+		}
+
 		$encrypted_key = isset( $settings[ $provider ]['api_key'] ) ? $settings[ $provider ]['api_key'] : '';
 
 		// If no key in options, check filter.
@@ -544,6 +615,10 @@ class Settings {
 
 		if ( 'automattic' === $provider && defined( 'WPVDB_AUTOMATTIC_API_KEY' ) ) {
 			return \constant( 'WPVDB_AUTOMATTIC_API_KEY' );
+		}
+
+		if ( 'voyage' === $provider && defined( 'WPVDB_VOYAGE_API_KEY' ) ) {
+			return \constant( 'WPVDB_VOYAGE_API_KEY' );
 		}
 
 		$encrypted_key = '';

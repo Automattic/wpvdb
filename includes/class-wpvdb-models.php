@@ -99,6 +99,62 @@ class Models {
 					'supports_dimensions' => false,
 				),
 			),
+			'voyage'     => array(
+				'voyage-4-lite'    => array(
+					'label'               => 'Voyage 4 Lite (256/512/1024/2048 dim)',
+					'dimensions'          => 1024,
+					'default'             => true,
+					'selectable'          => true,
+					'endpoint'            => 'embeddings',
+					'request_format'      => 'openai',
+					'response_format'     => 'openai',
+					'supports_dimensions' => true,
+					'allowed_dimensions'  => array( 256, 512, 1024, 2048 ),
+					'dimension_param'     => 'output_dimension',
+				),
+				'voyage-4-large'   => array(
+					'label'               => 'Voyage 4 Large (256/512/1024/2048 dim)',
+					'dimensions'          => 1024,
+					'selectable'          => true,
+					'endpoint'            => 'embeddings',
+					'request_format'      => 'openai',
+					'response_format'     => 'openai',
+					'supports_dimensions' => true,
+					'allowed_dimensions'  => array( 256, 512, 1024, 2048 ),
+					'dimension_param'     => 'output_dimension',
+				),
+				'voyage-code-3'    => array(
+					'label'               => 'Voyage Code 3 (256/512/1024/2048 dim)',
+					'dimensions'          => 1024,
+					'selectable'          => true,
+					'endpoint'            => 'embeddings',
+					'request_format'      => 'openai',
+					'response_format'     => 'openai',
+					'supports_dimensions' => true,
+					'allowed_dimensions'  => array( 256, 512, 1024, 2048 ),
+					'dimension_param'     => 'output_dimension',
+				),
+				'voyage-finance-2' => array(
+					'label'               => 'Voyage Finance 2 (1024 dim)',
+					'dimensions'          => 1024,
+					'selectable'          => true,
+					'endpoint'            => 'embeddings',
+					'request_format'      => 'openai',
+					'response_format'     => 'openai',
+					'supports_dimensions' => false,
+					'dimension_param'     => 'output_dimension',
+				),
+				'voyage-law-2'     => array(
+					'label'               => 'Voyage Law 2 (1024 dim)',
+					'dimensions'          => 1024,
+					'selectable'          => true,
+					'endpoint'            => 'embeddings',
+					'request_format'      => 'openai',
+					'response_format'     => 'openai',
+					'supports_dimensions' => false,
+					'dimension_param'     => 'output_dimension',
+				),
+			),
 		);
 
 		// Allow plugins to register additional models or modify existing ones.
@@ -259,6 +315,20 @@ class Models {
 	}
 
 	/**
+	 * Get the request body parameter name used to request an output dimension.
+	 *
+	 * OpenAI-compatible APIs use `dimensions`; Voyage AI uses `output_dimension`.
+	 *
+	 * @param string $model_name Model name.
+	 * @param string $api_base API base URL.
+	 * @return string Parameter name
+	 */
+	public static function get_dimension_param( $model_name, $api_base = '' ) {
+		$model = self::get_model_for_request( $model_name, $api_base );
+		return ( $model && ! empty( $model['dimension_param'] ) ) ? $model['dimension_param'] : 'dimensions';
+	}
+
+	/**
 	 * Check whether a model can produce embeddings for the storage dimension.
 	 *
 	 * @param string   $model_name Model name.
@@ -272,6 +342,42 @@ class Models {
 			return false;
 		}
 		return self::is_model_storage_compatible( $model, self::get_storage_dimension( $target_dim ) );
+	}
+
+	/**
+	 * Get the configured embedding column dimension.
+	 *
+	 * @return int Storage dimension
+	 */
+	public static function get_configured_dimension() {
+		return self::get_storage_dimension();
+	}
+
+	/**
+	 * Get the embedding dimensions a provider's models can produce.
+	 *
+	 * Returns the discrete set of storage dimensions for which at least one of
+	 * the provider's models would be selectable. An empty array means the
+	 * provider has a model that accepts any dimension (no constraint to surface).
+	 *
+	 * @param string $provider Provider name.
+	 * @return int[] Sorted, unique list of compatible dimensions
+	 */
+	public static function get_provider_compatible_dimensions( $provider ) {
+		$dims = array();
+		foreach ( self::get_provider_models( $provider ) as $model ) {
+			if ( isset( $model['allowed_dimensions'] ) && is_array( $model['allowed_dimensions'] ) ) {
+				$dims = array_merge( $dims, array_map( 'intval', $model['allowed_dimensions'] ) );
+			} elseif ( ! empty( $model['supports_dimensions'] ) ) {
+				// Model accepts any dimension; the provider is never dimension-constrained.
+				return array();
+			} elseif ( isset( $model['dimensions'] ) ) {
+				$dims[] = (int) $model['dimensions'];
+			}
+		}
+		$dims = array_values( array_unique( $dims ) );
+		sort( $dims );
+		return $dims;
 	}
 
 	/**
@@ -314,6 +420,10 @@ class Models {
 			return 'openai';
 		}
 
+		if ( strpos( $api_base, 'api.voyageai.com' ) !== false ) {
+			return 'voyage';
+		}
+
 		return '';
 	}
 
@@ -338,6 +448,9 @@ class Models {
 	 * @return bool Whether the model can fit the configured embedding column
 	 */
 	private static function is_model_storage_compatible( $model, $target_dim ) {
+		if ( isset( $model['allowed_dimensions'] ) && is_array( $model['allowed_dimensions'] ) ) {
+			return in_array( $target_dim, array_map( 'intval', $model['allowed_dimensions'] ), true );
+		}
 		if ( ! empty( $model['supports_dimensions'] ) ) {
 			return true;
 		}

@@ -498,31 +498,36 @@
 					<p class="description"><?php esc_html_e( 'Maximum number of posts to process', 'wpvdb' ); ?></p>
 				</div>
 
+				<?php
+				$wpvdb_active_provider = \WPVDB\Settings::get_active_provider();
+				$wpvdb_bulk_settings   = \WPVDB\Settings::get_validated_settings();
+				$wpvdb_active_model    = ! empty( $wpvdb_bulk_settings['active_model'] )
+					? $wpvdb_bulk_settings['active_model']
+					: \WPVDB\Models::get_default_model_for_provider( $wpvdb_active_provider );
+
+				$wpvdb_providers      = \WPVDB\Providers::get_available_providers();
+				$wpvdb_provider_label = isset( $wpvdb_providers[ $wpvdb_active_provider ]['label'] )
+					? $wpvdb_providers[ $wpvdb_active_provider ]['label']
+					: $wpvdb_active_provider;
+
+				$wpvdb_active_model_data = \WPVDB\Models::get_model( $wpvdb_active_provider, $wpvdb_active_model );
+				$wpvdb_model_label       = ( is_array( $wpvdb_active_model_data ) && ! empty( $wpvdb_active_model_data['label'] ) )
+					? $wpvdb_active_model_data['label']
+					: $wpvdb_active_model;
+				?>
+
 				<div class="wpvdb-form-group">
 					<label for="wpvdb-provider"><?php esc_html_e( 'Provider', 'wpvdb' ); ?></label>
-					<select id="wpvdb-provider" name="provider">
-						<?php
-						$providers = \WPVDB\Providers::get_available_providers();
-						foreach ( $providers as $provider_id => $provider ) {
-							echo '<option value="' . esc_attr( $provider_id ) . '">' . esc_html( $provider['label'] ) . '</option>';
-						}
-						?>
+					<select id="wpvdb-provider" name="provider" disabled>
+						<option value="<?php echo esc_attr( $wpvdb_active_provider ); ?>" selected><?php echo esc_html( $wpvdb_provider_label ); ?></option>
 					</select>
+					<p class="description"><?php esc_html_e( 'Uses the active provider configured under Settings. To embed with a different provider, change it there first.', 'wpvdb' ); ?></p>
 				</div>
 
 				<div class="wpvdb-form-group" id="wpvdb-bulk-models">
 					<label for="wpvdb-model"><?php esc_html_e( 'Model', 'wpvdb' ); ?></label>
-					<select id="wpvdb-model" name="model">
-						<?php
-						// Get models for the first provider.
-						$first_provider    = reset( $providers );
-						$first_provider_id = key( $providers );
-						$provider_models   = \WPVDB\Models::get_selectable_provider_models( $first_provider_id );
-
-						foreach ( $provider_models as $model_id => $model ) {
-							echo '<option value="' . esc_attr( $model_id ) . '">' . esc_html( $model['label'] ) . '</option>';
-						}
-						?>
+					<select id="wpvdb-model" name="model" disabled>
+						<option value="<?php echo esc_attr( $wpvdb_active_model ); ?>" selected><?php echo esc_html( $wpvdb_model_label ); ?></option>
 					</select>
 				</div>
 

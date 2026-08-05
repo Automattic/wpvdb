@@ -47,6 +47,13 @@ class Providers {
 				'api_key_constant' => '',  // No API key needed for local server.
 				'description'      => __( 'SPECTER2 is a research model for scientific document embeddings, running locally.', 'wpvdb' ),
 			),
+			'voyage'     => array(
+				'name'             => 'voyage',
+				'label'            => 'Voyage AI',
+				'api_base'         => 'https://api.voyageai.com/v1/',
+				'api_key_constant' => 'WPVDB_VOYAGE_API_KEY',
+				'description'      => __( 'Voyage AI provides domain-specialized embedding models for code, finance, and law.', 'wpvdb' ),
+			),
 		);
 
 		// Allow plugins to register additional providers.
