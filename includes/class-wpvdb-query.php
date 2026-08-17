@@ -72,8 +72,9 @@ class Query {
 		Logger::debug( 'Using API base: ' . $api_base );
 
 		try {
-			$limit = $query->get( 'posts_per_page' );
-			$limit = $limit ? $limit : 10;
+			// posts_per_page of -1 or 0 has no bounded meaning here, so use the default page size.
+			$limit = (int) $query->get( 'posts_per_page' );
+			$limit = $limit > 0 ? $limit : 10;
 
 			// Set an appropriate similarity threshold - we discovered this is critical for performance
 			// Lower values (0.2-0.3) are more strict but faster, higher values (0.4-0.6) give more results.
