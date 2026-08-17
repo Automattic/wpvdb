@@ -554,6 +554,7 @@ if ( ! class_exists( 'wpdb' ) ) {
         public $last_result = [];
         public $num_rows = 0;
         public $prefix = 'wp_';
+        public $posts = 'wp_posts';
         public $dbname = 'test_db';
 
         public function get_var( $query = null, $x = 0, $y = 0 ) {
@@ -621,6 +622,7 @@ require_once dirname( __DIR__ ) . '/includes/class-wpvdb-cache.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-indexability.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-core.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-database.php';
+require_once dirname( __DIR__ ) . '/includes/class-wpvdb-search.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-rest.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-embedding-enqueuer.php';
 require_once dirname( __DIR__ ) . '/includes/class-wpvdb-queue.php';

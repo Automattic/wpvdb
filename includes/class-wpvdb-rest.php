@@ -24,6 +24,16 @@ defined( 'ABSPATH' ) || exit;
 class REST {
 
 	/**
+	 * Candidate multiplier applied to the requested result count.
+	 *
+	 * The visibility gate runs in SQL, so reading only `limit` rows lets
+	 * filtered-out rows shrink the response below what the client asked for.
+	 *
+	 * @var int
+	 */
+	const QUERY_OVER_FETCH = 3;
+
+	/**
 	 * Database handler instance
 	 *
 	 * @since 1.0.0
@@ -566,9 +576,6 @@ class REST {
 		$start_time = Logger::start_timer( 'query_processing' );
 
 		try {
-			global $wpdb;
-			$table_name = $wpdb->prefix . 'wpvdb_embeddings';
-
 			Logger::debug(
 				'Processing query request',
 				array(
@@ -578,19 +585,11 @@ class REST {
 				)
 			);
 
-			if ( $has_provided_vector ) {
-				$embedding = $normalized_vector;
-			} else {
-				Logger::debug(
-					'Using configuration',
-					array(
-						'model'    => $model,
-						'provider' => $provider,
-					)
-				);
-
-				// Get API key from settings based on provider.
+			// Pre-flighted here rather than in Search so the REST-specific
+			// error codes existing clients match on are preserved.
+			if ( ! $has_provided_vector ) {
 				$api_key = Settings::get_api_key_for_provider( $provider );
+
 				if ( empty( $api_key ) ) {
 					Logger::error( 'API key not configured', array( 'provider' => $provider ) );
 					return new \WP_Error( 'missing_api_key', __( 'API key not configured for the selected provider', 'wpvdb' ), array( 'status' => 400 ) );
@@ -600,245 +599,49 @@ class REST {
 					Logger::error( 'API base URL not configured', array( 'provider' => $provider ) );
 					return new \WP_Error( 'missing_api_base', __( 'API base URL not configured for the selected provider', 'wpvdb' ), array( 'status' => 400 ) );
 				}
-
-				Logger::debug(
-					'Generating embedding',
-					array(
-						'model'       => $model,
-						'text_length' => strlen( $text ),
-					)
-				);
-
-				$embed_start = $debug ? microtime( true ) : 0.0;
-				$embedding   = Core::get_embedding( $text, $model, $api_base, $api_key );
-				if ( $debug ) {
-					$timing['embed_ms'] = (int) round( ( microtime( true ) - $embed_start ) * 1000 );
-				}
-				if ( is_wp_error( $embedding ) ) {
-					Logger::error(
-						'Failed to generate embedding',
-						array(
-							'error' => $embedding->get_error_message(),
-							'model' => $model,
-						)
-					);
-					return $embedding;
-				}
 			}
 
-			Logger::debug( 'Embedding generated successfully', array( 'dimensions' => count( $embedding ) ) );
+			$search = Search::query(
+				array(
+					'text'               => $has_provided_vector ? '' : $text,
+					'vector'             => $has_provided_vector ? $normalized_vector : null,
+					'model'              => $model,
+					'limit'              => $limit,
+					'over_fetch'         => self::QUERY_OVER_FETCH,
+					'respect_visibility' => true,
+					'provider'           => $provider,
+					'api_base'           => $api_base,
+				)
+			);
 
-			// Now we have an embedding array of floats. If we have native vector support, use it. Otherwise fallback.
-			$probe_start = $debug ? microtime( true ) : 0.0;
-			$has_vector  = self::$database->has_native_vector_support();
+			if ( is_wp_error( $search ) ) {
+				return $search;
+			}
+
+			$results    = $search['results'];
+			$plan       = $search['plan'];
+			$has_vector = $plan['has_vector_support'];
+
 			if ( $debug ) {
-				$timing['vector_probe_ms'] = (int) round( ( microtime( true ) - $probe_start ) * 1000 );
+				$timing['embed_ms']        = $plan['timings_ms']['embed'];
+				$timing['vector_probe_ms'] = $plan['timings_ms']['vector_probe'];
+				$timing['db_ms']           = $plan['timings_ms']['db'];
 			}
-			Logger::debug( 'Database vector support status', array( 'has_vector' => $has_vector ) );
-			$results = array();
 
-			if ( $has_vector ) {
-				try {
-					// Convert the embedding array to JSON and validate.
-					$embedding_json = wp_json_encode( $embedding );
-					if ( false === $embedding_json ) {
-						return new \WP_Error( 'encoding_error', __( 'Failed to encode embedding data', 'wpvdb' ), array( 'status' => 500 ) );
-					}
-
-					// Use Database class to get safe vector SQL components.
-					$db_type           = self::$database->get_db_type();
-					$vector_function   = '';
-					$distance_function = '';
-
-					// Build safe SQL based on database type. MariaDB 11.7+ uses
-					// VEC_FromText to parse a JSON array; MySQL 9 uses its own
-					// ingest function (VECTOR_FROM_JSON here is a placeholder).
-					if ( 'mariadb' === $db_type ) {
-						$vector_function   = "VEC_FromText('" . esc_sql( $embedding_json ) . "')";
-						$distance_function = 'VEC_DISTANCE_COSINE(embedding, ' . $vector_function . ')';
-					} elseif ( 'mysql' === $db_type ) {
-						$vector_function   = "VECTOR_FROM_JSON('" . esc_sql( $embedding_json ) . "')";
-						$distance_function = 'COSINE_DISTANCE(embedding, ' . $vector_function . ')';
-					} else {
-						return new \WP_Error( 'db_error', __( 'Unsupported database type for vector operations', 'wpvdb' ), array( 'status' => 500 ) );
-					}
-
-					Logger::debug(
-						'Vector SQL components',
-						array(
-							'vector_function'   => substr( $vector_function, 0, 30 ) . '...',
-							'distance_function' => substr( $distance_function, 0, 50 ) . '...',
-							'db_type'           => $db_type,
-						)
-					);
-
-					// Scope by model (no cross-model rows) and exclude protected /
-					// non-public post rows at query time (arbitrary docs pass).
-					$sql = $wpdb->prepare(
-						"SELECT e.id, e.doc_id, e.chunk_id, e.chunk_content, e.summary,
-						{$distance_function} as distance
-						FROM {$table_name} e
-						LEFT JOIN {$wpdb->posts} p ON p.ID = e.doc_id
-						WHERE e.model = %s
-						AND ( p.ID IS NULL OR ( p.post_status = 'publish' AND p.post_password = '' ) )
-						ORDER BY distance
-						LIMIT %d",
-						$model,
-						$limit
-					);
-
-					Logger::debug( 'Executing vector query', array( 'limit' => $limit ) );
-
-					$db_start = $debug ? microtime( true ) : 0.0;
-					$results  = $wpdb->get_results( $sql, ARRAY_A );
-					if ( $debug ) {
-						$timing['db_ms'] = (int) round( ( microtime( true ) - $db_start ) * 1000 );
-					}
-
-					if ( $wpdb->last_error ) {
-						Logger::error(
-							'Vector query database error',
-							array(
-								'error' => $wpdb->last_error,
-								'sql'   => substr( $sql, 0, 200 ) . '...',
-							)
-						);
-						return new \WP_Error( 'db_error', $wpdb->last_error, array( 'status' => 500 ) );
-					}
-
-					Logger::info(
-						'Vector query completed',
-						array(
-							'results_count' => count( $results ),
-							'has_vector'    => true,
-						)
-					);
-				} catch ( \Exception $e ) {
-					Logger::log_exception( $e, 'Vector query exception' );
-					return new \WP_Error( 'query_error', $e->getMessage(), array( 'status' => 500 ) );
-				}
-			} else {
-				// Fallback to PHP with pagination and memory optimization.
-				Logger::warning( 'Using PHP fallback for similarity search - performance may be slower' );
-				$fallback_start = microtime( true );
-
-				// Use pagination to avoid loading all rows at once.
-				$page_size       = 1000;
-				$offset          = 0;
-				$distances       = array();
-				$total_processed = 0;
-
-				while ( true ) {
-					// Get a batch of rows with LIMIT and OFFSET. Same visibility
-					// filter as the native path (exclude protected/non-public posts).
-					$batch_query = $wpdb->prepare(
-						"SELECT e.id, e.doc_id, e.chunk_id, e.chunk_content, e.summary, e.embedding
-						FROM {$table_name} e
-						LEFT JOIN {$wpdb->posts} p ON p.ID = e.doc_id
-						WHERE e.model = %s
-						AND ( p.ID IS NULL OR ( p.post_status = 'publish' AND p.post_password = '' ) )
-						LIMIT %d OFFSET %d",
-						$model,
-						$page_size,
-						$offset
-					);
-
-					$batch_rows = $wpdb->get_results( $batch_query, ARRAY_A );
-
-					if ( $wpdb->last_error ) {
-						Logger::error(
-							'PHP fallback database error',
-							array(
-								'error'  => $wpdb->last_error,
-								'offset' => $offset,
-							)
-						);
-						return new \WP_Error( 'db_error', $wpdb->last_error, array( 'status' => 500 ) );
-					}
-
-					// Break if no more rows.
-					if ( empty( $batch_rows ) ) {
-						break;
-					}
-
-					// Process this batch.
-					foreach ( $batch_rows as $row ) {
-						try {
-							$vector = json_decode( $row['embedding'], true );
-							if ( ! is_array( $vector ) ) {
-								continue; // Skip invalid embeddings.
-							}
-
-							$distance = self::cosine_distance( $embedding, $vector );
-
-							// Add distance to the row.
-							$row['distance'] = $distance;
-							$distances[]     = $row;
-							++$total_processed;
-
-							// Memory management: if we have way more than needed,
-							// sort and trim to prevent memory issues.
-							if ( count( $distances ) > ( $limit * 10 ) ) {
-								usort(
-									$distances,
-									function ( $a, $b ) {
-										return $a['distance'] <=> $b['distance'];
-									}
-								);
-								$distances = array_slice( $distances, 0, $limit * 2 );
-							}
-						} catch ( \Exception $e ) {
-							// Skip rows that cause errors.
-							Logger::warning(
-								'Error processing embedding row in fallback',
-								array(
-									'row_id' => $row['id'],
-									'error'  => $e->getMessage(),
-								)
-							);
-						}
-					}
-
-					$offset += $page_size;
-
-					// Safety break to prevent infinite loops.
-					if ( $total_processed > 50000 ) {
-						Logger::warning( 'Fallback processing limit reached', array( 'processed' => $total_processed ) );
-						break;
-					}
-				}
-
-				// Final sort and limit.
-				usort(
-					$distances,
-					function ( $a, $b ) {
-						return $a['distance'] <=> $b['distance'];
-					}
-				);
-
-				// Limit results.
-				$results = array_slice( $distances, 0, $limit );
-
-				$fallback_duration = microtime( true ) - $fallback_start;
-				if ( $debug ) {
-					$timing['db_ms'] = (int) round( $fallback_duration * 1000 );
-				}
-				Logger::log_performance(
-					'php_fallback_similarity_search',
-					$fallback_duration,
-					array(
-						'total_processed'  => $total_processed,
-						'results_returned' => count( $results ),
-					)
-				);
-			}
+			Logger::info(
+				'Query completed',
+				array(
+					'results_count' => count( $results ),
+					'strategy'      => $plan['strategy'],
+				)
+			);
 
 			// Add debug info.
 			$results = array_map(
-				function ( $row ) {
+				function ( $row ) use ( $plan ) {
 					$row['debug_info'] = array(
-						'database_type'      => self::$database->get_db_type(),
-						'has_vector_support' => self::$database->has_native_vector_support() ? 'yes' : 'no',
+						'database_type'      => $plan['db_type'],
+						'has_vector_support' => $plan['has_vector_support'] ? 'yes' : 'no',
 					);
 					return $row;
 				},
