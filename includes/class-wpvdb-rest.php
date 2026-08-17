@@ -881,7 +881,6 @@ class REST {
 
 				// Use the Database class to determine the vector function to use.
 				$vector_function = self::$database->get_vector_from_string_function( $embedding_json );
-				Logger::debug( 'Vector function: ' . $vector_function );
 
 				// For MySQL, the prepare statement handles the quoting properly
 				// For MariaDB, we need to make sure the vector function is inserted as-is.
@@ -891,8 +890,8 @@ class REST {
 					// Cache::get_relevant_embeddings() and Maintenance compare against.
 					$sql = $wpdb->prepare(
 						"INSERT INTO $table_name
-                        (doc_id, chunk_id, chunk_content, summary, embedding, model, doc_type, chunk_index, embedding_date)
-                        VALUES (%d, %s, %s, %s, $vector_function, %s, %s, %d, NOW())",
+						(doc_id, chunk_id, chunk_content, summary, embedding, model, doc_type, chunk_index, embedding_date)
+						VALUES (%d, %s, %s, %s, $vector_function, %s, %s, %d, NOW())",
 						$doc_id,
 						$chunk_id,
 						$chunk_content,

@@ -33,9 +33,6 @@ class Query {
 	 * @return void
 	 */
 	public static function maybe_vector_search( $query ) {
-		// Initialize database.
-		self::init_database();
-
 		// Only run in front-end or REST contexts, and only if vdb_vector_query is set.
 		if ( is_admin() && ! wp_doing_ajax() ) {
 			return;
