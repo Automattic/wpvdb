@@ -14,22 +14,6 @@ defined( 'ABSPATH' ) || exit;
  */
 class Query {
 	/**
-	 * Database handler
-	 *
-	 * @var Database
-	 */
-	private static $database;
-
-	/**
-	 * Initialize the database instance
-	 */
-	private static function init_database() {
-		if ( null === self::$database ) {
-			self::$database = new Database();
-		}
-	}
-
-	/**
 	 * Hook into 'pre_get_posts' or a similar filter to do custom vector searching if requested.
 	 */
 	public static function init() {
@@ -49,9 +33,6 @@ class Query {
 	 * @return void
 	 */
 	public static function maybe_vector_search( $query ) {
-		// Initialize database.
-		self::init_database();
-
 		// Only run in front-end or REST contexts, and only if vdb_vector_query is set.
 		if ( is_admin() && ! wp_doing_ajax() ) {
 			return;
@@ -66,11 +47,6 @@ class Query {
 
 		Logger::debug( 'maybe_vector_search triggered with query: ' . $vdb_query );
 
-		// For simplicity, embed and do a fallback search. Then get the doc_ids, presumably post_id was stored as doc_id.
-		global $wpdb;
-		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
-
-		// We'll do a direct call to the REST method or replicate logic from REST::handle_query.
 		$api_key = apply_filters( 'wpvdb_default_api_key', '' );
 		if ( ! $api_key ) {
 			$api_key = Settings::get_api_key();
@@ -96,106 +72,43 @@ class Query {
 		Logger::debug( 'Using API base: ' . $api_base );
 
 		try {
-			$embedding_result = Core::get_embedding( $vdb_query, $model, $api_base, $api_key );
-			if ( is_wp_error( $embedding_result ) ) {
-				Logger::error( 'Error generating embedding: ' . $embedding_result->get_error_message() );
-				return; // skip.
+			// posts_per_page of -1 or 0 has no bounded meaning here, so use the default page size.
+			$limit = (int) $query->get( 'posts_per_page' );
+			$limit = $limit > 0 ? $limit : 10;
+
+			// Set an appropriate similarity threshold - we discovered this is critical for performance
+			// Lower values (0.2-0.3) are more strict but faster, higher values (0.4-0.6) give more results.
+			$similarity_threshold = apply_filters( 'wpvdb_similarity_threshold', 0.35 );
+
+			$search = Search::query(
+				array(
+					'text'               => $vdb_query,
+					'model'              => $model,
+					// Over-fetch: several chunks can resolve to the same post and
+					// collapse when doc_ids are deduped below.
+					'limit'              => $limit * 3,
+					'distance_threshold' => $similarity_threshold,
+					// WP_Query re-gates status and capabilities downstream.
+					'respect_visibility' => false,
+					'api_base'           => $api_base,
+					'api_key'            => $api_key,
+				)
+			);
+
+			if ( is_wp_error( $search ) ) {
+				Logger::error( 'Vector search failed: ' . $search->get_error_message() );
+				return;
 			}
 
-			Logger::debug( 'Embedding generated successfully, dimensions: ' . count( $embedding_result ) );
+			$doc_ids = array_map( 'intval', wp_list_pluck( $search['results'], 'doc_id' ) );
 
-			$embedding  = $embedding_result;
-			$has_vector = self::$database->has_native_vector_support();
-			Logger::debug( 'Vector support detected: ' . ( $has_vector ? 'Yes' : 'No' ) );
-
-			$limit = $query->get( 'posts_per_page' );
-			$limit = $limit ? $limit : 10;
-			Logger::debug( 'Posts per page limit: ' . $limit );
-
-			$doc_ids = array();
-
-			if ( $has_vector ) {
-				try {
-					// Convert the embedding array to JSON.
-					$embedding_json = wp_json_encode( $embedding );
-
-					// Use Database class to get the appropriate vector function.
-					$vector_function = self::$database->get_vector_from_string_function( $embedding_json );
-					Logger::debug( 'Using vector function: ' . $vector_function );
-
-					// Use Database class to get the appropriate distance function.
-					$distance_function = self::$database->get_vector_distance_function( 'embedding', $vector_function, 'cosine' );
-					Logger::debug( 'Using distance function: ' . $distance_function );
-
-					// Set an appropriate similarity threshold - we discovered this is critical for performance
-					// Lower values (0.2-0.3) are more strict but faster, higher values (0.4-0.6) give more results.
-					$similarity_threshold = apply_filters( 'wpvdb_similarity_threshold', 0.35 );
-
-					// Optimized query that uses the vector index with a distance threshold.
-					// The threshold + ORDER BY + LIMIT pattern is what maximizes vector index usage.
-					$sql = $wpdb->prepare(
-						"
-                        SELECT doc_id,
-                            $distance_function AS distance
-                        FROM $table_name
-                        WHERE $distance_function < %f
-                          AND model = %s
-                        ORDER BY distance
-                        LIMIT %d
-                    ",
-						$similarity_threshold,
-						$model,
-						$limit * 3 // fetch more candidates than needed.
-					);
-
-					Logger::debug( 'Vector search SQL: ' . $sql );
-
-					$rows = $wpdb->get_results( $sql, ARRAY_A );
-
-					if ( $wpdb->last_error ) {
-						Logger::error( 'Database error in vector search: ' . $wpdb->last_error );
-					}
-
-					if ( $rows ) {
-						Logger::debug( 'Found ' . count( $rows ) . ' results from vector search' );
-						foreach ( $rows as $r ) {
-							$doc_ids[] = (int) $r['doc_id'];
-							Logger::debug( 'Added doc_id: ' . $r['doc_id'] . ' with distance: ' . $r['distance'] );
-						}
-					} else {
-						Logger::debug( 'No results found from vector search' );
-					}
-				} catch ( \Exception $e ) {
-					Logger::error( 'Exception in vector search: ' . $e->getMessage() );
-				}
-			} else {
-				Logger::debug( 'No vector support, using PHP fallback search' );
-				// Fallback: do in PHP.
-				$all_rows  = $wpdb->get_results(
-					$wpdb->prepare( "SELECT doc_id, embedding FROM $table_name WHERE model = %s", $model ),
-					ARRAY_A
-				);
-				$distances = array();
-				foreach ( $all_rows as $r ) {
-					$stored_emb = json_decode( $r['embedding'], true );
-					if ( ! is_array( $stored_emb ) ) {
-						continue;
-					}
-					$d           = REST::cosine_distance( $embedding, $stored_emb );
-					$distances[] = array(
-						'doc_id'   => (int) $r['doc_id'],
-						'distance' => $d,
-					);
-				}
-				usort(
-					$distances,
-					function ( $a, $b ) {
-						return $a['distance'] <=> $b['distance'];
-					}
-				);
-				$distances = array_slice( $distances, 0, $limit * 3 );
-				$doc_ids   = wp_list_pluck( $distances, 'doc_id' );
-			}
+			Logger::debug(
+				'Vector search completed',
+				array(
+					'strategy' => $search['plan']['strategy'],
+					'matches'  => count( $doc_ids ),
+				)
+			);
 
 			if ( empty( $doc_ids ) ) {
 				// No matches, so force query to return no posts.

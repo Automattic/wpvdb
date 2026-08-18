@@ -68,6 +68,7 @@ require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-activation.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-models.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-providers.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-core.php';
+require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-search.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-rest.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-query.php';
 require_once WPVDB_PLUGIN_DIR . 'includes/class-wpvdb-settings.php';
