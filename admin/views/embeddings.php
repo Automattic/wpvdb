@@ -37,12 +37,13 @@
 	$facet_author     = isset( $_GET['wpvdb_author'] ) ? absint( $_GET['wpvdb_author'] ) : 0;
 	$facet_after      = isset( $_GET['wpvdb_after'] ) && is_scalar( $_GET['wpvdb_after'] ) ? sanitize_text_field( wp_unslash( $_GET['wpvdb_after'] ) ) : '';
 	$facet_before     = isset( $_GET['wpvdb_before'] ) && is_scalar( $_GET['wpvdb_before'] ) ? sanitize_text_field( wp_unslash( $_GET['wpvdb_before'] ) ) : '';
-	$facet_strategy   = isset( $_GET['wpvdb_strategy'] ) && is_scalar( $_GET['wpvdb_strategy'] ) ? sanitize_key( wp_unslash( $_GET['wpvdb_strategy'] ) ) : 'auto';
+	$facet_default_strategy = \WPVDB\Search::default_args()['strategy'];
+	$facet_strategy   = isset( $_GET['wpvdb_strategy'] ) && is_scalar( $_GET['wpvdb_strategy'] ) ? sanitize_key( wp_unslash( $_GET['wpvdb_strategy'] ) ) : $facet_default_strategy;
 	$show_explain     = $show_debug || ( isset( $_GET['wpvdb_explain'] ) && '1' === $_GET['wpvdb_explain'] );
 	// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 	$has_advanced_facets = ( $facet_author > 0 ) || ( '' !== $facet_after ) || ( '' !== $facet_before )
-		|| ( 'auto' !== $facet_strategy ) || $show_explain;
+		|| ( $facet_default_strategy !== $facet_strategy ) || $show_explain;
 
 	$search_filters = array();
 

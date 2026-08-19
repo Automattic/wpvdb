@@ -412,7 +412,7 @@ class Search {
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 		$sql = $wpdb->prepare(
-			"SELECT COUNT(*) FROM {$table} e{$clauses['join']} WHERE {$where}",
+			"SELECT COUNT(DISTINCT e.id) FROM {$table} e{$clauses['join']} WHERE {$where}",
 			$clauses['params']
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
@@ -648,10 +648,26 @@ class Search {
 	 * @return array
 	 */
 	private static function sort_recursive( array $value ) {
+		$is_scalar_list = true;
+
 		foreach ( $value as $k => $v ) {
 			if ( is_array( $v ) ) {
-				$value[ $k ] = self::sort_recursive( $v );
+				$value[ $k ]    = self::sort_recursive( $v );
+				$is_scalar_list = false;
+				continue;
 			}
+
+			if ( ! is_int( $k ) ) {
+				$is_scalar_list = false;
+			}
+		}
+
+		if ( $is_scalar_list && ! empty( $value ) ) {
+			// A list of scalars (notably tax_query `terms`) means the same set
+			// whatever the order, so sort it to keep the cache seed stable.
+			sort( $value );
+
+			return $value;
 		}
 
 		ksort( $value );
@@ -736,6 +752,7 @@ class Search {
 			"SELECT {$columns}, {$distance_format} AS distance
 			FROM {$table} e{$clauses['join']}
 			WHERE {$where}
+			GROUP BY e.id
 			ORDER BY distance
 			LIMIT %d",
 			$params
@@ -799,6 +816,7 @@ class Search {
 				"SELECT {$columns}, e.embedding
 				FROM {$table} e{$clauses['join']}
 				WHERE {$where}
+				GROUP BY e.id
 				LIMIT %d OFFSET %d",
 				$params
 			);
