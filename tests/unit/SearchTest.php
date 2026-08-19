@@ -253,6 +253,43 @@ class SearchTest extends TestCase {
 	}
 
 	/**
+	 * Unknown strategies fall back to the safe pre-filter default.
+	 */
+	public function test_resolve_strategy_rejects_unknown_values() {
+		$this->assertSame( 'prefilter', Search::resolve_strategy( 'nonsense' ) );
+		$this->assertSame( 'prefilter', Search::resolve_strategy( '' ) );
+		$this->assertSame( 'auto', Search::resolve_strategy( 'auto' ) );
+		$this->assertSame( 'postfilter', Search::resolve_strategy( 'POSTFILTER' ) );
+	}
+
+	/**
+	 * The override filter wins over the caller's strategy.
+	 */
+	public function test_strategy_filter_overrides_the_caller() {
+		$filter = function () {
+			return 'postfilter';
+		};
+
+		add_filter( 'wpvdb_search_strategy', $filter );
+
+		try {
+			$this->assertSame( 'postfilter', Search::resolve_strategy( 'prefilter' ) );
+		} finally {
+			remove_filter( 'wpvdb_search_strategy', $filter );
+		}
+	}
+
+	/**
+	 * The default strategy is the always-correct pre-filter.
+	 */
+	public function test_default_strategy_is_prefilter() {
+		$defaults = Search::default_args();
+
+		$this->assertSame( 'prefilter', $defaults['strategy'] );
+		$this->assertSame( array(), $defaults['filters'] );
+	}
+
+	/**
 	 * A search with neither text nor a vector is rejected before any API call.
 	 */
 	public function test_query_requires_text_or_a_vector() {

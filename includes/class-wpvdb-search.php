@@ -50,6 +50,11 @@ class Search {
 	const FALLBACK_MAX_ROWS = 50000;
 
 	/**
+	 * Strategies accepted by the `strategy` argument.
+	 */
+	const STRATEGIES = array( 'auto', 'prefilter', 'postfilter' );
+
+	/**
 	 * Database handler.
 	 *
 	 * @var Database|null
@@ -84,6 +89,7 @@ class Search {
 			'distance_threshold' => null,
 			'respect_visibility' => true,
 			'filters'            => array(),
+			'strategy'           => 'prefilter',
 			'provider'           => '',
 			'api_base'           => '',
 			'api_key'            => '',
@@ -123,14 +129,18 @@ class Search {
 		$args['limit']      = max( 1, (int) $args['limit'] );
 		$args['over_fetch'] = max( 1, (int) $args['over_fetch'] );
 		$args['filters']    = self::canonical_filters( (array) $args['filters'] );
+		$args['strategy']   = self::resolve_strategy( $args['strategy'] );
 
 		$plan = array(
 			'strategy'           => '',
 			'model'              => $args['model'],
 			'db_type'            => self::db()->get_db_type(),
 			'has_vector_support' => null,
+			'filter_strategy'    => 'unfiltered',
+			'strategy_source'    => 'default',
 			'candidates'         => null,
 			'rows_scanned'       => null,
+			'rounds'             => 0,
 			'total_rows'         => null,
 			'timings_ms'         => array(
 				'embed'        => 0,
@@ -138,6 +148,24 @@ class Search {
 				'db'           => 0,
 			),
 		);
+
+		$has_filters             = ! empty( $args['filters'] );
+		$plan['strategy_source'] = ( 'auto' === $args['strategy'] ) ? 'auto' : 'forced';
+
+		if ( $has_filters ) {
+			$candidates         = self::count_candidates( $args );
+			$plan['candidates'] = $candidates;
+
+			if ( 0 === $candidates ) {
+				// No row can match, so skip the paid embedding round trip.
+				$plan['filter_strategy'] = 'short_circuit';
+
+				return array(
+					'results' => array(),
+					'plan'    => $plan,
+				);
+			}
+		}
 
 		$embedding = $args['vector'];
 		if ( ! is_array( $embedding ) ) {
@@ -167,10 +195,21 @@ class Search {
 
 		$fetch = $args['limit'] * $args['over_fetch'];
 
-		$started                  = microtime( true );
-		$rows                     = $has_vector
-			? self::run_native( $embedding, $fetch, $args )
-			: self::run_php_fallback( $embedding, $fetch, $args, $plan );
+		if ( $has_filters ) {
+			$plan['filter_strategy'] = self::choose_filter_strategy( $args, $candidates, $has_vector, $plan );
+		}
+
+		$started = microtime( true );
+
+		if ( 'postfilter' === $plan['filter_strategy'] ) {
+			$rows = self::run_postfilter( $embedding, $fetch, $args, $plan );
+		} else {
+			$plan['rounds'] = 1;
+			$rows           = $has_vector
+				? self::run_native( $embedding, $fetch, $args )
+				: self::run_php_fallback( $embedding, $fetch, $args, $plan );
+		}
+
 		$plan['timings_ms']['db'] = (int) round( ( microtime( true ) - $started ) * 1000 );
 
 		if ( is_wp_error( $rows ) ) {
@@ -179,8 +218,8 @@ class Search {
 
 		$rows = array_slice( $rows, 0, $args['limit'] );
 
-		if ( $args['explain'] ) {
-			$plan['total_rows'] = self::count_rows( $args['model'] );
+		if ( $args['explain'] && null === $plan['total_rows'] ) {
+			$plan['total_rows'] = self::count_total( $args['model'] );
 		}
 
 		if ( OBJECT === $args['output'] ) {
@@ -196,6 +235,215 @@ class Search {
 			'results' => $rows,
 			'plan'    => $plan,
 		);
+	}
+
+	/**
+	 * Normalize the requested strategy, honouring the global override filter.
+	 *
+	 * @param string $strategy Requested strategy.
+	 * @return string
+	 */
+	public static function resolve_strategy( $strategy ) {
+		$override = (string) apply_filters( 'wpvdb_search_strategy', '' );
+
+		if ( '' !== $override ) {
+			$strategy = $override;
+		}
+
+		$strategy = strtolower( trim( (string) $strategy ) );
+
+		return in_array( $strategy, self::STRATEGIES, true ) ? $strategy : 'prefilter';
+	}
+
+	/**
+	 * Pick between pre-filtering and post-filtering for a filtered search.
+	 *
+	 * @param array $args       Normalized search arguments.
+	 * @param int   $candidates Rows matching the filter.
+	 * @param bool  $has_vector Whether the database scores vectors natively.
+	 * @param array $plan       Plan array, updated by reference.
+	 * @return string
+	 */
+	private static function choose_filter_strategy( array $args, $candidates, $has_vector, array &$plan ) {
+		if ( ! $has_vector ) {
+			// The fallback scans in PHP, so filtering in SQL is always cheaper.
+			return 'prefilter';
+		}
+
+		if ( 'auto' !== $args['strategy'] ) {
+			return $args['strategy'];
+		}
+
+		$exact_scan_threshold = (int) apply_filters( 'wpvdb_search_exact_scan_threshold', 5000 );
+
+		if ( $candidates <= $exact_scan_threshold ) {
+			return 'prefilter';
+		}
+
+		$total              = self::count_total( $args['model'] );
+		$plan['total_rows'] = $total;
+
+		if ( $total < 1 ) {
+			return 'prefilter';
+		}
+
+		$broad_ratio = (float) apply_filters( 'wpvdb_search_broad_ratio', 0.5 );
+
+		return ( ( $candidates / $total ) >= $broad_ratio ) ? 'postfilter' : 'prefilter';
+	}
+
+	/**
+	 * Score against the whole table, then drop rows the filter rejects.
+	 *
+	 * Widens the over-fetch and retries while the result set is short, because
+	 * the filter removes an unknown fraction of each batch.
+	 *
+	 * @param array $embedding Query vector.
+	 * @param int   $fetch     Rows wanted after filtering.
+	 * @param array $args      Normalized search arguments.
+	 * @param array $plan      Plan array, updated by reference.
+	 * @return array|\WP_Error
+	 */
+	private static function run_postfilter( array $embedding, $fetch, array $args, array &$plan ) {
+		$multiplier = max( 2, (int) apply_filters( 'wpvdb_search_overfetch_multiplier', 4 ) );
+		$max_rounds = max( 1, (int) apply_filters( 'wpvdb_search_max_topup_rounds', 3 ) );
+
+		$unfiltered            = $args;
+		$unfiltered['filters'] = array();
+
+		$window = $fetch * $multiplier;
+		$kept   = array();
+
+		for ( $round = 1; $round <= $max_rounds; $round++ ) {
+			$plan['rounds'] = $round;
+
+			$rows = self::run_native( $embedding, $window, $unfiltered );
+
+			if ( is_wp_error( $rows ) ) {
+				return $rows;
+			}
+
+			$kept = self::reject_filtered_rows( $rows, $args );
+
+			if ( count( $kept ) >= $fetch || count( $rows ) < $window ) {
+				// Either enough survivors, or the table is exhausted.
+				break;
+			}
+
+			$window *= $multiplier;
+		}
+
+		return $kept;
+	}
+
+	/**
+	 * Keep only the rows whose ids satisfy the filter clauses.
+	 *
+	 * @param array $rows Candidate rows ordered by distance.
+	 * @param array $args Normalized search arguments.
+	 * @return array
+	 */
+	private static function reject_filtered_rows( array $rows, array $args ) {
+		global $wpdb;
+
+		if ( empty( $rows ) ) {
+			return array();
+		}
+
+		$ids = array_values( array_unique( array_map( 'intval', wp_list_pluck( $rows, 'id' ) ) ) );
+
+		if ( empty( $ids ) ) {
+			return array();
+		}
+
+		$clauses            = self::build_clauses( $args );
+		$clauses['where'][] = 'e.id IN (' . self::placeholders( $ids, '%d' ) . ')';
+		$params             = array_merge( $clauses['params'], $ids );
+
+		$table = self::table();
+		$where = implode( ' AND ', $clauses['where'] );
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+		$sql = $wpdb->prepare(
+			"SELECT e.id FROM {$table} e{$clauses['join']} WHERE {$where}",
+			$params
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
+		$allowed = $wpdb->get_col( $sql );
+
+		if ( empty( $allowed ) ) {
+			return array();
+		}
+
+		$allowed = array_flip( array_map( 'intval', $allowed ) );
+
+		return array_values(
+			array_filter(
+				$rows,
+				function ( $row ) use ( $allowed ) {
+					return isset( $allowed[ (int) $row['id'] ] );
+				}
+			)
+		);
+	}
+
+	/**
+	 * Count embedding rows matching the current filter set.
+	 *
+	 * @param array $args Normalized search arguments.
+	 * @return int
+	 */
+	private static function count_candidates( array $args ) {
+		global $wpdb;
+
+		$cache_key = 'candidates_' . $args['model'] . '_' . self::filters_cache_seed( $args['filters'] )
+			. '_' . ( empty( $args['respect_visibility'] ) ? '0' : '1' );
+		$cached    = wp_cache_get( $cache_key, Cache::CACHE_GROUP );
+
+		if ( false !== $cached ) {
+			return (int) $cached;
+		}
+
+		$clauses = self::build_clauses( $args );
+		$table   = self::table();
+		$where   = implode( ' AND ', $clauses['where'] );
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+		$sql = $wpdb->prepare(
+			"SELECT COUNT(*) FROM {$table} e{$clauses['join']} WHERE {$where}",
+			$clauses['params']
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
+		$count = (int) $wpdb->get_var( $sql );
+
+		wp_cache_set( $cache_key, $count, Cache::CACHE_GROUP, 5 * MINUTE_IN_SECONDS );
+
+		return $count;
+	}
+
+	/**
+	 * Count every embedding row stored for a model.
+	 *
+	 * @param string $model Model name.
+	 * @return int
+	 */
+	private static function count_total( $model ) {
+		$cache_key = 'total_rows_' . $model;
+		$cached    = wp_cache_get( $cache_key, Cache::CACHE_GROUP );
+
+		if ( false !== $cached ) {
+			return (int) $cached;
+		}
+
+		$count = self::count_rows( $model );
+
+		wp_cache_set( $cache_key, $count, Cache::CACHE_GROUP, HOUR_IN_SECONDS );
+
+		return $count;
 	}
 
 	/**

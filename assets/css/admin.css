@@ -427,3 +427,55 @@
     padding-bottom: 10px;
     color: #23282d;
 } 
+/* Embeddings search facets. Core controls, wrapped so they reflow on narrow screens. */
+.wpvdb-embeddings .search-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+}
+
+.wpvdb-embeddings .search-form > .details,
+.wpvdb-advanced-search {
+    flex-basis: 100%;
+}
+
+.wpvdb-advanced-search > summary {
+    cursor: pointer;
+    padding: 4px 0;
+    color: #2271b1;
+}
+
+.wpvdb-advanced-search > summary:hover,
+.wpvdb-advanced-search > summary:focus {
+    color: #135e96;
+}
+
+.wpvdb-advanced-search-fields {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    padding: 8px 0 4px;
+}
+
+.wpvdb-advanced-search-fields .wpvdb-facet {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+@media screen and (max-width: 782px) {
+    .wpvdb-embeddings .search-form > * {
+        flex-basis: 100%;
+    }
+
+    .wpvdb-advanced-search-fields .wpvdb-facet {
+        flex-basis: 100%;
+    }
+
+    .wpvdb-advanced-search-fields .wpvdb-facet > select,
+    .wpvdb-advanced-search-fields .wpvdb-facet > input[type="date"] {
+        flex: 1;
+    }
+}
