@@ -83,6 +83,7 @@ class Search {
 			'over_fetch'         => 1,
 			'distance_threshold' => null,
 			'respect_visibility' => true,
+			'filters'            => array(),
 			'provider'           => '',
 			'api_base'           => '',
 			'api_key'            => '',
@@ -121,6 +122,7 @@ class Search {
 		$args['model']      = $args['model'] ? $args['model'] : Settings::get_default_model();
 		$args['limit']      = max( 1, (int) $args['limit'] );
 		$args['over_fetch'] = max( 1, (int) $args['over_fetch'] );
+		$args['filters']    = self::canonical_filters( (array) $args['filters'] );
 
 		$plan = array(
 			'strategy'           => '',
@@ -219,12 +221,226 @@ class Search {
 			'params' => array( $args['model'] ),
 		);
 
+		$filters = self::canonical_filters( isset( $args['filters'] ) ? (array) $args['filters'] : array() );
+
+		if ( ! empty( $filters['doc_type'] ) ) {
+			$clauses['where'][] = 'e.doc_type IN (' . self::placeholders( $filters['doc_type'], '%s' ) . ')';
+			$clauses['params']  = array_merge( $clauses['params'], $filters['doc_type'] );
+		}
+
+		$post_filters = $filters;
+		unset( $post_filters['doc_type'] );
+		$needs_posts = ! empty( $post_filters );
+
+		if ( ! empty( $args['respect_visibility'] ) || $needs_posts ) {
+			$clauses['join'] .= " LEFT JOIN {$wpdb->posts} p ON p.ID = e.doc_id";
+		}
+
 		if ( ! empty( $args['respect_visibility'] ) ) {
-			$clauses['join']   .= " LEFT JOIN {$wpdb->posts} p ON p.ID = e.doc_id";
 			$clauses['where'][] = "( p.ID IS NULL OR ( p.post_status = 'publish' AND p.post_password = '' ) )";
 		}
 
+		if ( $needs_posts ) {
+			// A post-derived filter cannot describe a row that has no post, so
+			// the visibility LEFT JOIN becomes an effective INNER JOIN here.
+			$clauses['where'][] = 'p.ID IS NOT NULL';
+		}
+
+		$in_columns = array(
+			'post_type'   => array( 'p.post_type', '%s' ),
+			'post_status' => array( 'p.post_status', '%s' ),
+			'author__in'  => array( 'p.post_author', '%d' ),
+			'post__in'    => array( 'p.ID', '%d' ),
+		);
+
+		foreach ( $in_columns as $key => $spec ) {
+			if ( empty( $filters[ $key ] ) ) {
+				continue;
+			}
+
+			$clauses['where'][] = $spec[0] . ' IN (' . self::placeholders( $filters[ $key ], $spec[1] ) . ')';
+			$clauses['params']  = array_merge( $clauses['params'], $filters[ $key ] );
+		}
+
+		$not_in_columns = array(
+			'author__not_in' => array( 'p.post_author', '%d' ),
+			// phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_post__not_in -- Filter key name, not a get_posts() argument.
+			'post__not_in'   => array( 'p.ID', '%d' ),
+		);
+
+		foreach ( $not_in_columns as $key => $spec ) {
+			if ( empty( $filters[ $key ] ) ) {
+				continue;
+			}
+
+			$clauses['where'][] = $spec[0] . ' NOT IN (' . self::placeholders( $filters[ $key ], $spec[1] ) . ')';
+			$clauses['params']  = array_merge( $clauses['params'], $filters[ $key ] );
+		}
+
+		if ( ! empty( $filters['date_query'] ) && class_exists( '\WP_Date_Query' ) ) {
+			$date_query = new \WP_Date_Query( $filters['date_query'], 'p.post_date' );
+			$fragment   = self::sql_fragment( $date_query->get_sql() );
+
+			if ( '' !== $fragment ) {
+				$clauses['where'][] = $fragment;
+			}
+		}
+
+		if ( ! empty( $filters['tax_query'] ) && class_exists( '\WP_Tax_Query' ) ) {
+			$tax_query = new \WP_Tax_Query( $filters['tax_query'] );
+			$tax_sql   = $tax_query->get_sql( 'e', 'doc_id' );
+
+			if ( ! empty( $tax_sql['join'] ) ) {
+				$clauses['join'] .= $tax_sql['join'];
+			}
+
+			$fragment = self::sql_fragment( $tax_sql['where'] );
+
+			if ( '' !== $fragment ) {
+				$clauses['where'][] = $fragment;
+			}
+		}
+
 		return apply_filters( 'wpvdb_search_clauses', $clauses, $args );
+	}
+
+	/**
+	 * Normalize a filter array into a stable shape used for SQL and cache keys.
+	 *
+	 * Scalars become lists, empty values are dropped, list values are sorted,
+	 * and keys are sorted so equivalent filters produce an identical array.
+	 *
+	 * @param array $filters Raw filters.
+	 * @return array
+	 */
+	public static function canonical_filters( array $filters ) {
+		$lists = array(
+			'post_type',
+			'post_status',
+			'doc_type',
+			'author__in',
+			'author__not_in',
+			'post__in',
+			'post__not_in',
+		);
+
+		if ( isset( $filters['author'] ) && ! isset( $filters['author__in'] ) ) {
+			$filters['author__in'] = $filters['author'];
+		}
+		unset( $filters['author'] );
+
+		$out = array();
+
+		foreach ( $lists as $key ) {
+			if ( ! isset( $filters[ $key ] ) ) {
+				continue;
+			}
+
+			$values = array_values( array_unique( array_filter( (array) $filters[ $key ], array( __CLASS__, 'is_filled' ) ) ) );
+
+			if ( empty( $values ) ) {
+				continue;
+			}
+
+			if ( in_array( $key, array( 'author__in', 'author__not_in', 'post__in', 'post__not_in' ), true ) ) {
+				$values = array_map( 'intval', $values );
+			} else {
+				$values = array_map( 'strval', $values );
+			}
+
+			sort( $values );
+			$out[ $key ] = $values;
+		}
+
+		foreach ( array( 'date_query', 'tax_query' ) as $key ) {
+			if ( empty( $filters[ $key ] ) || ! is_array( $filters[ $key ] ) ) {
+				continue;
+			}
+
+			$out[ $key ] = self::sort_recursive( $filters[ $key ] );
+		}
+
+		ksort( $out );
+
+		return $out;
+	}
+
+	/**
+	 * Stable cache seed for a filter set. Returns '' when no filter applies.
+	 *
+	 * @param array $filters Raw or canonical filters.
+	 * @return string
+	 */
+	public static function filters_cache_seed( array $filters ) {
+		$canonical = self::canonical_filters( $filters );
+
+		if ( empty( $canonical ) ) {
+			return '';
+		}
+
+		$encoded = wp_json_encode( $canonical );
+
+		return hash( 'sha256', false !== $encoded ? $encoded : http_build_query( $canonical ) );
+	}
+
+	/**
+	 * Whether a filter value is worth keeping.
+	 *
+	 * @param mixed $value Candidate value.
+	 * @return bool
+	 */
+	private static function is_filled( $value ) {
+		return null !== $value && '' !== $value;
+	}
+
+	/**
+	 * Recursively sort keys so equivalent nested filters compare equal.
+	 *
+	 * @param array $value Nested filter array.
+	 * @return array
+	 */
+	private static function sort_recursive( array $value ) {
+		foreach ( $value as $k => $v ) {
+			if ( is_array( $v ) ) {
+				$value[ $k ] = self::sort_recursive( $v );
+			}
+		}
+
+		ksort( $value );
+
+		return $value;
+	}
+
+	/**
+	 * Build a placeholder list for an IN clause.
+	 *
+	 * @param array  $values Bound values.
+	 * @param string $type   Placeholder token.
+	 * @return string
+	 */
+	private static function placeholders( array $values, $type ) {
+		return implode( ', ', array_fill( 0, count( $values ), $type ) );
+	}
+
+	/**
+	 * Prepare a core-generated SQL fragment for use inside prepare().
+	 *
+	 * Core returns fragments already prefixed with AND and already escaped, so
+	 * literal percent signs must survive the surrounding prepare() call.
+	 *
+	 * @param string $sql Fragment from WP_Tax_Query or WP_Date_Query.
+	 * @return string
+	 */
+	private static function sql_fragment( $sql ) {
+		$sql = trim( (string) $sql );
+		$sql = preg_replace( '/^AND\s+/i', '', $sql );
+		$sql = trim( (string) $sql );
+
+		if ( '' === $sql ) {
+			return '';
+		}
+
+		return str_replace( '%', '%%', $sql );
 	}
 
 	/**

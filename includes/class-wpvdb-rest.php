@@ -505,6 +505,8 @@ class REST {
 			)
 		);
 
+		$filters = ( isset( $data['filters'] ) && is_array( $data['filters'] ) ) ? $data['filters'] : array();
+
 		$has_vector_payload  = isset( $data['vector'] ) && is_array( $data['vector'] );
 		$has_provided_vector = $has_vector_payload && apply_filters( 'wpvdb_query_accept_vector_field', false, $request );
 
@@ -549,6 +551,13 @@ class REST {
 				)
 			);
 			$cache_key_override = 'text:' . hash( 'sha256', false !== $text_cache_seed ? $text_cache_seed : $text );
+		}
+
+		// Filters change the result set, so they must change the cache key.
+		// An empty filter set leaves existing keys byte-identical.
+		$filter_seed = Search::filters_cache_seed( $filters );
+		if ( '' !== $filter_seed ) {
+			$cache_key_override .= '|f:' . $filter_seed;
 		}
 
 		// Check cache first for expensive queries.
@@ -609,6 +618,7 @@ class REST {
 					'limit'              => $limit,
 					'over_fetch'         => self::QUERY_OVER_FETCH,
 					'respect_visibility' => true,
+					'filters'            => $filters,
 					'provider'           => $provider,
 					'api_base'           => $api_base,
 				)
