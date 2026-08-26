@@ -90,6 +90,7 @@ class Query {
 					'distance_threshold' => $similarity_threshold,
 					// WP_Query re-gates status and capabilities downstream.
 					'respect_visibility' => false,
+					'filters'            => (array) $query->get( 'vdb_filters' ),
 					'api_base'           => $api_base,
 					'api_key'            => $api_key,
 				)

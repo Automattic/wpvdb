@@ -34,5 +34,6 @@ Thumbs.db
 /build/
 
 /docker/wordpress/setup/test-data.xml
+/docker/wordpress/setup/.mw-cache/
 # Ignore scripts directory
 /scripts/

@@ -26,6 +26,72 @@
 		$search_query = '';
 	}
 
+	// Facet controls submit as GET args so a tuned query stays shareable.
+	// phpcs:disable WordPress.Security.NonceVerification.Recommended
+	$facet_post_types = isset( $_GET['wpvdb_post_type'] ) ? array_filter( array_map( 'sanitize_key', (array) wp_unslash( $_GET['wpvdb_post_type'] ) ) ) : array();
+	// wp_dropdown_categories() submits '0' for its show_option_all entry.
+	$facet_category   = isset( $_GET['wpvdb_cat'] ) && is_scalar( $_GET['wpvdb_cat'] ) ? sanitize_title( wp_unslash( $_GET['wpvdb_cat'] ) ) : '';
+	$facet_category   = ( '0' === $facet_category ) ? '' : $facet_category;
+	$facet_tag        = isset( $_GET['wpvdb_tag'] ) && is_scalar( $_GET['wpvdb_tag'] ) ? sanitize_title( wp_unslash( $_GET['wpvdb_tag'] ) ) : '';
+	$facet_tag        = ( '0' === $facet_tag ) ? '' : $facet_tag;
+	$facet_author     = isset( $_GET['wpvdb_author'] ) ? absint( $_GET['wpvdb_author'] ) : 0;
+	$facet_after      = isset( $_GET['wpvdb_after'] ) && is_scalar( $_GET['wpvdb_after'] ) ? sanitize_text_field( wp_unslash( $_GET['wpvdb_after'] ) ) : '';
+	$facet_before     = isset( $_GET['wpvdb_before'] ) && is_scalar( $_GET['wpvdb_before'] ) ? sanitize_text_field( wp_unslash( $_GET['wpvdb_before'] ) ) : '';
+	$facet_default_strategy = \WPVDB\Search::default_args()['strategy'];
+	$facet_strategy   = isset( $_GET['wpvdb_strategy'] ) && is_scalar( $_GET['wpvdb_strategy'] ) ? sanitize_key( wp_unslash( $_GET['wpvdb_strategy'] ) ) : $facet_default_strategy;
+	$show_explain     = $show_debug || ( isset( $_GET['wpvdb_explain'] ) && '1' === $_GET['wpvdb_explain'] );
+	// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+	$has_advanced_facets = ( $facet_author > 0 ) || ( '' !== $facet_after ) || ( '' !== $facet_before )
+		|| ( $facet_default_strategy !== $facet_strategy ) || $show_explain;
+
+	$search_filters = array();
+
+	if ( ! empty( $facet_post_types ) ) {
+		$search_filters['post_type'] = $facet_post_types;
+	}
+
+	$facet_taxonomies = array();
+
+	if ( '' !== $facet_category ) {
+		$facet_taxonomies[] = array(
+			'taxonomy' => 'category',
+			'field'    => 'slug',
+			'terms'    => array( $facet_category ),
+		);
+	}
+
+	if ( '' !== $facet_tag ) {
+		$facet_taxonomies[] = array(
+			'taxonomy' => 'post_tag',
+			'field'    => 'slug',
+			'terms'    => array( $facet_tag ),
+		);
+	}
+
+	if ( ! empty( $facet_taxonomies ) ) {
+		// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query -- Search service filter key, not a WP_Query argument.
+		$search_filters['tax_query'] = $facet_taxonomies;
+	}
+
+	if ( $facet_author > 0 ) {
+		$search_filters['author'] = $facet_author;
+	}
+
+	if ( '' !== $facet_after || '' !== $facet_before ) {
+		$facet_dates = array();
+
+		if ( '' !== $facet_after ) {
+			$facet_dates['after'] = $facet_after;
+		}
+
+		if ( '' !== $facet_before ) {
+			$facet_dates['before'] = $facet_before;
+		}
+
+		$search_filters['date_query'] = array( $facet_dates );
+	}
+
 	if ( $show_debug ) {
 		// Get and display settings information.
 		$table_name = $wpdb->prefix . 'wpvdb_embeddings';
@@ -66,7 +132,106 @@
 						value="<?php echo esc_attr( $search_query ); ?>"
 						placeholder="<?php esc_attr_e( 'Search embeddings...', 'wpvdb' ); ?>"
 						class="regular-text">
-				<input type="submit" class="button" value="<?php esc_attr_e( 'Semantic Search', 'wpvdb' ); ?>">
+				<label class="screen-reader-text" for="wpvdb-facet-post-type"><?php esc_html_e( 'Filter by post type', 'wpvdb' ); ?></label>
+				<select name="wpvdb_post_type" id="wpvdb-facet-post-type">
+					<option value=""><?php esc_html_e( 'All post types', 'wpvdb' ); ?></option>
+					<?php foreach ( get_post_types( array( 'public' => true ), 'objects' ) as $facet_type ) : ?>
+						<option value="<?php echo esc_attr( $facet_type->name ); ?>" <?php selected( in_array( $facet_type->name, $facet_post_types, true ) ); ?>>
+							<?php echo esc_html( $facet_type->labels->singular_name ); ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+
+				<label class="screen-reader-text" for="wpvdb-facet-cat"><?php esc_html_e( 'Filter by category', 'wpvdb' ); ?></label>
+				<?php
+				wp_dropdown_categories(
+					array(
+						'taxonomy'        => 'category',
+						'name'            => 'wpvdb_cat',
+						'id'              => 'wpvdb-facet-cat',
+						'value_field'     => 'slug',
+						'selected'        => $facet_category,
+						'show_option_all' => __( 'All categories', 'wpvdb' ),
+						'hide_empty'      => false,
+						'hierarchical'    => true,
+						'orderby'         => 'name',
+					)
+				);
+				?>
+
+				<label class="screen-reader-text" for="wpvdb-facet-tag"><?php esc_html_e( 'Filter by tag', 'wpvdb' ); ?></label>
+				<?php
+				wp_dropdown_categories(
+					array(
+						'taxonomy'        => 'post_tag',
+						'name'            => 'wpvdb_tag',
+						'id'              => 'wpvdb-facet-tag',
+						'value_field'     => 'slug',
+						'selected'        => $facet_tag,
+						'show_option_all' => __( 'All tags', 'wpvdb' ),
+						'hide_empty'      => false,
+						'hierarchical'    => false,
+						'orderby'         => 'name',
+					)
+				);
+				?>
+
+				<?php submit_button( __( 'Semantic Search', 'wpvdb' ), 'secondary', '', false ); ?>
+
+				<details class="wpvdb-advanced-search" <?php echo $has_advanced_facets ? 'open' : ''; ?>>
+					<summary><?php esc_html_e( 'Advanced search', 'wpvdb' ); ?></summary>
+
+					<div class="wpvdb-advanced-search-fields">
+						<span class="wpvdb-facet">
+							<label for="wpvdb-facet-author"><?php esc_html_e( 'Author', 'wpvdb' ); ?></label>
+							<?php
+							wp_dropdown_users(
+								array(
+									'name'            => 'wpvdb_author',
+									'id'              => 'wpvdb-facet-author',
+									'selected'        => $facet_author,
+									'show_option_all' => __( 'All authors', 'wpvdb' ),
+								)
+							);
+							?>
+						</span>
+
+						<span class="wpvdb-facet">
+							<label for="wpvdb-facet-after"><?php esc_html_e( 'Published after', 'wpvdb' ); ?></label>
+							<input type="date" name="wpvdb_after" id="wpvdb-facet-after" value="<?php echo esc_attr( $facet_after ); ?>">
+						</span>
+
+						<span class="wpvdb-facet">
+							<label for="wpvdb-facet-before"><?php esc_html_e( 'Published before', 'wpvdb' ); ?></label>
+							<input type="date" name="wpvdb_before" id="wpvdb-facet-before" value="<?php echo esc_attr( $facet_before ); ?>">
+						</span>
+
+						<span class="wpvdb-facet">
+							<label for="wpvdb-facet-strategy"><?php esc_html_e( 'Filter strategy', 'wpvdb' ); ?></label>
+							<select name="wpvdb_strategy" id="wpvdb-facet-strategy">
+								<?php
+								$facet_strategies = array(
+									'auto'       => __( 'Auto', 'wpvdb' ),
+									'prefilter'  => __( 'Force pre-filter', 'wpvdb' ),
+									'postfilter' => __( 'Force post-filter', 'wpvdb' ),
+								);
+								foreach ( $facet_strategies as $facet_value => $facet_label ) :
+									?>
+									<option value="<?php echo esc_attr( $facet_value ); ?>" <?php selected( $facet_strategy, $facet_value ); ?>>
+										<?php echo esc_html( $facet_label ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						</span>
+
+						<span class="wpvdb-facet">
+							<label for="wpvdb-facet-explain">
+								<input type="checkbox" name="wpvdb_explain" id="wpvdb-facet-explain" value="1" <?php checked( $show_explain ); ?>>
+								<?php esc_html_e( 'Show query plan', 'wpvdb' ); ?>
+							</label>
+						</span>
+					</div>
+				</details>
 			</form>
 		</div>
 		<?php endif; ?>
@@ -89,6 +254,7 @@
 		$search_start_time      = microtime( true );
 		$search_time_result     = 0;
 		$total_vectors_searched = 0;
+		$search_plan            = null;
 
 		$model    = \WPVDB\Settings::get_default_model();
 		$api_base = \WPVDB\Settings::get_api_base();
@@ -105,6 +271,8 @@
 					// This screen manages the index, so drafts and protected
 					// posts stay visible here even though the API hides them.
 					'respect_visibility' => false,
+					'filters'            => $search_filters,
+					'strategy'           => $facet_strategy,
 					'api_base'           => $api_base,
 					'api_key'            => $api_key,
 					'output'             => OBJECT,
@@ -118,6 +286,7 @@
 			} else {
 				$search_results         = $search_response['results'];
 				$embeddings             = $search_results;
+				$search_plan            = $search_response['plan'];
 				$total_vectors_searched = (int) $search_response['plan']['total_rows'];
 			}
 
@@ -128,6 +297,100 @@
 		}
 	}
 	?>
+
+	<?php if ( $show_explain && ! empty( $search_plan ) ) : ?>
+		<div class="postbox wpvdb-explain">
+			<div class="postbox-header">
+				<h2 class="hndle"><?php esc_html_e( 'Query plan', 'wpvdb' ); ?></h2>
+			</div>
+			<div class="inside">
+			<table class="widefat striped">
+				<tbody>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Strategy', 'wpvdb' ); ?></th>
+						<td>
+							<?php
+							printf(
+								/* translators: 1: filter strategy, 2: how the strategy was chosen. */
+								esc_html__( '%1$s (%2$s)', 'wpvdb' ),
+								esc_html( $search_plan['filter_strategy'] ),
+								esc_html( $search_plan['strategy_source'] )
+							);
+							?>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Candidates', 'wpvdb' ); ?></th>
+						<td>
+							<?php
+							if ( null === $search_plan['candidates'] ) {
+								esc_html_e( 'not counted (no filter)', 'wpvdb' );
+							} elseif ( null === $search_plan['total_rows'] ) {
+								printf(
+									/* translators: %s: candidate rows. */
+									esc_html__( '%s rows', 'wpvdb' ),
+									esc_html( number_format_i18n( (int) $search_plan['candidates'] ) )
+								);
+							} else {
+								$explain_total = (int) $search_plan['total_rows'];
+								$explain_share = $explain_total > 0 ? ( $search_plan['candidates'] / $explain_total ) * 100 : 0;
+								printf(
+									/* translators: 1: candidate rows, 2: total rows, 3: percentage share. */
+									esc_html__( '%1$s of %2$s rows (%3$s%%)', 'wpvdb' ),
+									esc_html( number_format_i18n( (int) $search_plan['candidates'] ) ),
+									esc_html( number_format_i18n( $explain_total ) ),
+									esc_html( number_format_i18n( $explain_share, 1 ) )
+								);
+							}
+							?>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Engine', 'wpvdb' ); ?></th>
+						<td>
+							<?php
+							printf(
+								/* translators: 1: execution engine, 2: database type. */
+								esc_html__( '%1$s on %2$s', 'wpvdb' ),
+								esc_html( $search_plan['strategy'] ),
+								esc_html( $search_plan['db_type'] )
+							);
+							?>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Rounds', 'wpvdb' ); ?></th>
+						<td><?php echo esc_html( number_format_i18n( (int) $search_plan['rounds'] ) ); ?></td>
+					</tr>
+					<?php if ( null !== $search_plan['rows_scanned'] ) : ?>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Rows scanned', 'wpvdb' ); ?></th>
+						<td><?php echo esc_html( number_format_i18n( (int) $search_plan['rows_scanned'] ) ); ?></td>
+					</tr>
+					<?php endif; ?>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Timing', 'wpvdb' ); ?></th>
+						<td>
+							<?php
+							printf(
+								/* translators: 1: embedding ms, 2: vector probe ms, 3: database ms. */
+								esc_html__( 'embed %1$sms · probe %2$sms · db %3$sms', 'wpvdb' ),
+								esc_html( number_format_i18n( (int) $search_plan['timings_ms']['embed'] ) ),
+								esc_html( number_format_i18n( (int) $search_plan['timings_ms']['vector_probe'] ) ),
+								esc_html( number_format_i18n( (int) $search_plan['timings_ms']['db'] ) )
+							);
+							?>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Filters', 'wpvdb' ); ?></th>
+						<td><code><?php echo esc_html( empty( $search_filters ) ? '—' : wp_json_encode( \WPVDB\Search::canonical_filters( $search_filters ) ) ); ?></code></td>
+					</tr>
+				</tbody>
+			</table>
+			</div>
+		</div>
+	<?php endif; ?>
 
 	<?php if ( ! empty( $search_query ) ) : ?>
 			<p class="description wpvdb-search-note">
